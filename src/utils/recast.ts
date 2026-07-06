@@ -168,6 +168,20 @@ export class NavManager {
     return n.nearestPoint;
   }
 
+  // Nearest walkable floor Y (game coords) under the given position, or null if
+  // no polygon is found. Last-resort fallback when neither the structure BVH
+  // (CollisionManager.groundRaycast) nor the terrain heightmap yields a height.
+  getFloorY(gamePos: Float32Array): number | null {
+    const navInput = NavManager.gameToNav(gamePos);
+    const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
+      navInput,
+      { halfExtents: { x: 2, y: 8, z: 2 } }
+    );
+    if (!nearestRef) return null;
+    const res = this.navMeshQuery.getPolyHeight(nearestRef, nearestPoint);
+    return res.success && Number.isFinite(res.height) ? res.height : null;
+  }
+
   createAgent(gamePos: Float32Array): CrowdAgent {
     const navPosition = this.getClosestNavPointVec3(gamePos);
     debug(

@@ -22,6 +22,8 @@ import { LZConnectionClient } from "../LoginZoneConnection/shared/lzconnectioncl
 import { Resolver } from "node:dns";
 
 import { promisify } from "node:util";
+import { join } from "node:path";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { ZonePacketHandlers } from "./zonepackethandlers";
 import { ZoneClient2016 as Client } from "./classes/zoneclient";
 import { Vehicle2016 as Vehicle, Vehicle2016 } from "./entities/vehicle";
@@ -260,6 +262,7 @@ import { RewardManager } from "./managers/rewardmanager";
 import { DynamicAppearance } from "types/zonedata";
 import { clearInterval, setInterval } from "node:timers";
 import { NavManager } from "../../utils/recast";
+import { CollisionManager } from "./managers/collisionmanager";
 import { ProjectileEntity } from "./entities/projectileentity";
 import { ChallengeManager, ChallengeType } from "./managers/challengemanager";
 import { RandomEventsManager } from "./managers/randomeventsmanager";
@@ -581,6 +584,10 @@ export class ZoneServer2016 extends EventEmitter {
   disableBaseCheck!: boolean;
   /*                          */
   navManager: NavManager;
+  collisionManager: CollisionManager;
+  private _heightmapData?: Uint8ClampedArray;
+  private _heightmapW = 0;
+  private _heightmapH = 0;
   staticBuildings: AddSimpleNpc[] = PluginManager.loadServerData(
     "2016/sampleData/staticbuildings.json"
   );
@@ -634,6 +641,7 @@ export class ZoneServer2016 extends EventEmitter {
     this.explosiveManager = new AiManager(this);
     this.airdropManager = new AirdropManager(this);
     this.navManager = new NavManager();
+    this.collisionManager = new CollisionManager();
     this.challengeManager = new ChallengeManager(this);
     this.randomEventsManager = new RandomEventsManager(this);
     this.explosionManager = new ExplosionManager(this);
@@ -2077,6 +2085,8 @@ export class ZoneServer2016 extends EventEmitter {
   private async setupServer() {
     if (!process.env.DISABLE_AI && this.aiEnabled) {
       await this.navManager.loadNav();
+      await this.initHeightmap();
+      this.collisionManager.load();
       this.aiTickRoutine = setInterval(() => this.tickAi(), this.aiTickRate);
       this.pathfindingRoutine = setInterval(
         () => this.updatePathfindingPositions(),
@@ -10605,15 +10615,92 @@ export class ZoneServer2016 extends EventEmitter {
     this.sounds = [];
   }
 
+  private async initHeightmap(): Promise<void> {
+    const path = join(
+      __dirname,
+      "..",
+      "..",
+      "..",
+      "data",
+      "2016",
+      "zoneData",
+      "heightmap.png"
+    );
+    try {
+      const image = await loadImage(path);
+      const canvas = createCanvas(image.width, image.height);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(image, 0, 0);
+      this._heightmapW = image.width;
+      this._heightmapH = image.height;
+      this._heightmapData = ctx.getImageData(
+        0,
+        0,
+        image.width,
+        image.height
+      ).data;
+      console.log(`[Heightmap] loaded ${this._heightmapW}x${this._heightmapH}`);
+    } catch {
+      console.log(
+        "[Heightmap] heightmap.png not found - terrain height disabled"
+      );
+    }
+  }
+
+  getHeight(pos: Float32Array): number | null {
+    const data = this._heightmapData;
+    if (!data) return null;
+    const x = pos[0],
+      z = pos[2];
+    if (x > 4096 || x < -4096 || z > 4096 || z < -4096) return null;
+    const cx = Math.floor(z + 4096),
+      cy = Math.floor(4096 - x),
+      W = this._heightmapW,
+      H = this._heightmapH;
+    let h = 0,
+      n = 0;
+    for (let a = -2; a < 2; a++) {
+      for (let b = -2; b < 2; b++) {
+        const px = Math.min(W - 1, Math.max(0, cx + a)),
+          py = Math.min(H - 1, Math.max(0, cy + b)),
+          i = (py * W + px) * 4;
+        h += (data[i] - 16) * 8 + data[i + 1] / 32;
+        n++;
+      }
+    }
+    return n > 0 ? h / n : null;
+  }
+
   updatePathfindingPositions(): void {
     for (const k in this._npcs) {
       const npc = this._npcs[k];
       if (npc.navAgent) {
         const navPos = npc.navAgent.interpolatedPosition;
         const gamePos = NavManager.navToGame(navPos);
+        // Ground NPC feet on man-made structures (stairs/floors/bridges) that
+        // the terrain heightmap ignores; fall back to heightmap, then the
+        // navmesh floor. Structure surface only wins if it is at/above terrain
+        // (avoids dropping NPCs onto buried geometry below the ground).
+        const terrainY = this.getHeight(gamePos);
+        const structureY = this.collisionManager.groundRaycast(
+          gamePos[0],
+          gamePos[2],
+          npc.state.position[1]
+        );
+        let h;
+        if (
+          structureY !== null &&
+          (terrainY === null || structureY >= terrainY - 0.5)
+        ) {
+          h = structureY;
+        } else {
+          h = terrainY;
+        }
+        gamePos[1] = h ?? this.navManager.getFloorY(gamePos) ?? gamePos[1];
         if (
           gamePos[0] != npc.state.position[0] ||
-          gamePos[2] != npc.state.position[2]
+          gamePos[2] != npc.state.position[2] ||
+          Math.abs(gamePos[1] - npc.state.position[1]) > 0.1
         ) {
           npc.goTo(gamePos);
         }
