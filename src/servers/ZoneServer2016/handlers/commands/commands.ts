@@ -2262,6 +2262,27 @@ export const commands: Array<Command> = [
     }
   },
   {
+    name: "groundinfo",
+    permissionLevel: PermissionLevels.ADMIN,
+    execute: (server: ZoneServer2016, client: Client) => {
+      const position = client.character.state.position;
+      const ground = server.getGroundInfo(position);
+      const format = (value: number | null) =>
+        value === null ? "none" : value.toFixed(3);
+      const terrain = ground.terrainSample;
+      server.sendChatText(
+        client,
+        `[Ground] x=${position[0].toFixed(2)} z=${position[2].toFixed(2)} ` +
+          `terrain=${format(terrain?.height ?? null)}` +
+          (terrain
+            ? `(${terrain.mode},${terrain.min.toFixed(2)}..${terrain.max.toFixed(2)}) `
+            : " ") +
+          `structure=${format(ground.structureY)} nav=${format(ground.navY)} ` +
+          `selected=${ground.selection.source}:${ground.selection.height.toFixed(3)}`
+      );
+    }
+  },
+  {
     name: "spawnnpc",
     permissionLevel: PermissionLevels.ADMIN,
     execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
@@ -2334,29 +2355,32 @@ export const commands: Array<Command> = [
             : modelId;
         let offsetX = 0;
         let offsetZ = 0;
+        let spawnY = server.getGroundInfo(client.character.state.position)
+          .selection.height;
         for (let attempt = 0; attempt < 8; attempt++) {
           const angle = Math.random() * Math.PI * 2;
           const distance = 6 + Math.random() * (scatterRadius - 6);
           const candidateX = Math.cos(angle) * distance;
           const candidateZ = Math.sin(angle) * distance;
-          const surfaceY = server.collisionManager.groundRaycast(
+          const candidatePosition = new Float32Array([
             client.character.state.position[0] + candidateX,
+            client.character.state.position[1],
             client.character.state.position[2] + candidateZ,
-            client.character.state.position[1]
-          );
-          if (
-            surfaceY !== null &&
-            surfaceY > client.character.state.position[1] + 1
-          ) {
+            1
+          ]);
+          const candidateGround =
+            server.getGroundInfo(candidatePosition).selection.height;
+          if (candidateGround > client.character.state.position[1] + 1) {
             continue;
           }
           offsetX = candidateX;
           offsetZ = candidateZ;
+          spawnY = candidateGround;
           break;
         }
         const pos = new Float32Array([
           client.character.state.position[0] + offsetX,
-          client.character.state.position[1],
+          spawnY,
           client.character.state.position[2] + offsetZ,
           1
         ]);

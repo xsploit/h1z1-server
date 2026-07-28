@@ -263,6 +263,11 @@ import { DynamicAppearance } from "types/zonedata";
 import { clearInterval, setInterval } from "node:timers";
 import { NavManager } from "../../utils/recast";
 import { CollisionManager } from "./managers/collisionmanager";
+import {
+  EXPECTED_HEIGHTMAP_SIZE,
+  sampleTerrainHeight,
+  selectGroundSurface
+} from "./managers/grounding";
 import { ProjectileEntity } from "./entities/projectileentity";
 import { ChallengeManager, ChallengeType } from "./managers/challengemanager";
 import { RandomEventsManager } from "./managers/randomeventsmanager";
@@ -10632,7 +10637,7 @@ export class ZoneServer2016 extends EventEmitter {
   }
 
   private async initHeightmap(): Promise<void> {
-    const path = join(
+    const heightmapPath = join(
       __dirname,
       "..",
       "..",
@@ -10643,7 +10648,16 @@ export class ZoneServer2016 extends EventEmitter {
       "heightmap.png"
     );
     try {
-      const image = await loadImage(path);
+      const image = await loadImage(heightmapPath);
+      if (
+        image.width !== EXPECTED_HEIGHTMAP_SIZE ||
+        image.height !== EXPECTED_HEIGHTMAP_SIZE
+      ) {
+        throw new Error(
+          `expected ${EXPECTED_HEIGHTMAP_SIZE}x${EXPECTED_HEIGHTMAP_SIZE}, ` +
+            `got ${image.width}x${image.height}`
+        );
+      }
       const canvas = createCanvas(image.width, image.height);
       const ctx = canvas.getContext("2d");
       ctx.drawImage(image, 0, 0);
@@ -10656,35 +10670,54 @@ export class ZoneServer2016 extends EventEmitter {
         image.height
       ).data;
       console.log(`[Heightmap] loaded ${this._heightmapW}x${this._heightmapH}`);
-    } catch {
+    } catch (error) {
       console.log(
-        "[Heightmap] heightmap.png not found - terrain height disabled"
+        `[Heightmap] terrain height disabled: ${heightmapPath}: ` +
+          `${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
 
-  getHeight(pos: Float32Array): number | null {
+  getHeight(pos: Float32Array, referenceY?: number): number | null {
     const data = this._heightmapData;
     if (!data) return null;
-    const x = pos[0],
-      z = pos[2];
-    if (x > 4096 || x < -4096 || z > 4096 || z < -4096) return null;
-    const cx = Math.floor(z + 4096),
-      cy = Math.floor(4096 - x),
-      W = this._heightmapW,
-      H = this._heightmapH;
-    let h = 0,
-      n = 0;
-    for (let a = -2; a < 2; a++) {
-      for (let b = -2; b < 2; b++) {
-        const px = Math.min(W - 1, Math.max(0, cx + a)),
-          py = Math.min(H - 1, Math.max(0, cy + b)),
-          i = (py * W + px) * 4;
-        h += (data[i] - 16) * 8 + data[i + 1] / 32;
-        n++;
-      }
-    }
-    return n > 0 ? h / n : null;
+    return (
+      sampleTerrainHeight(
+        data,
+        this._heightmapW,
+        this._heightmapH,
+        pos[0],
+        pos[2],
+        referenceY
+      )?.height ?? null
+    );
+  }
+
+  getGroundInfo(pos: Float32Array, navY?: number | null) {
+    const resolvedNavY =
+      navY === undefined ? this.navManager.getFloorY(pos) : navY;
+    const terrainSample = this._heightmapData
+      ? sampleTerrainHeight(
+          this._heightmapData,
+          this._heightmapW,
+          this._heightmapH,
+          pos[0],
+          pos[2],
+          resolvedNavY ?? pos[1]
+        )
+      : null;
+    const structureY = this.collisionManager.groundRaycast(
+      pos[0],
+      pos[2],
+      resolvedNavY ?? pos[1]
+    );
+    const selection = selectGroundSurface({
+      terrainY: terrainSample?.height ?? null,
+      structureY,
+      navY: resolvedNavY,
+      currentY: pos[1]
+    });
+    return { terrainSample, structureY, navY: resolvedNavY, selection };
   }
 
   updatePathfindingPositions(): void {
@@ -10709,27 +10742,12 @@ export class ZoneServer2016 extends EventEmitter {
       if (npc.navAgent) {
         const navPos = npc.navAgent.interpolatedPosition;
         const gamePos = NavManager.navToGame(navPos);
-        // Ground NPC feet on man-made structures (stairs/floors/bridges) that
-        // the terrain heightmap ignores; fall back to heightmap, then the
-        // navmesh floor. Structure surface only wins if it is at/above terrain
-        // (avoids dropping NPCs onto buried geometry below the ground).
-        const terrainY = this.getHeight(gamePos);
-        const navFloorY = this.navManager.getFloorY(gamePos);
-        const structureY = this.collisionManager.groundRaycast(
-          gamePos[0],
-          gamePos[2],
-          navFloorY ?? gamePos[1]
-        );
-        let h;
-        if (
-          structureY !== null &&
-          (terrainY === null || structureY >= terrainY - 0.5)
-        ) {
-          h = structureY;
-        } else {
-          h = terrainY;
-        }
-        gamePos[1] = h ?? navFloorY ?? gamePos[1];
+        // The crowd agent already carries the Recast floor Y. Use it as the
+        // cliff disambiguation/reference height instead of doing a second
+        // nearest-poly query for every NPC on every update.
+        const navFloorY = Number.isFinite(gamePos[1]) ? gamePos[1] : null;
+        const ground = this.getGroundInfo(gamePos, navFloorY);
+        gamePos[1] = ground.selection.height;
         if (
           gamePos[0] != npc.state.position[0] ||
           gamePos[2] != npc.state.position[2] ||
@@ -10740,6 +10758,7 @@ export class ZoneServer2016 extends EventEmitter {
           // PlayerUpdatePosition serialization (uint32 out of range).
           if (
             !Number.isFinite(gamePos[0]) ||
+            !Number.isFinite(gamePos[1]) ||
             !Number.isFinite(gamePos[2]) ||
             Math.abs(gamePos[0]) > 4096 ||
             Math.abs(gamePos[2]) > 4096
