@@ -1,12 +1,17 @@
-# Forgelight Z1 collision exporter
+# Forgelight Z1 terrain and collision exporters
 
-Extracts the **static structure geometry** of the H1Z1 map **Z1** (roads,
-sidewalks, building floors, foundations, bridges, wrecked props, …) from the
-game's Forgelight assets and bakes it into a compact **`z1_collision.bin`**.
+These tools extract two complementary parts of the H1Z1 map **Z1**:
+
+- the native CNK0 terrain mesh into the server's `heightmap.png`; and
+- **static structure geometry** (roads,
+  sidewalks, building floors, foundations, bridges, wrecked props, …) from the
+  game's Forgelight assets into a compact **`z1_collision.bin`**.
 
 The Zone server (`CollisionManager`) loads that file, builds one BVH per unique
 mesh + an XZ broadphase, and ray-casts downward to place NPC feet on the visible
 surface — the man-made surfaces that the terrain heightmap alone cannot follow.
+The terrain heightmap supplies the authoritative outdoor ground beneath those
+structures.
 
 > The mesh is **derived from your own copy of the game's assets** and is **not**
 > shipped in this repository (`data/2016/collision/` is gitignored, like the
@@ -34,9 +39,8 @@ Typical Z1 output: ~980 unique meshes, ~306k instances, ~80 MB.
 
 - A legitimate copy of **H1Z1** (the `Resources/Assets/Assets_*.pack` archives).
 - **Python 3.12** and **git**.
-- These tools only need **structure** geometry, so the C++ `cnk_loader` (terrain)
-  is **not** required — the server uses the existing terrain heightmap and only
-  needs the structures from here.
+- The structure exporter is pure Python. The terrain exporter additionally uses
+  pydmod's native `cnk_loader` plus `numba` for exact triangle rasterization.
 
 ## Setup
 
@@ -55,19 +59,21 @@ Typical Z1 output: ~980 unique meshes, ~306k instances, ~80 MB.
    ```bash
    python -m venv venv
    # Windows: venv\Scripts\activate   |   Linux/macOS: . venv/bin/activate
-   pip install numpy scipy pygltflib Pillow aabbtree bitstruct numpy-stl
+   pip install numpy scipy pygltflib Pillow aabbtree bitstruct numpy-stl numba
    pip install ./dbg-pack          # the pack1/pack2 reader (DbgPack)
+   pip install ./cnk_loader        # native CNK0 decompressor for heightmap export
    ```
 
-3. Copy the two scripts from this folder into the pydmod checkout root (next to
+3. Copy the scripts from this folder into the pydmod checkout root (next to
    `zone_converter.py`), so they can import pydmod's modules:
 
    ```bash
    cp <h1z1-server>/tools/forgelight/export_z1_collision.py .
    cp <h1z1-server>/tools/forgelight/export_z1_instanced.py .
+   cp <h1z1-server>/tools/forgelight/export_z1_heightmap.py .
    ```
 
-## Run
+## Export structure collision
 
 ```bash
 # point at your H1Z1 assets and where the .bin should land
@@ -96,6 +102,35 @@ back to the heightmap — nothing breaks.
 `python export_z1_collision.py` exports a small GLB of one town
 (`z1_actors_town.glb`) you can open in any glTF viewer to eyeball the geometry.
 
+## Export native terrain
+
+```bash
+export H1Z1_ASSETS="/path/to/H1Z1/Resources/Assets"
+export HEIGHTMAP_OUT="<h1z1-server>/data/2016/zoneData/heightmap.png"
+
+python export_z1_heightmap.py
+```
+
+The exporter reads the high-detail native triangle batches from every Z1 CNK0
+chunk, selects the upper surface where the client contains duplicate XY
+vertices, and rasterizes the actual triangles at one-metre resolution. It
+refuses to write an output if those triangles do not cover the complete
+8192×8192 map.
+
+The PNG is derived client data and is gitignored. Each pixel uses the same
+encoding as the server loader:
+
+```text
+height_meters = (red - 16) * 8 + green / 32
+```
+
+For a quick parser/topology check without writing the map:
+
+```bash
+python export_z1_heightmap.py --inspect-only
+python export_z1_heightmap.py --validate-topology-only
+```
+
 ## Environment variables
 
 | var             | meaning                                                   | default                    |
@@ -103,10 +138,11 @@ back to the heightmap — nothing breaks.
 | `H1Z1_ASSETS`   | directory holding `Assets_*.pack`                         | `D:/h1z1/Resources/Assets` |
 | `Z1_ZONE`       | optional pre-extracted `Z1.zone` (else pulled from packs) | —                          |
 | `COLLISION_OUT` | output `.bin` path                                        | `./z1_collision.bin`       |
+| `HEIGHTMAP_OUT` | output terrain PNG                                        | `./heightmap.png`          |
 
 ## Notes / caveats
 
-- Only **LOD0** structure geometry is exported; terrain comes from the heightmap.
+- Only **LOD0** structure geometry is exported.
 - pydmod's material database is PS2-derived; a handful of H1Z1 materials are
   unknown, so the exporter falls back to a position-only layout (`ModelRigid`) —
   fine here because collision needs vertex **positions** only.

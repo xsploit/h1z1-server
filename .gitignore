@@ -9,4 +9,6 @@ bin/*.exe
 config.yaml
 /navMeshDump.obj
 *.tsbuildinfo
+__pycache__/
 /data/2016/collision/
+/data/2016/zoneData/heightmap.png
