@@ -124,6 +124,9 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   detectionRange: number;
   attackRange: number;
   attackAnimation: string;
+  attackImpactSeconds: number;
+  attackRecoverySeconds: number;
+  attackHitApplied: boolean;
   npc: Npc;
   server: ZoneServer2016;
 }
@@ -133,6 +136,8 @@ export interface ZombieAiOptions {
   detectionRange?: number;
   attackRange?: number;
   attackAnimation?: string;
+  attackImpactSeconds?: number;
+  attackRecoverySeconds?: number;
 }
 
 const BASE_SPEED = 1.0;
@@ -474,7 +479,7 @@ export function createZombie(
 
       [ZombieTransitions.Attacking]: (dt: number) => {
         zombie.hunger = Math.min(100, zombie.hunger + dt * 2);
-        zombie.stateTimer += dt * 2;
+        zombie.stateTimer += dt;
         zombie.lastAttackTime += dt;
         listenToSounds(zombie, zombie.server.sounds);
 
@@ -483,16 +488,16 @@ export function createZombie(
           zombie.npc.lookAt(attackTarget.position);
         }
 
-        if (zombie.stateTimer >= 2) {
+        if (
+          !zombie.attackHitApplied &&
+          zombie.stateTimer >= zombie.attackImpactSeconds
+        ) {
+          zombie.attackHitApplied = true;
           if (attackTarget) {
-            const attackDist = getDistance(
-              zombie.npc.state.position,
-              attackTarget.position
-            );
-            if (attackDist <= zombie.attackRange) {
-              applyDamageToTarget(zombie);
-            }
+            applyDamageToTarget(zombie);
           }
+        }
+        if (zombie.stateTimer >= zombie.attackRecoverySeconds) {
           zombie.event(ZombieEvents.DoneAttacking);
         }
       },
@@ -628,9 +633,11 @@ export function createZombie(
         from: [ZombieTransitions.Attack],
         to: ZombieTransitions.Attacking,
         EnterTransition: () => {
+          zombie.npc.stopMovement();
           zombie.npc.playAnimation(zombie.attackAnimation);
           zombie.stateTimer = 0;
           zombie.lastAttackTime = 0;
+          zombie.attackHitApplied = false;
         }
       },
       {
@@ -727,6 +734,12 @@ export function createZombie(
   zombie.attackRange = options.attackRange ?? 2;
   zombie.attackAnimation =
     options.attackAnimation ?? ZombieOneshotAnim.KnifeSlash;
+  zombie.attackImpactSeconds = options.attackImpactSeconds ?? 1;
+  zombie.attackRecoverySeconds = Math.max(
+    zombie.attackImpactSeconds,
+    options.attackRecoverySeconds ?? 1
+  );
+  zombie.attackHitApplied = false;
 
   return zombie;
 }

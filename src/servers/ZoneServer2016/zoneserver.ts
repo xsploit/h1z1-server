@@ -10747,6 +10747,8 @@ export class ZoneServer2016 extends EventEmitter {
             continue;
           }
           npc.goTo(gamePos);
+        } else {
+          npc.syncIdleIfStopped();
         }
       }
     }

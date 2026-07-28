@@ -76,7 +76,9 @@ export class HostileSurvivor extends Npc {
         canFeed: false,
         detectionRange: 20,
         attackRange: 1.35,
-        attackAnimation: "OneHandForehandSlashRight"
+        attackAnimation: "OneHandForehandSlashRight",
+        attackImpactSeconds: 0.45,
+        attackRecoverySeconds: 0.9
       });
     }
   }
