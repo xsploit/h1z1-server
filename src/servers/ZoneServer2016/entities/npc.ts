@@ -415,14 +415,13 @@ export abstract class Npc extends BaseFullCharacter {
           rotationRaw
         },
         stats: [],
-        remoteWeaponsExtra: this.pGetRemoteWeaponsExtraData(server)
+        remoteWeaponExtra: this.pGetRemoteWeaponsExtraData(server)
       } as unknown as LightweightToFullPc);
       this.sendPlayerWeaponState(server, client);
       return;
     }
 
     server.sendData(client, "LightweightToFullNpc", this.pGetFull(server));
-    this.sendPlayerWeaponState(server, client);
   }
 
   pGetLightweightPc(): AddLightweightPc {
