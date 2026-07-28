@@ -13,7 +13,8 @@
 
 // Minimal ambient declaration for three-mesh-bvh: the package ships its types
 // via the "exports" field, which this project's classic ("node") module
-// resolution does not honor. Only the surface used by CollisionManager is typed.
+// resolution does not honor. This file lives beside CollisionManager so the
+// narrowed zone tsconfigs include it. Only the used surface is typed.
 declare module "three-mesh-bvh" {
   import { BufferGeometry, Ray, Side, Vector3 } from "three";
 
