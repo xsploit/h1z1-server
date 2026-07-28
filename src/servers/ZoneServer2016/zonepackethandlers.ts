@@ -3161,6 +3161,41 @@ export class ZonePacketHandlers {
   handleWeaponPacket(server: ZoneServer2016, client: Client, packet: any) {
     const weaponItem = client.character.getEquippedWeapon();
     if (!weaponItem || !weaponItem.weapon) return;
+    const payload = packet.packet ?? {};
+    switch (packet.packetName) {
+      case "Weapon.FireStateUpdate":
+        server.traceWeaponEvent(client, "FIRE_STATE", {
+          gameTime: packet.gameTime,
+          firestate: payload.firestate
+        });
+        break;
+      case "Weapon.Fire":
+        server.traceWeaponEvent(client, "FIRE", {
+          gameTime: packet.gameTime,
+          firePosition: payload.position,
+          weaponProjectileCount: payload.weaponProjectileCount,
+          sessionProjectileCount: payload.sessionProjectileCount,
+          projectileUniqueId: payload.projectileUniqueId
+        });
+        break;
+      case "Weapon.ProjectileHitReport":
+        server.traceWeaponEvent(client, "HIT_REPORT", {
+          gameTime: packet.gameTime,
+          sessionProjectileCount: payload.hitReport?.sessionProjectileCount,
+          targetCharacterId: payload.hitReport?.characterId,
+          hitPosition: payload.hitReport?.position,
+          hitLocation: payload.hitReport?.hitLocation,
+          totalShotCount: payload.hitReport?.totalShotCount
+        });
+        break;
+      case "Weapon.ReloadRequest":
+      case "Weapon.ReloadInterrupt":
+      case "Weapon.SwitchFireModeRequest":
+        server.traceWeaponEvent(client, packet.packetName, {
+          gameTime: packet.gameTime
+        });
+        break;
+    }
     switch (packet.packetName) {
       case "Weapon.FireStateUpdate":
         // Cancel emote when player starts firing

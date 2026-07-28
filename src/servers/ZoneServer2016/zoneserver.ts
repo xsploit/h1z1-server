@@ -386,6 +386,7 @@ export class ZoneServer2016 extends EventEmitter {
       faction: Factions;
     }[]
   >();
+  readonly weaponTraceCharacters = new Set<string>();
   private static readonly _AI_TARGET_GRID_SIZE = 50;
   recastRoutine?: NodeJS.Timeout;
 
@@ -4201,7 +4202,13 @@ export class ZoneServer2016 extends EventEmitter {
     }
     const message = `FairPlay: blocked incoming projectile from ${client.character.name}`;
     const fireHint = client.fireHints[hitReport.sessionProjectileCount];
-    if (!fireHint) return;
+    if (!fireHint) {
+      this.traceWeaponEvent(client, "HIT_REJECTED", {
+        reason: "MissingFireHint",
+        sessionProjectileCount: hitReport.sessionProjectileCount
+      });
+      return;
+    }
     const weaponItem = fireHint.weaponItem;
     if (!weaponItem) return;
     const entity = this.getEntity(hitReport.characterId);
@@ -4215,7 +4222,13 @@ export class ZoneServer2016 extends EventEmitter {
       }
       return;
     }
-    if (!entity) return;
+    if (!entity) {
+      this.traceWeaponEvent(client, "HIT_REJECTED", {
+        reason: "MissingTarget",
+        targetCharacterId: hitReport.characterId
+      });
+      return;
+    }
     // Don't allow hits registering over 350 as this is the render distance for NPC's
     if (
       getDistance2d(entity.state.position, client.character.state.position) >
@@ -4234,6 +4247,10 @@ export class ZoneServer2016 extends EventEmitter {
       return;
     }
     if (fireHint.hitNumber > 0) {
+      this.traceWeaponEvent(client, "HIT_REJECTED", {
+        reason: "DuplicateProjectile",
+        targetCharacterId: hitReport.characterId
+      });
       if (targetClient) {
         this.sendChatTextToAdmins(
           `FairPlay: ${client.character.name} shot has been blocked due to desync / double usage`,
@@ -4255,6 +4272,10 @@ export class ZoneServer2016 extends EventEmitter {
         gameTime
       )
     ) {
+      this.traceWeaponEvent(client, "HIT_REJECTED", {
+        reason: "FairPlay",
+        targetCharacterId: hitReport.characterId
+      });
       const itemDef = this.getItemDefinition(weaponItem.itemDefinitionId);
       if (!itemDef) return;
       const weaponDefinitionId = itemDef.PARAM1;
@@ -4277,17 +4298,31 @@ export class ZoneServer2016 extends EventEmitter {
       client.flaggedShots = 0;
     }
     const hitValidation = this.validateHit(client, entity);
+    const damage = hitValidation.isValid
+      ? this.getProjectileDamage(
+          weaponItem.itemDefinitionId,
+          client.character.state.position,
+          entity.state.position
+        )
+      : 0;
+    this.traceWeaponEvent(client, "HIT_APPLIED", {
+      targetCharacterId: entity.characterId,
+      targetType: entity.constructor.name,
+      targetPosition: Array.from(entity.state.position),
+      distance: getDistance2d(
+        client.character.state.position,
+        entity.state.position
+      ),
+      hitLocation: hitReport.hitLocation,
+      hitPosition: hitReport.position,
+      damage,
+      validation: hitValidation.message || "Valid"
+    });
 
     entity.OnProjectileHit(this, {
       entity: client.character.characterId,
       weapon: weaponItem.itemDefinitionId,
-      damage: hitValidation.isValid
-        ? this.getProjectileDamage(
-            weaponItem.itemDefinitionId,
-            client.character.state.position,
-            entity.state.position
-          )
-        : 0,
+      damage,
       hitReport: packet.hitReport,
       message: hitValidation.message
     });
@@ -8892,6 +8927,27 @@ export class ZoneServer2016 extends EventEmitter {
           position: client.character.state.position
         }
       }
+    );
+  }
+
+  traceWeaponEvent(
+    client: Client,
+    event: string,
+    details: Record<string, unknown> = {}
+  ): void {
+    if (!this.weaponTraceCharacters.has(client.character.characterId)) return;
+    const weapon = client.character.getEquippedWeapon();
+    console.log(
+      `[ShotTrace] ${JSON.stringify({
+        timestamp: Date.now(),
+        event,
+        characterId: client.character.characterId,
+        position: Array.from(client.character.state.position),
+        yaw: client.character.state.yaw,
+        weaponDefinitionId: weapon?.itemDefinitionId,
+        ammoCount: weapon?.weapon?.ammoCount,
+        ...details
+      })}`
     );
   }
 

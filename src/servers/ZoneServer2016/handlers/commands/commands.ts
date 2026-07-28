@@ -2304,6 +2304,27 @@ export const commands: Array<Command> = [
     }
   },
   {
+    name: "shottrace",
+    permissionLevel: PermissionLevels.ADMIN,
+    execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
+      const characterId = client.character.characterId;
+      const requested = args[0]?.toLowerCase();
+      const enabled =
+        requested === "on" ||
+        (requested !== "off" && !server.weaponTraceCharacters.has(characterId));
+      if (enabled) {
+        server.weaponTraceCharacters.add(characterId);
+        server.sendChatText(
+          client,
+          "[ShotTrace] ON - fire, miss, wall, body, and head test shots now."
+        );
+      } else {
+        server.weaponTraceCharacters.delete(characterId);
+        server.sendChatText(client, "[ShotTrace] OFF");
+      }
+    }
+  },
+  {
     name: "spawnnpc",
     permissionLevel: PermissionLevels.ADMIN,
     execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
