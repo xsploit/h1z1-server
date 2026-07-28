@@ -2263,7 +2263,7 @@ export const commands: Array<Command> = [
   },
   {
     name: "groundinfo",
-    permissionLevel: PermissionLevels.ADMIN,
+    permissionLevel: PermissionLevels.DEFAULT,
     execute: (server: ZoneServer2016, client: Client) => {
       const position = client.character.state.position;
       const ground = server.getGroundInfo(position);
