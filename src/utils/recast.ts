@@ -64,6 +64,7 @@ export class NavManager {
   lastTimeCall: number = Date.now();
   updateFrequency = 1 / 5;
   obstacleCount = 0;
+  private readonly _activeObstacles = new Set<BoxObstacle>();
   // streaming state
   streaming = false;
   private _tcOrigX = 0;
@@ -271,8 +272,10 @@ export class NavManager {
   }
 
   removeObstacle(obstacle: BoxObstacle) {
+    if (!this._activeObstacles.delete(obstacle)) return;
     this.tilecache.removeObstacle(obstacle);
     this.obstaclesRequestsPending++;
+    this.obstacleCount--;
   }
 
   addObstacle(
@@ -299,6 +302,7 @@ export class NavManager {
     if (success) {
       this.obstaclesRequestsPending++;
       this.obstacleCount++;
+      this._activeObstacles.add(obstacle);
       return obstacle;
     }
     return null;
