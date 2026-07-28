@@ -5367,6 +5367,36 @@ export class ZoneServer2016 extends EventEmitter {
     });
   }
 
+  sendRemoteWeaponUpdateDataToAllWithSpawnedEntity(
+    dictionary: EntityDictionary<BaseEntity>,
+    entityCharacterId: string,
+    transientId: number,
+    weaponGuid: string,
+    packetName: remoteWeaponUpdatePacketsType,
+    obj: zone2016packets
+  ) {
+    this.sendDataToAllWithSpawnedEntity<WeaponWeapon>(
+      dictionary,
+      entityCharacterId,
+      "Weapon.Weapon",
+      {
+        weaponPacket: {
+          packetName: "Weapon.RemoteWeapon",
+          gameTime: getCurrentServerTimeWrapper().getTruncatedU32(),
+          remoteWeaponPacket: {
+            packetName: "RemoteWeapon.Update",
+            transientId,
+            remoteWeaponUpdatePacket: {
+              packetName,
+              weaponGuid,
+              packet: obj
+            }
+          }
+        }
+      }
+    );
+  }
+
   sendRemoteWeaponUpdateDataToAllOthers(
     client: Client,
     transientId: number,

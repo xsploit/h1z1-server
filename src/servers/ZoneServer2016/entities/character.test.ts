@@ -7,7 +7,7 @@ import {
   createFakeZoneClient
 } from "../../../utils/test.utils";
 import { ZombieWalker } from "./zombiewalker";
-import { ModelIds } from "../models/enums";
+import { Items, ModelIds } from "../models/enums";
 
 process.env.FORCE_DISABLE_WS = "true";
 test("Damage-pve", { timeout: 10000 }, async (t) => {
@@ -26,7 +26,7 @@ test("Damage-pve", { timeout: 10000 }, async (t) => {
       entity: damager.characterId,
       damage: dmg,
       hitReport: {
-        characterId: damager.characterId,
+        characterId: character.characterId,
         sessionProjectileCount: 0,
         totalShotCount: 0,
         position: new Float32Array([0, 0, 0]),
@@ -74,7 +74,7 @@ test("Damage-npc-pvp", { timeout: 10000 }, async (t) => {
   });
   await zone.stop();
 });
-test("Damage-npc-pve", { timeout: 10000 }, async (t) => {
+test("Projectile-damage-npc-pve", { timeout: 10000 }, async (t) => {
   const zone = new ZoneServer2016(0);
   zone.isPvE = true;
   await zone.start();
@@ -96,17 +96,19 @@ test("Damage-npc-pve", { timeout: 10000 }, async (t) => {
     const dmg = 26;
     const damageInfo: DamageInfo = {
       entity: damager.characterId,
+      weapon: Items.WEAPON_M9,
       damage: dmg,
       hitReport: {
-        characterId: damager.characterId,
+        characterId: character.characterId,
         sessionProjectileCount: 0,
         totalShotCount: 0,
         position: new Float32Array([0, 0, 0]),
         unknownByte2: 0,
-        unknownFlag1: 0
+        unknownFlag1: 0,
+        hitLocation: "CHEST"
       }
     };
-    character.damage(zone, damageInfo);
+    character.OnProjectileHit(zone, damageInfo);
     assert.equal(character.getHealth(), oldHealth - dmg);
   });
   await zone.stop();

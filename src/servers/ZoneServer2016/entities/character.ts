@@ -1488,7 +1488,8 @@ export class Character2016 extends BaseFullCharacter {
     if (
       server.isPvE &&
       damageInfo.hitReport?.characterId &&
-      server._characters[damageInfo.hitReport?.characterId]
+      server._characters[damageInfo.hitReport?.characterId] &&
+      !server._npcs[damageInfo.entity]
     )
       return;
     const client = server.getClientByCharId(this.characterId);
@@ -2006,7 +2007,8 @@ export class Character2016 extends BaseFullCharacter {
   }
 
   OnProjectileHit(server: ZoneServer2016, damageInfo: DamageInfo) {
-    if (!this.isAlive || server.isPvE) return;
+    const sourceNpc = server._npcs[damageInfo.entity];
+    if (!this.isAlive || (server.isPvE && !sourceNpc)) return;
 
     if (server.isHeadshotOnly) {
       switch (damageInfo.hitReport?.hitLocation) {
@@ -2025,16 +2027,22 @@ export class Character2016 extends BaseFullCharacter {
 
     const sourceClient = server.getClientByCharId(damageInfo.entity), // source
       targetClient = server.getClientByCharId(this.characterId); // target
-    if (!sourceClient || !targetClient || !damageInfo.hitReport) {
+    if (
+      (!sourceClient && !sourceNpc) ||
+      !targetClient ||
+      !damageInfo.hitReport
+    ) {
       return;
     }
 
-    server.fairPlayManager.hitMissFairPlayCheck(
-      server,
-      sourceClient,
-      true,
-      damageInfo.hitReport?.hitLocation || ""
-    );
+    if (sourceClient) {
+      server.fairPlayManager.hitMissFairPlayCheck(
+        server,
+        sourceClient,
+        true,
+        damageInfo.hitReport?.hitLocation || ""
+      );
+    }
 
     const hasHelmetBefore = this.hasHelmet(server);
     const hasArmorBefore = this.hasArmor(server);
@@ -2084,7 +2092,7 @@ export class Character2016 extends BaseFullCharacter {
         break;
     }
 
-    if (this.isAlive) {
+    if (this.isAlive && sourceClient) {
       server.sendHitmarker(
         sourceClient,
         damageInfo.hitReport?.hitLocation,

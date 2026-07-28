@@ -126,6 +126,12 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   attackAnimation: string;
   attackImpactSeconds: number;
   attackRecoverySeconds: number;
+  attackCooldownSeconds: number;
+  attackImmediatelyOnReach: boolean;
+  attackImmediatelyAfterRecovery: boolean;
+  playAttackAnimation: boolean;
+  canAttackTarget?: (targetCharacterId: string) => boolean;
+  performAttack?: (targetCharacterId: string) => void;
   attackHitApplied: boolean;
   npc: Npc;
   server: ZoneServer2016;
@@ -138,6 +144,12 @@ export interface ZombieAiOptions {
   attackAnimation?: string;
   attackImpactSeconds?: number;
   attackRecoverySeconds?: number;
+  attackCooldownSeconds?: number;
+  attackImmediatelyOnReach?: boolean;
+  attackImmediatelyAfterRecovery?: boolean;
+  playAttackAnimation?: boolean;
+  canAttackTarget?: (targetCharacterId: string) => boolean;
+  performAttack?: (targetCharacterId: string) => void;
 }
 
 const BASE_SPEED = 1.0;
@@ -253,6 +265,10 @@ function getChaseTarget(zombie: ZombieInstance): {
 
 function applyDamageToTarget(zombie: ZombieInstance): void {
   if (!zombie.targetCharacterId) return;
+  if (zombie.performAttack) {
+    zombie.performAttack(zombie.targetCharacterId);
+    return;
+  }
   const character = zombie.server._characters[zombie.targetCharacterId];
   if (character) {
     zombie.npc.applyDamage(zombie.targetCharacterId);
@@ -427,7 +443,10 @@ export function createZombie(
         );
         if (chaseDist > 50) {
           zombie.event(ZombieEvents.LostPlayer);
-        } else if (chaseDist < zombie.attackRange) {
+        } else if (
+          chaseDist < zombie.attackRange &&
+          (zombie.canAttackTarget?.(zombie.targetCharacterId ?? "") ?? true)
+        ) {
           zombie.event(ZombieEvents.ReachPlayer);
         } else {
           if (trySmellCorpse(zombie)) return;
@@ -470,9 +489,12 @@ export function createZombie(
           zombie.npc.state.position,
           attackTarget.position
         );
-        if (attackDist >= zombie.attackRange) {
+        if (
+          attackDist >= zombie.attackRange ||
+          !(zombie.canAttackTarget?.(zombie.targetCharacterId ?? "") ?? true)
+        ) {
           zombie.event(ZombieEvents.PlayerBacked);
-        } else if (zombie.lastAttackTime > 2) {
+        } else if (zombie.lastAttackTime > zombie.attackCooldownSeconds) {
           zombie.event(ZombieEvents.StartAttacking);
         }
       },
@@ -596,7 +618,9 @@ export function createZombie(
         from: [ZombieTransitions.Chase],
         to: ZombieTransitions.Attack,
         EnterTransition: () => {
-          zombie.lastAttackTime = 2;
+          zombie.lastAttackTime = zombie.attackImmediatelyOnReach
+            ? zombie.attackCooldownSeconds
+            : 0;
         }
       },
       {
@@ -634,7 +658,9 @@ export function createZombie(
         to: ZombieTransitions.Attacking,
         EnterTransition: () => {
           zombie.npc.stopMovement();
-          zombie.npc.playAnimation(zombie.attackAnimation);
+          if (zombie.playAttackAnimation) {
+            zombie.npc.playAnimation(zombie.attackAnimation);
+          }
           zombie.stateTimer = 0;
           zombie.lastAttackTime = 0;
           zombie.attackHitApplied = false;
@@ -645,7 +671,9 @@ export function createZombie(
         from: [ZombieTransitions.Attacking],
         to: ZombieTransitions.Attack,
         EnterTransition: () => {
-          zombie.lastAttackTime = 2;
+          zombie.lastAttackTime = zombie.attackImmediatelyAfterRecovery
+            ? zombie.attackCooldownSeconds
+            : 0;
         }
       },
       {
@@ -739,6 +767,13 @@ export function createZombie(
     zombie.attackImpactSeconds,
     options.attackRecoverySeconds ?? 1
   );
+  zombie.attackCooldownSeconds = options.attackCooldownSeconds ?? 2;
+  zombie.attackImmediatelyOnReach = options.attackImmediatelyOnReach ?? true;
+  zombie.attackImmediatelyAfterRecovery =
+    options.attackImmediatelyAfterRecovery ?? true;
+  zombie.playAttackAnimation = options.playAttackAnimation ?? true;
+  zombie.canAttackTarget = options.canAttackTarget;
+  zombie.performAttack = options.performAttack;
   zombie.attackHitApplied = false;
 
   return zombie;
