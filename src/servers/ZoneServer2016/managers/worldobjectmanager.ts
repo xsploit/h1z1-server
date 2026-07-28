@@ -94,6 +94,23 @@ import { HostileSurvivor } from "../entities/hostilesurvivor";
 const debug = require("debug")("ZoneServer");
 const apm = require("elastic-apm-node");
 
+export const HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND = {
+  multiplayer: 50,
+  solo: 200
+} as const;
+
+export function getHostileSurvivorChancePerThousand(soloMode: boolean): number {
+  const fallback = soloMode
+    ? HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND.solo
+    : HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND.multiplayer;
+  const configuredChance = Number(
+    process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND ?? fallback
+  );
+  return Number.isFinite(configuredChance)
+    ? Math.max(0, Math.min(1000, configuredChance))
+    : fallback;
+}
+
 export function getRandomSkin(itemDefinitionId: number) {
   let itemDefId = 0;
   let arr: any[] = [];
@@ -210,19 +227,14 @@ export class WorldObjectManager {
   maxLootbagDespawnsPerRun = 40;
   maxItemDespawnsPerRun = 120;
 
-  private getNpcModelForSpawn(modelId: number): number {
+  private getNpcModelForSpawn(modelId: number, soloMode: boolean): number {
     if (
       modelId !== ModelIds.ZOMBIE_FEMALE_WALKER &&
       modelId !== ModelIds.ZOMBIE_MALE_WALKER
     ) {
       return modelId;
     }
-    const configuredChance = Number(
-      process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND ?? 50
-    );
-    const chancePerThousand = Number.isFinite(configuredChance)
-      ? Math.max(0, Math.min(1000, configuredChance))
-      : 50;
+    const chancePerThousand = getHostileSurvivorChancePerThousand(soloMode);
     if (Math.floor(Math.random() * 1000) + 1 > chancePerThousand) {
       return modelId;
     }
@@ -483,7 +495,10 @@ export class WorldObjectManager {
 
       let i = 0;
       for (const entry of plan) {
-        const modelId = this.getNpcModelForSpawn(entry.modelId);
+        const modelId = this.getNpcModelForSpawn(
+          entry.modelId,
+          server._soloMode
+        );
         this.createNpc(
           server,
           modelId,
@@ -1524,7 +1539,8 @@ export class WorldObjectManager {
           const modelId = this.getNpcModelForSpawn(
             authorizedModelId[
               Math.floor(Math.random() * authorizedModelId.length)
-            ]
+            ],
+            server._soloMode
           );
           let npcId: NpcIds | undefined;
           if (

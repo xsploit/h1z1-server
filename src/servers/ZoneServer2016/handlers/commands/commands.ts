@@ -60,6 +60,7 @@ import { LoadoutContainer } from "../../classes/loadoutcontainer";
 import { BaseItem } from "../../classes/baseItem";
 import { DB_COLLECTIONS } from "../../../../utils/enums";
 import { WorldDataManager } from "../../managers/worlddatamanager";
+import { getHostileSurvivorChancePerThousand } from "../../managers/worldobjectmanager";
 import { BaseEntity } from "../../entities/baseentity";
 import { MAX_UINT32 } from "../../../../utils/constants";
 import { WithId } from "mongodb";
@@ -2484,7 +2485,7 @@ export const commands: Array<Command> = [
     execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
       if (!args[0]) {
         const currentChance =
-          Number(process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND ?? 50) / 10;
+          getHostileSurvivorChancePerThousand(server._soloMode) / 10;
         server.sendChatText(
           client,
           `Bandit replacement chance is ${currentChance}% per zombie spawn.`

@@ -14,6 +14,32 @@
 import test, { after } from "node:test";
 import assert from "node:assert";
 import { LootTableManager } from "./loottablemanager";
+import {
+  getHostileSurvivorChancePerThousand,
+  HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND
+} from "./worldobjectmanager";
+
+test("solo mode favors bandits without changing multiplayer defaults", () => {
+  const previousChance = process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND;
+  delete process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND;
+  try {
+    assert.equal(
+      getHostileSurvivorChancePerThousand(true),
+      HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND.solo
+    );
+    assert.equal(
+      getHostileSurvivorChancePerThousand(false),
+      HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND.multiplayer
+    );
+    assert.equal(HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND.solo, 200);
+  } finally {
+    if (previousChance === undefined) {
+      delete process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND;
+    } else {
+      process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND = previousChance;
+    }
+  }
+});
 
 test("WorldObjectManager", { timeout: 10000 }, async (t) => {
   await t.test("containerLootSpawners", () => {
