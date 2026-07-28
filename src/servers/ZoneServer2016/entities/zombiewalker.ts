@@ -58,6 +58,11 @@ export class ZombieWalker extends Npc {
     );
     this.materialType = MaterialTypes.ZOMBIE;
     this.npcMeleeDamage = 2500;
+    this.npcMeleeTrace = {
+      reach: 1.65,
+      halfArcDegrees: 65,
+      verticalTolerance: 1.5
+    };
     this.npcId = NpcIds.ZOMBIE;
     this.faction = Factions.ZOMBIE;
     this.nameId = StringIds.ZOMBIE_WALKER;

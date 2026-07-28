@@ -1318,16 +1318,23 @@ export class Vehicle2016 extends BaseLootableEntity {
   OnMeleeHit(server: ZoneServer2016, damageInfo: DamageInfo) {
     const client = server.getClientByCharId(damageInfo.entity),
       weapon = client?.character.getEquippedWeapon();
-    damageInfo.damage = damageInfo.damage * 2;
+    if (server._npcs[damageInfo.entity]) {
+      this.damage(server, damageInfo);
+      return;
+    }
+    const scaledDamageInfo = {
+      ...damageInfo,
+      damage: damageInfo.damage * 2
+    };
     if (!client || weapon?.itemDefinitionId != Items.WEAPON_WRENCH) {
       if (!server.isPvE) {
-        this.damage(server, damageInfo);
+        this.damage(server, scaledDamageInfo);
       }
       return;
     }
 
     if (this._resources[ResourceIds.CONDITION] < 100000) {
-      this.damage(server, { ...damageInfo, damage: -2000 });
+      this.damage(server, { ...scaledDamageInfo, damage: -2000 });
       server.damageItem(client.character, weapon, 80);
     }
   }

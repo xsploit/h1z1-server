@@ -68,6 +68,18 @@ test("Damage-pvp", { timeout: 10000 }, async (t) => {
     // don't ask me why it's *2
     assert.equal(vehicle.getHealth(), oldHealth - dmg * 2);
   });
+  await t.test(
+    "Damage from NPC melee has no player melee multiplier",
+    async () => {
+      const oldHealth = vehicle.getHealth();
+      const damageInfo: DamageInfo = { entity: "zombie", damage: 10 };
+      zone._npcs.zombie = {} as never;
+      vehicle.OnMeleeHit(zone, damageInfo);
+      delete zone._npcs.zombie;
+      assert.equal(vehicle.getHealth(), oldHealth - damageInfo.damage);
+      assert.equal(damageInfo.damage, 10);
+    }
+  );
   await t.test("Damage from collisions", async () => {
     const oldHealth = vehicle.getHealth();
     const dmg = 10;

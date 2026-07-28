@@ -281,8 +281,8 @@ export abstract class Npc extends BaseFullCharacter {
         const vehicle = this.server._vehicles[mountedVehicleId];
         if (vehicle) {
           vehicle.OnMeleeHit(this.server, damageInfo);
-          return;
         }
+        return;
       }
 
       const healthBefore = client.character.getHealth();
