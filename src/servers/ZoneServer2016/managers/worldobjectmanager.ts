@@ -90,10 +90,7 @@ import {
 } from "./lootspawnworker";
 import type { ItemFunction } from "types/zoneserver";
 import { Gasser } from "../entities/gasser";
-import {
-  HostileSurvivor,
-  HumanNpcArchetype
-} from "../entities/hostilesurvivor";
+import { HostileSurvivor } from "../entities/hostilesurvivor";
 const debug = require("debug")("ZoneServer");
 const apm = require("elastic-apm-node");
 
@@ -674,9 +671,7 @@ export class WorldObjectManager {
     position: Float32Array,
     rotation: Float32Array,
     spawnerId: number = 0,
-    npcId?: NpcIds,
-    humanArchetype: HumanNpcArchetype = "raider",
-    homePosition?: Float32Array
+    npcId?: NpcIds
   ) {
     const characterId = generateRandomGuid();
     const transientId = server.getTransientId(characterId);
@@ -773,9 +768,7 @@ export class WorldObjectManager {
           position,
           rotation,
           server,
-          spawnerId,
-          humanArchetype,
-          homePosition
+          spawnerId
         );
         break;
       default:

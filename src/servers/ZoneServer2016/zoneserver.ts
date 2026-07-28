@@ -219,7 +219,6 @@ import {
 } from "types/zone2016packets";
 import { getCharacterModelData } from "../shared/functions";
 import { HookManager } from "./managers/hookmanager";
-import { HumanEncounterManager } from "./managers/humanencountermanager";
 import { BaseItem } from "./classes/baseItem";
 import { LoadoutItem } from "./classes/loadoutItem";
 import { LoadoutContainer } from "./classes/loadoutcontainer";
@@ -492,7 +491,6 @@ export class ZoneServer2016 extends EventEmitter {
   accountInventoriesManager: AccountInventoryManager;
   rewardManager: RewardManager;
   worldObjectManager: WorldObjectManager;
-  humanEncounterManager: HumanEncounterManager;
   voiceChatManager: VoiceChatManager;
   smeltingManager: SmeltingManager;
   decayManager: DecayManager;
@@ -630,7 +628,6 @@ export class ZoneServer2016 extends EventEmitter {
     this._worldId = worldId || 0;
     this._protocol = new H1Z1Protocol(this._clientProtocol);
     this.worldObjectManager = new WorldObjectManager();
-    this.humanEncounterManager = new HumanEncounterManager();
     this.voiceChatManager = new VoiceChatManager();
     this.smeltingManager = new SmeltingManager();
     this.decayManager = new DecayManager();
@@ -10668,7 +10665,6 @@ export class ZoneServer2016 extends EventEmitter {
     const dt = (now - this.lastFsmTick) / 1000;
     this.lastFsmTick = now;
     this._rebuildAiTargetMap();
-    this.humanEncounterManager.tick(this);
     this.tickNpcFsms(dt);
     // reset sounds every AI tick
     this.sounds = [];

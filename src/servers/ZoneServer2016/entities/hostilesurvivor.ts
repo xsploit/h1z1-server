@@ -1,6 +1,6 @@
 import { ZoneClient2016 } from "../classes/zoneclient";
 import { LoadoutContainer } from "../classes/loadoutcontainer";
-import { createHumanoid } from "../jsms/humanoid.jsm";
+import { createZombie } from "../jsms/zombie.jsm";
 import { Factions } from "../jsms/factions";
 import {
   Effects,
@@ -27,8 +27,6 @@ export interface BanditWeaponKit {
   attackCooldownSeconds: number;
   soundRadius: number;
 }
-
-export type HumanNpcArchetype = "raider" | "police" | "military";
 
 const BANDIT_WEAPON_KITS: BanditWeaponKit[] = [
   {
@@ -67,17 +65,8 @@ function randomItem(items: Items[]): Items {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function selectWeaponKit(archetype: HumanNpcArchetype): BanditWeaponKit {
-  if (archetype === "military") return BANDIT_WEAPON_KITS[2];
-  if (archetype === "police") {
-    return Math.random() < 0.75 ? BANDIT_WEAPON_KITS[1] : BANDIT_WEAPON_KITS[0];
-  }
-  return selectBanditWeaponKit();
-}
-
 export class HostileSurvivor extends Npc {
   private readonly weaponKit: BanditWeaponKit;
-  readonly archetype: HumanNpcArchetype;
   private reloadReadyAt = 0;
   private shotSequence = 0;
 
@@ -88,9 +77,7 @@ export class HostileSurvivor extends Npc {
     position: Float32Array,
     rotation: Float32Array,
     server: ZoneServer2016,
-    spawnerId: number = 0,
-    archetype: HumanNpcArchetype = "raider",
-    homePosition?: Float32Array
+    spawnerId: number = 0
   ) {
     super(
       characterId,
@@ -106,13 +93,7 @@ export class HostileSurvivor extends Npc {
     this.faction = Factions.BANDIT;
     this.loadoutId = LoadoutIds.CHARACTER;
     this.usesPlayerReplication = true;
-    this.archetype = archetype;
-    this.playerName =
-      archetype === "military"
-        ? "Soldier"
-        : archetype === "police"
-          ? "Officer"
-          : "Raider";
+    this.playerName = "Raider";
     this.movementStance = 66561;
     this.stationaryStance = 1089;
     this.npcMeleeDamage = 1400;
@@ -124,43 +105,24 @@ export class HostileSurvivor extends Npc {
       verticalTolerance: 1.25
     };
     this.infectsTargetOnMelee = false;
-    this.weaponKit = selectWeaponKit(archetype);
+    this.weaponKit = selectBanditWeaponKit();
 
-    const outfit =
-      archetype === "military"
-        ? [
-            Items.CAMO_GREEN_FLANNEL_SHIRT,
-            Items.PANTS_DEFAULT,
-            Items.BOOTS_TAN,
-            Items.BACKPACK_MILITARY_GREEN_CAMO,
-            Items.HELMET_TACTICAL,
-            Items.KEVLAR_DEFAULT
-          ]
-        : archetype === "police"
-          ? [
-              Items.POLICE_SHIRT,
-              Items.POLICE_SLACKS,
-              Items.BOOTS_GRAY_BLUE,
-              Items.POLICE_HAT,
-              Items.KEVLAR_DEFAULT
-            ]
-          : [
-              randomItem([
-                Items.SHIRT_DEFAULT,
-                Items.BLUE_FLANNEL_SHIRT,
-                Items.BROWN_FLANNEL_SHIRT,
-                Items.GREEN_FLANNEL_SHIRT,
-                Items.RED_FLANNEL_SHIRT
-              ]),
-              randomItem([Items.PANTS_DEFAULT, Items.POLICE_SLACKS]),
-              randomItem([Items.BOOTS_TAN, Items.BOOTS_GRAY_BLUE]),
-              randomItem([
-                Items.BACKPACK_BLUE_ORANGE,
-                Items.BACKPACK_MILITARY_TAN,
-                Items.BACKPACK_MILITARY_GREEN_CAMO
-              ])
-            ];
-    for (const itemDefinitionId of outfit) {
+    for (const itemDefinitionId of [
+      randomItem([
+        Items.SHIRT_DEFAULT,
+        Items.BLUE_FLANNEL_SHIRT,
+        Items.BROWN_FLANNEL_SHIRT,
+        Items.GREEN_FLANNEL_SHIRT,
+        Items.RED_FLANNEL_SHIRT
+      ]),
+      randomItem([Items.PANTS_DEFAULT, Items.POLICE_SLACKS]),
+      randomItem([Items.BOOTS_TAN, Items.BOOTS_GRAY_BLUE]),
+      randomItem([
+        Items.BACKPACK_BLUE_ORANGE,
+        Items.BACKPACK_MILITARY_TAN,
+        Items.BACKPACK_MILITARY_GREEN_CAMO
+      ])
+    ]) {
       this.equipItem(server, server.generateItem(itemDefinitionId), false);
     }
 
@@ -190,15 +152,16 @@ export class HostileSurvivor extends Npc {
     }
 
     if (!process.env.DISABLE_AI && server.aiEnabled) {
-      this.fsm = createHumanoid(this, server, {
-        homePosition,
-        patrolRadius: archetype === "military" ? 55 : 35,
-        leashRadius: archetype === "raider" ? 100 : 140,
+      this.fsm = createZombie(this, server, {
+        canFeed: false,
         detectionRange: 55,
         attackRange: this.weaponKit.attackRange,
-        minimumRange: archetype === "military" ? 12 : 8,
+        attackImpactSeconds: 0.12,
+        attackRecoverySeconds: 0.3,
         attackCooldownSeconds: this.weaponKit.attackCooldownSeconds,
-        reactionSeconds: archetype === "military" ? 0.45 : 0.7,
+        attackImmediatelyOnReach: false,
+        attackImmediatelyAfterRecovery: false,
+        playAttackAnimation: false,
         canAttackTarget: (targetCharacterId) =>
           this.canShootTarget(targetCharacterId),
         performAttack: (targetCharacterId) =>

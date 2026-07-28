@@ -1,7 +1,6 @@
 import assert from "node:assert";
 import test from "node:test";
 import { Factions, isHostile } from "./factions";
-import { createHumanoid } from "./humanoid.jsm";
 import { createZombie } from "./zombie.jsm";
 import { isMeleeTargetInArc } from "../entities/npc";
 import {
@@ -214,20 +213,18 @@ test("raider melee lands once at the configured animation impact", () => {
   assert.equal(raider.state, "attack");
 });
 
-test("human combat patrols, repositions without LOS, and fires after reacting", () => {
+test("ranged raider waits, checks line of sight, and uses its attack callback", () => {
   const playerPosition = new Float32Array([0, 0, 10, 1]);
   let fireCalls = 0;
-  let moveCalls = 0;
   let lineOfSight = false;
   const npc = {
     characterId: "bandit",
     transientId: 10,
     faction: Factions.BANDIT,
     state: { position: new Float32Array([0, 0, 0, 1]) },
-    navAgent: { requestMoveTarget: () => moveCalls++ },
+    navAgent: { requestMoveTarget: () => undefined },
     lookAtTarget: null,
     setSpeed: () => undefined,
-    goTo: () => moveCalls++,
     stopMovement: () => undefined,
     setAnimation: () => undefined,
     playAnimation: () => assert.fail("ranged attacks use weapon packets"),
@@ -267,11 +264,16 @@ test("human combat patrols, repositions without LOS, and fires after reacting", 
     },
     _npcs: { bandit: npc }
   };
-  const raider = createHumanoid(npc as never, server as never, {
-    homePosition: npc.state.position,
+  const raider = createZombie(npc as never, server as never, {
+    canFeed: false,
     detectionRange: 55,
     attackRange: 30,
+    attackImpactSeconds: 0.1,
+    attackRecoverySeconds: 0.2,
     attackCooldownSeconds: 0.5,
+    attackImmediatelyOnReach: false,
+    attackImmediatelyAfterRecovery: false,
+    playAttackAnimation: false,
     canAttackTarget: () => lineOfSight,
     performAttack: () => {
       fireCalls++;
@@ -279,12 +281,17 @@ test("human combat patrols, repositions without LOS, and fires after reacting", 
   });
 
   raider.tick(0.1);
-  assert.equal(raider.state, "engage");
-  raider.tick(0.9);
-  assert.ok(moveCalls > 0);
+  raider.tick(0.1);
+  assert.equal(raider.state, "chase");
   assert.equal(fireCalls, 0);
 
   lineOfSight = true;
-  raider.tick(0.6);
+  raider.tick(0.1);
+  assert.equal(raider.state, "attack");
+  raider.tick(0.49);
+  assert.equal(fireCalls, 0);
+  raider.tick(0.02);
+  assert.equal(raider.state, "attacking");
+  raider.tick(0.11);
   assert.equal(fireCalls, 1);
 });
