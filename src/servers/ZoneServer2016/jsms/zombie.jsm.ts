@@ -120,8 +120,19 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   wanderOrigin: Float32Array;
   isCoveringEars: boolean;
   coverEarsTimer: number;
+  canFeed: boolean;
+  detectionRange: number;
+  attackRange: number;
+  attackAnimation: string;
   npc: Npc;
   server: ZoneServer2016;
+}
+
+export interface ZombieAiOptions {
+  canFeed?: boolean;
+  detectionRange?: number;
+  attackRange?: number;
+  attackAnimation?: string;
 }
 
 const BASE_SPEED = 1.0;
@@ -181,7 +192,7 @@ function trySeePlayer(zombie: ZombieInstance): boolean {
       for (const entry of bucket) {
         if (entry.id === zombie.npc.characterId) continue;
         if (!isHostile(zombie.npc.faction, entry.faction)) continue;
-        if (getDistance2d(pos, entry.position) < 10) {
+        if (getDistance2d(pos, entry.position) < zombie.detectionRange) {
           zombie.targetCharacterId = entry.id;
           zombie.event(ZombieEvents.SeePlayer);
           return true;
@@ -193,6 +204,7 @@ function trySeePlayer(zombie: ZombieInstance): boolean {
 }
 
 function trySmellCorpse(zombie: ZombieInstance): boolean {
+  if (!zombie.canFeed) return false;
   if (zombie.hunger < 60) return false;
   for (const characterId in zombie.server._characters) {
     const character = zombie.server._characters[characterId];
@@ -286,7 +298,11 @@ function decayAgitation(zombie: ZombieInstance, dt: number) {
   zombie.agitation = Math.max(0, zombie.agitation - AGITATION_DECAY_RATE * dt);
 }
 
-export function createZombie(npc: Npc, server: ZoneServer2016): ZombieInstance {
+export function createZombie(
+  npc: Npc,
+  server: ZoneServer2016,
+  options: ZombieAiOptions = {}
+): ZombieInstance {
   const zombie = new JSM(
     {
       [ZombieTransitions.Wander]: (dt: number) => {
@@ -406,7 +422,7 @@ export function createZombie(npc: Npc, server: ZoneServer2016): ZombieInstance {
         );
         if (chaseDist > 50) {
           zombie.event(ZombieEvents.LostPlayer);
-        } else if (chaseDist < 2) {
+        } else if (chaseDist < zombie.attackRange) {
           zombie.event(ZombieEvents.ReachPlayer);
         } else {
           if (trySmellCorpse(zombie)) return;
@@ -432,7 +448,7 @@ export function createZombie(npc: Npc, server: ZoneServer2016): ZombieInstance {
 
         const attackTarget = getChaseTarget(zombie);
         if (!attackTarget || !attackTarget.isAlive) {
-          if (zombie.hunger >= 30) {
+          if (zombie.canFeed && zombie.hunger >= 30) {
             zombie.event(ZombieEvents.PlayerKilled);
           } else {
             zombie.event(ZombieEvents.LostPlayer);
@@ -449,7 +465,7 @@ export function createZombie(npc: Npc, server: ZoneServer2016): ZombieInstance {
           zombie.npc.state.position,
           attackTarget.position
         );
-        if (attackDist >= 2) {
+        if (attackDist >= zombie.attackRange) {
           zombie.event(ZombieEvents.PlayerBacked);
         } else if (zombie.lastAttackTime > 2) {
           zombie.event(ZombieEvents.StartAttacking);
@@ -473,7 +489,7 @@ export function createZombie(npc: Npc, server: ZoneServer2016): ZombieInstance {
               zombie.npc.state.position,
               attackTarget.position
             );
-            if (attackDist <= 2) {
+            if (attackDist <= zombie.attackRange) {
               applyDamageToTarget(zombie);
             }
           }
@@ -612,7 +628,7 @@ export function createZombie(npc: Npc, server: ZoneServer2016): ZombieInstance {
         from: [ZombieTransitions.Attack],
         to: ZombieTransitions.Attacking,
         EnterTransition: () => {
-          zombie.npc.playAnimation(ZombieOneshotAnim.KnifeSlash);
+          zombie.npc.playAnimation(zombie.attackAnimation);
           zombie.stateTimer = 0;
           zombie.lastAttackTime = 0;
         }
@@ -706,6 +722,11 @@ export function createZombie(npc: Npc, server: ZoneServer2016): ZombieInstance {
   zombie.lastAttackTime = 0;
   zombie.isCoveringEars = false;
   zombie.coverEarsTimer = 0;
+  zombie.canFeed = options.canFeed ?? true;
+  zombie.detectionRange = options.detectionRange ?? 10;
+  zombie.attackRange = options.attackRange ?? 2;
+  zombie.attackAnimation =
+    options.attackAnimation ?? ZombieOneshotAnim.KnifeSlash;
 
   return zombie;
 }

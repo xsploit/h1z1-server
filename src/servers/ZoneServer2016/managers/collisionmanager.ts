@@ -259,6 +259,73 @@ export class CollisionManager {
     return bestY;
   }
 
+  segmentBlocked(from: Float32Array, to: Float32Array): boolean {
+    if (!this._loaded) return false;
+    const dx = to[0] - from[0],
+      dy = to[1] - from[1],
+      dz = to[2] - from[2],
+      length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (length < 0.001) return false;
+
+    this._ray.origin.set(from[0], from[1], from[2]);
+    this._ray.direction.set(dx / length, dy / length, dz / length);
+
+    const cx0 = Math.max(0, this.cell(Math.min(from[0], to[0]))),
+      cx1 = Math.min(GRID_W - 1, this.cell(Math.max(from[0], to[0]))),
+      cz0 = Math.max(0, this.cell(Math.min(from[2], to[2]))),
+      cz1 = Math.min(GRID_W - 1, this.cell(Math.max(from[2], to[2])));
+    const seen = new Set<number>();
+
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cz = cz0; cz <= cz1; cz++) {
+        const cell = this._grid[cz * GRID_W + cx];
+        if (!cell) continue;
+        for (const i of cell) {
+          if (seen.has(i) || this._meshKind[this._instMesh[i]] === 0) continue;
+          seen.add(i);
+          const b = i * 16;
+          this._pos.set(
+            this._instData[b],
+            this._instData[b + 1],
+            this._instData[b + 2]
+          );
+          this._quat.set(
+            this._instData[b + 3],
+            this._instData[b + 4],
+            this._instData[b + 5],
+            this._instData[b + 6]
+          );
+          this._scl.set(
+            this._instData[b + 7],
+            this._instData[b + 8],
+            this._instData[b + 9]
+          );
+          this._mat.compose(this._pos, this._quat, this._scl);
+          this._inv.copy(this._mat).invert();
+          this._localRay.copy(this._ray).applyMatrix4(this._inv);
+
+          const hit = this._meshBVH[this._instMesh[i]].raycastFirst(
+            this._localRay,
+            DoubleSide
+          );
+          if (!hit) continue;
+          this._hitPoint.copy(hit.point).applyMatrix4(this._mat);
+          const hitDx = this._hitPoint.x - from[0],
+            hitDy = this._hitPoint.y - from[1],
+            hitDz = this._hitPoint.z - from[2],
+            distanceAlong =
+              hitDx * this._ray.direction.x +
+              hitDy * this._ray.direction.y +
+              hitDz * this._ray.direction.z;
+          if (distanceAlong > 0.05 && distanceAlong < length - 0.05) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   // Solid-obstacle instances (walls/wrecks/fences) whose world-AABB centre is
   // within `radius` of (x,z). Used to carve a moving navmesh-obstacle window
   // around players so NPCs route around them. Box is the instance world AABB,

@@ -76,6 +76,7 @@ import { DeerEvents } from "../../jsms/deer.jsm";
 import { ZombieEvents } from "../../jsms/zombie.jsm";
 import { Wolf } from "../../entities/wolf";
 import { Bear } from "../../entities/bear";
+import { HostileSurvivor } from "../../entities/hostilesurvivor";
 import { writeFileSync } from "node:fs";
 import { PluginManager } from "../../managers/pluginmanager";
 const itemDefinitions = PluginManager.loadServerData(
@@ -2290,7 +2291,10 @@ export const commands: Array<Command> = [
         deer: ModelIds.DEER,
         deer_buck: ModelIds.DEER_BUCK,
         wolf: ModelIds.WOLF,
-        bear: ModelIds.BEAR
+        bear: ModelIds.BEAR,
+        bandit: ModelIds.SURVIVOR_MALE_HEAD_01,
+        bandit_male: ModelIds.SURVIVOR_MALE_HEAD_01,
+        bandit_female: ModelIds.SURVIVAL_FEMALE_HEAD_01
       };
       const availableTypes = Object.keys(npcTypes).join(", ");
       if (!args[0]) {
@@ -2322,8 +2326,34 @@ export const commands: Array<Command> = [
         gasser: NpcIds.GASSER
       };
       for (let i = 0; i < count; i++) {
-        const offsetX = (Math.random() - 0.5) * 2 * scatterRadius;
-        const offsetZ = (Math.random() - 0.5) * 2 * scatterRadius;
+        const spawnModelId =
+          args[0] === "bandit"
+            ? Math.random() < 0.5
+              ? ModelIds.SURVIVOR_MALE_HEAD_01
+              : ModelIds.SURVIVAL_FEMALE_HEAD_01
+            : modelId;
+        let offsetX = 0;
+        let offsetZ = 0;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 6 + Math.random() * (scatterRadius - 6);
+          const candidateX = Math.cos(angle) * distance;
+          const candidateZ = Math.sin(angle) * distance;
+          const surfaceY = server.collisionManager.groundRaycast(
+            client.character.state.position[0] + candidateX,
+            client.character.state.position[2] + candidateZ,
+            client.character.state.position[1]
+          );
+          if (
+            surfaceY !== null &&
+            surfaceY > client.character.state.position[1] + 1
+          ) {
+            continue;
+          }
+          offsetX = candidateX;
+          offsetZ = candidateZ;
+          break;
+        }
         const pos = new Float32Array([
           client.character.state.position[0] + offsetX,
           client.character.state.position[1],
@@ -2332,7 +2362,7 @@ export const commands: Array<Command> = [
         ]);
         server.worldObjectManager.createNpc(
           server,
-          modelId,
+          spawnModelId,
           pos,
           client.character.state.lookAt,
           0,
@@ -2366,6 +2396,13 @@ export const commands: Array<Command> = [
           npc instanceof Deer && npc.actorModelId === ModelIds.DEER_BUCK,
         wolf: (npc) => npc instanceof Wolf,
         bear: (npc) => npc instanceof Bear,
+        bandit: (npc) => npc instanceof HostileSurvivor,
+        bandit_male: (npc) =>
+          npc instanceof HostileSurvivor &&
+          npc.actorModelId === ModelIds.SURVIVOR_MALE_HEAD_01,
+        bandit_female: (npc) =>
+          npc instanceof HostileSurvivor &&
+          npc.actorModelId === ModelIds.SURVIVAL_FEMALE_HEAD_01,
         all: () => true
       };
       const availableTypes = Object.keys(npcGroups).join(", ");
@@ -2395,6 +2432,33 @@ export const commands: Array<Command> = [
         count++;
       }
       server.sendChatText(client, `Despawned ${count} ${args[0]} NPC(s).`);
+    }
+  },
+  {
+    name: "banditchance",
+    permissionLevel: PermissionLevels.ADMIN,
+    execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
+      if (!args[0]) {
+        const currentChance =
+          Number(process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND ?? 50) / 10;
+        server.sendChatText(
+          client,
+          `Bandit replacement chance is ${currentChance}% per zombie spawn.`
+        );
+        return;
+      }
+      const percent = Number(args[0]);
+      if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+        server.sendChatText(client, "[ERROR] Usage: /banditchance <0-100>");
+        return;
+      }
+      process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND = String(
+        Math.round(percent * 10)
+      );
+      server.sendChatText(
+        client,
+        `Bandit replacement chance set to ${percent}% for future NPC spawns.`
+      );
     }
   },
   {

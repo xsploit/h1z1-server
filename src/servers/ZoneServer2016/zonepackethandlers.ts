@@ -172,6 +172,23 @@ import { Collection } from "mongodb";
 import { ItemObject } from "./entities/itemobject";
 import { ExplosiveEntity } from "./entities/explosiveentity";
 
+export function resolveItemUseCount(
+  itemUseOption: number | undefined,
+  itemSubDataCount: number | undefined,
+  itemCount: number | undefined
+): number {
+  const count = itemSubDataCount ?? itemCount ?? 0;
+  if (count > 0) return count;
+  switch (itemUseOption) {
+    case ItemUseOptions.DROP:
+    case ItemUseOptions.DROP_BATTERY:
+    case ItemUseOptions.DROP_SPARKS:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 function getStanceFlags(num: number): StanceFlags {
   function getBit(bin: string, bit: number) {
     return bin.charAt(bit) === "1";
@@ -2129,8 +2146,11 @@ export class ZonePacketHandlers {
     debug(packet.data);
     const { itemGuid, itemUseOption, targetCharacterId, sourceCharacterId } =
       packet.data;
-    const count =
-      (packet.data.itemSubData as any)?.count ?? packet.data.itemCount;
+    const count = resolveItemUseCount(
+      itemUseOption,
+      (packet.data.itemSubData as any)?.count,
+      packet.data.itemCount
+    );
 
     switch (itemUseOption) {
       case ItemUseOptions.HOTWIRE_OFFROADER:
@@ -2205,7 +2225,7 @@ export class ZonePacketHandlers {
       case ItemUseOptions.DROP:
       case ItemUseOptions.DROP_BATTERY:
       case ItemUseOptions.DROP_SPARKS:
-        server.dropItem(character, item, count, animationId);
+        await server.dropItem(character, item, count, animationId);
         if (character instanceof BaseLootableEntity) {
           // remount container to keep items from changing slotIds
           client.character.mountContainer(server, character);

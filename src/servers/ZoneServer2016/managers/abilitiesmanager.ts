@@ -319,6 +319,20 @@ export class AbilitiesManager {
     )
       return;
     const effectId: Effects = Effects[effectString as keyof typeof Effects];
+    this.applyMeleeHitEffect(
+      server,
+      entity,
+      client.character.characterId,
+      effectId
+    );
+  }
+
+  applyMeleeHitEffect(
+    server: ZoneServer2016,
+    entity: BaseEntity,
+    attackerCharacterId: string,
+    effectId: Effects
+  ) {
     const dictionary = server.getEntityDictionary(entity.characterId);
     if (!dictionary) return;
     if (entity.effectTags.includes(effectId)) {
@@ -343,7 +357,7 @@ export class AbilitiesManager {
         characterId: entity.characterId,
         unknownDword1: effectId,
         effectId: effectId,
-        unknownGuid: client.character.characterId,
+        unknownGuid: attackerCharacterId,
         unknownDword2: 3
       }
     );

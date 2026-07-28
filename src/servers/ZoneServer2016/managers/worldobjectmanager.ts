@@ -90,6 +90,7 @@ import {
 } from "./lootspawnworker";
 import type { ItemFunction } from "types/zoneserver";
 import { Gasser } from "../entities/gasser";
+import { HostileSurvivor } from "../entities/hostilesurvivor";
 const debug = require("debug")("ZoneServer");
 const apm = require("elastic-apm-node");
 
@@ -208,6 +209,27 @@ export class WorldObjectManager {
   maxNpcDespawnsPerRun = 40;
   maxLootbagDespawnsPerRun = 40;
   maxItemDespawnsPerRun = 120;
+
+  private getNpcModelForSpawn(modelId: number): number {
+    if (
+      modelId !== ModelIds.ZOMBIE_FEMALE_WALKER &&
+      modelId !== ModelIds.ZOMBIE_MALE_WALKER
+    ) {
+      return modelId;
+    }
+    const configuredChance = Number(
+      process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND ?? 50
+    );
+    const chancePerThousand = Number.isFinite(configuredChance)
+      ? Math.max(0, Math.min(1000, configuredChance))
+      : 50;
+    if (Math.floor(Math.random() * 1000) + 1 > chancePerThousand) {
+      return modelId;
+    }
+    return Math.random() < 0.5
+      ? ModelIds.SURVIVOR_MALE_HEAD_01
+      : ModelIds.SURVIVAL_FEMALE_HEAD_01;
+  }
 
   private getItemRespawnTimer(server: ZoneServer2016): void {
     if (this.hasCustomLootRespawnTime) return;
@@ -461,9 +483,10 @@ export class WorldObjectManager {
 
       let i = 0;
       for (const entry of plan) {
+        const modelId = this.getNpcModelForSpawn(entry.modelId);
         this.createNpc(
           server,
-          entry.modelId,
+          modelId,
           new Float32Array(entry.position),
           new Float32Array(eul2quat(new Float32Array(entry.rotation))),
           entry.spawnerId,
@@ -715,6 +738,18 @@ export class WorldObjectManager {
         npc = new Bear(
           characterId,
           transientId,
+          position,
+          rotation,
+          server,
+          spawnerId
+        );
+        break;
+      case ModelIds.SURVIVOR_MALE_HEAD_01:
+      case ModelIds.SURVIVAL_FEMALE_HEAD_01:
+        npc = new HostileSurvivor(
+          characterId,
+          transientId,
+          modelId,
           position,
           rotation,
           server,
@@ -1486,10 +1521,11 @@ export class WorldObjectManager {
           if (screamerChance <= this.chanceScreamer) {
             authorizedModelId.push(9667);
           }
-          const modelId =
+          const modelId = this.getNpcModelForSpawn(
             authorizedModelId[
               Math.floor(Math.random() * authorizedModelId.length)
-            ];
+            ]
+          );
           let npcId: NpcIds | undefined;
           if (
             modelId === ModelIds.ZOMBIE_FEMALE_WALKER ||

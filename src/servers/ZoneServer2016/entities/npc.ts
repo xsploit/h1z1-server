@@ -16,6 +16,7 @@ import { ZoneServer2016 } from "../zoneserver";
 import { BaseFullCharacter } from "./basefullcharacter";
 import { ZoneClient2016 } from "../classes/zoneclient";
 import {
+  eul2quat,
   getCurrentServerTimeWrapper,
   getDistance,
   logClientActionToMongo,
@@ -24,18 +25,62 @@ import {
 import { DB_COLLECTIONS, KILL_TYPE } from "../../../utils/enums";
 import {
   Items,
+  Effects,
   MeleeTypes,
   NpcIds,
   PositionUpdateType,
   ResourceIds,
   ResourceTypes
 } from "../models/enums";
-import { CommandInteractionString } from "types/zone2016packets";
+import {
+  AddLightweightPc,
+  CommandInteractionString,
+  LightweightToFullPc
+} from "types/zone2016packets";
 import { BaseEntity } from "./baseentity";
 import { ChallengeType } from "../managers/challengemanager";
 import { ProjectileEntity } from "./projectileentity";
 import { JSM } from "../jsms/jsm";
 import { Factions } from "../jsms/factions";
+import { CrowdAgent } from "recast-navigation";
+import { NavManager } from "../../../utils/recast";
+
+export function getInitialNpcNavPosition(
+  navAgent: Pick<CrowdAgent, "position">
+): Float32Array {
+  return NavManager.navToGame(navAgent.position());
+}
+
+export interface NpcMeleeTrace {
+  reach: number;
+  halfArcDegrees: number;
+  verticalTolerance: number;
+}
+
+export function isMeleeTargetInArc(
+  attackerPosition: Float32Array,
+  attackerYaw: number,
+  targetPosition: Float32Array,
+  trace: NpcMeleeTrace
+): boolean {
+  const dx = targetPosition[0] - attackerPosition[0],
+    dz = targetPosition[2] - attackerPosition[2],
+    horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+  if (
+    horizontalDistance > trace.reach ||
+    Math.abs(targetPosition[1] - attackerPosition[1]) >
+      trace.verticalTolerance
+  ) {
+    return false;
+  }
+  if (horizontalDistance < 0.001) return true;
+  const forwardX = Math.sin(attackerYaw),
+    forwardZ = Math.cos(attackerYaw),
+    facingDot =
+      forwardX * (dx / horizontalDistance) +
+      forwardZ * (dz / horizontalDistance);
+  return facingDot >= Math.cos((trace.halfArcDegrees * Math.PI) / 180);
+}
 
 export abstract class Npc extends BaseFullCharacter {
   health: number;
@@ -82,9 +127,19 @@ export abstract class Npc extends BaseFullCharacter {
   }
   server: ZoneServer2016;
   npcMeleeDamage: number = 0;
+  npcMeleeWeapon: Items = Items.WEAPON_MACHETE01;
+  npcMeleeEffect?: Effects;
+  npcMeleeTrace?: NpcMeleeTrace;
+  infectsTargetOnMelee = true;
   fsm?: JSM<string | number>;
   currentAnimation = "";
   lookAtTarget: Float32Array | null = null;
+  movementStance = 66565;
+  stationaryStance = 66565;
+  private lastMovementUpdateAt = Date.now();
+  usesPlayerReplication = false;
+  playerName = "Survivor";
+  hairModel = "";
   isSelected: boolean = false;
   variant: string = "";
 
@@ -105,7 +160,11 @@ export abstract class Npc extends BaseFullCharacter {
     this.server = server;
     this.variant = variant;
     if (!process.env.DISABLE_AI && this.server.aiEnabled) {
-      this.navAgent = this.server.navManager.createAgent(this.state.position);
+      const navAgent = this.server.navManager.createAgent(this.state.position);
+      if (navAgent) {
+        this.navAgent = navAgent;
+        this.state.position = getInitialNpcNavPosition(navAgent);
+      }
     }
     server.explosiveManager.addEntity(this);
   }
@@ -165,9 +224,36 @@ export abstract class Npc extends BaseFullCharacter {
   applyDamage(characterId: string) {
     const client = this.server.getClientByCharId(characterId);
     if (client?.isLoading === false) {
+      if (
+        this.npcMeleeTrace &&
+        !isMeleeTargetInArc(
+          this.state.position,
+          this.state.yaw,
+          client.character.state.position,
+          this.npcMeleeTrace
+        )
+      ) {
+        return;
+      }
+      if (this.npcMeleeTrace) {
+        const attackOrigin = new Float32Array([
+            this.state.position[0],
+            this.state.position[1] + 1,
+            this.state.position[2],
+            1
+          ]),
+          targetChest = new Float32Array([
+            client.character.state.position[0],
+            client.character.state.position[1] + 1,
+            client.character.state.position[2],
+            1
+          ]);
+        if (this.server.collisionManager.segmentBlocked(attackOrigin, targetChest))
+          return;
+      }
       const damageInfo: DamageInfo = {
         entity: this.characterId,
-        weapon: Items.WEAPON_MACHETE01,
+        weapon: this.npcMeleeWeapon,
         damage: this.npcMeleeDamage,
         causeBleed: false, // another method for melees to apply bleeding
         meleeType: MeleeTypes.BLADE,
@@ -191,7 +277,19 @@ export abstract class Npc extends BaseFullCharacter {
       }
 
       client.character.OnMeleeHit(this.server, damageInfo);
-      if (this.server.isSurvival() && this.server.infectionEnabled) {
+      if (this.npcMeleeEffect !== undefined) {
+        this.server.abilitiesManager.applyMeleeHitEffect(
+          this.server,
+          client.character,
+          this.characterId,
+          this.npcMeleeEffect
+        );
+      }
+      if (
+        this.infectsTargetOnMelee &&
+        this.server.isSurvival() &&
+        this.server.infectionEnabled
+      ) {
         const virus = client.character._resources[ResourceIds.VIRUS];
         if (virus > 0) {
           client.character.immunity = Math.max(
@@ -296,7 +394,87 @@ export abstract class Npc extends BaseFullCharacter {
   }
 
   OnFullCharacterDataRequest(server: ZoneServer2016, client: ZoneClient2016) {
+    if (this.usesPlayerReplication) {
+      const rotationRaw = new Float32Array([this.state.yaw, 0, 0, 0]);
+      server.sendData<LightweightToFullPc>(client, "LightweightToFullPc", {
+        useCompression: false,
+        fullPcData: {
+          transientId: this.transientId,
+          attachmentData: this.pGetAttachmentSlots(),
+          headActor: this.headActor,
+          eyeActor: this.eyeActor,
+          hairModel: this.hairModel,
+          resources: { data: this.pGetResources() },
+          remoteWeapons: { data: this.pGetRemoteWeaponsData(server) }
+        },
+        positionUpdate: {
+          sequenceTime: getCurrentServerTimeWrapper().getTruncatedU32(),
+          position: this.state.position,
+          stance: this.stationaryStance,
+          orientation: this.state.yaw,
+          rotationRaw
+        },
+        stats: [],
+        remoteWeaponsExtra: this.pGetRemoteWeaponsExtraData(server)
+      } as unknown as LightweightToFullPc);
+      this.sendPlayerWeaponState(server, client);
+      return;
+    }
+
     server.sendData(client, "LightweightToFullNpc", this.pGetFull(server));
+    this.sendPlayerWeaponState(server, client);
+  }
+
+  pGetLightweightPc(): AddLightweightPc {
+    const rotationRaw = new Float32Array([this.state.yaw, 0, 0, 0]);
+    return {
+      characterId: this.characterId,
+      transientId: this.transientId,
+      identity: {
+        characterName: this.playerName
+      },
+      actorModelId: this.temporaryActorModelId || this.actorModelId,
+      position: this.state.position,
+      rotation: eul2quat(rotationRaw),
+      mountGuid: "",
+      mountSeatId: 0,
+      mountRelatedDword1: 0,
+      movementVersion: this.movementVersion,
+      shaderGroupId: 0,
+      flags1: {
+        knockedOut: this.flags.knockedOut,
+        disableEquipment: 0,
+        isAdmin: 0
+      }
+    };
+  }
+
+  private sendPlayerWeaponState(
+    server: ZoneServer2016,
+    client: ZoneClient2016
+  ) {
+    const weapon = this.getEquippedWeapon();
+    if (weapon && server.isWeapon(weapon.itemDefinitionId)) {
+      server.sendData(
+        client,
+        "Equipment.SetCharacterEquipment",
+        this.pGetEquipment()
+      );
+      server.sendRemoteWeaponUpdateData(
+        client,
+        this.transientId,
+        weapon.itemGuid,
+        "Update.SwitchFireMode",
+        {
+          firegroupIndex: 0,
+          firemodeIndex: 0
+        }
+      );
+      server.sendData(client, "Character.WeaponStance", {
+        characterId: this.characterId,
+        stance: 1
+      });
+    }
 
     if (this.onReadyCallback) {
       this.onReadyCallback(client);
@@ -471,6 +649,18 @@ export abstract class Npc extends BaseFullCharacter {
   }
 
   goTo(position: Float32Array) {
+    const now = Date.now();
+    const elapsedSeconds = Math.max(
+      0.001,
+      (now - this.lastMovementUpdateAt) / 1000
+    );
+    const movementDx = position[0] - this.state.position[0];
+    const movementDz = position[2] - this.state.position[2];
+    const actualHorizontalSpeed =
+      Math.sqrt(movementDx * movementDx + movementDz * movementDz) /
+      elapsedSeconds;
+    this.lastMovementUpdateAt = now;
+
     const orientTarget = this.lookAtTarget ?? position;
     const dx = orientTarget[0] - this.state.position[0];
     const dz = orientTarget[2] - this.state.position[2];
@@ -491,16 +681,22 @@ export abstract class Npc extends BaseFullCharacter {
     const lateralDist = dx * cosO - dz * sinO;
 
     const sideTilt = Math.atan2(lateralDist, horizontalDist);
+    const rotationRaw = new Float32Array([orientation, 0, 0, 0]);
+    this.state.rotation = eul2quat(rotationRaw);
+    this.state.lookAt = this.state.rotation;
 
     this.state.position = position;
 
-    let horizontalSpeed = horizontalDist;
+    let horizontalSpeed = metersToFeet(actualHorizontalSpeed);
     let verticalSpeed = Math.abs(dy);
     if (this.navAgent) {
       const vel = this.navAgent.velocity();
-      horizontalSpeed = metersToFeet(Math.sqrt(vel.x * vel.x + vel.z * vel.z));
       verticalSpeed = metersToFeet(Math.abs(vel.y));
     }
+    const stance =
+      actualHorizontalSpeed >= 0.2
+        ? this.movementStance
+        : this.stationaryStance;
 
     this.server.sendDataToAllWithSpawnedEntity(
       this.server._npcs,
@@ -512,14 +708,15 @@ export abstract class Npc extends BaseFullCharacter {
           sequenceTime: getCurrentServerTimeWrapper().getTruncatedU32(),
           position: this.state.position,
           unknown3_int8: 0,
-          stance: 66565,
+          stance,
           engineRPM: 0,
           orientation,
-          frontTilt,
-          sideTilt,
-          angleChange,
-          verticalSpeed,
-          horizontalSpeed
+           frontTilt,
+           sideTilt,
+           angleChange,
+           rotationRaw,
+           verticalSpeed,
+           horizontalSpeed
         }
       }
     );
@@ -540,6 +737,9 @@ export abstract class Npc extends BaseFullCharacter {
     const cosO = Math.cos(orientation);
     const lateralDist = dx * cosO - dz * sinO;
     const sideTilt = Math.atan2(lateralDist, horizontalDist);
+    const rotationRaw = new Float32Array([orientation, 0, 0, 0]);
+    this.state.rotation = eul2quat(rotationRaw);
+    this.state.lookAt = this.state.rotation;
 
     this.server.sendDataToAllWithSpawnedEntity(
       this.server._npcs,
@@ -551,13 +751,14 @@ export abstract class Npc extends BaseFullCharacter {
           sequenceTime: getCurrentServerTimeWrapper().getTruncatedU32(),
           position: this.state.position,
           unknown3_int8: 0,
-          stance: 66565,
+          stance: this.stationaryStance,
           engineRPM: 0,
           orientation,
-          frontTilt,
-          sideTilt,
-          angleChange,
-          verticalSpeed: 0,
+           frontTilt,
+           sideTilt,
+           angleChange,
+           rotationRaw,
+           verticalSpeed: 0,
           horizontalSpeed: 0
         }
       }

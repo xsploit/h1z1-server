@@ -4585,10 +4585,25 @@ export class ZoneServer2016 extends EventEmitter {
     entity: BaseLightweightCharacter,
     nameId = 0
   ) {
-    this.sendData<AddLightweightNpc>(client, "AddLightweightNpc", {
-      ...entity.pGetLightweight(),
-      nameId
-    });
+    if (entity instanceof Npc && entity.usesPlayerReplication) {
+      this.sendData<AddLightweightPc>(
+        client,
+        "AddLightweightPc",
+        entity.pGetLightweightPc()
+      );
+    } else {
+      this.sendData<AddLightweightNpc>(client, "AddLightweightNpc", {
+        ...entity.pGetLightweight(),
+        nameId
+      });
+    }
+    if (entity instanceof BaseFullCharacter) {
+      this.sendData(
+        client,
+        "Equipment.SetCharacterEquipment",
+        entity.pGetEquipment()
+      );
+    }
     entity.effectTags.forEach((effectTag: number) => {
       this.sendData<CharacterAddEffectTagCompositeEffect>(
         client,
@@ -7411,21 +7426,22 @@ export class ZoneServer2016 extends EventEmitter {
    * @param count Optional: The number of items to drop on the ground, default 1.
    * @param animationId The animation to play
    */
-  dropItem(
+  async dropItem(
     character: BaseFullCharacter,
     item: BaseItem,
     count: number = 1,
     animationId: number
-  ): void {
+  ): Promise<void> {
     const client = this.getClientByContainerAccessor(character);
 
     if (!client) return;
 
-    item.debugFlag = "dropItem";
     if (!item) {
       this.containerError(client, ContainerErrors.NO_ITEM_IN_SLOT);
       return;
     }
+    item.debugFlag = "dropItem";
+    if (!Number.isSafeInteger(count) || count < 1) count = 1;
     let dropItem: BaseItem | undefined;
     if (item.stackCount == count) {
       dropItem = item;
@@ -7434,7 +7450,7 @@ export class ZoneServer2016 extends EventEmitter {
     } else {
       return;
     }
-    if (!this.removeInventoryItem(character, item, count)) return;
+    if (!(await this.removeInventoryItem(character, item, count))) return;
     this.sendData<CharacterDroppedItemNotification>(
       client,
       "Character.DroppedItemNotification",
@@ -10698,10 +10714,11 @@ export class ZoneServer2016 extends EventEmitter {
         // navmesh floor. Structure surface only wins if it is at/above terrain
         // (avoids dropping NPCs onto buried geometry below the ground).
         const terrainY = this.getHeight(gamePos);
+        const navFloorY = this.navManager.getFloorY(gamePos);
         const structureY = this.collisionManager.groundRaycast(
           gamePos[0],
           gamePos[2],
-          npc.state.position[1]
+          navFloorY ?? gamePos[1]
         );
         let h;
         if (
@@ -10712,7 +10729,7 @@ export class ZoneServer2016 extends EventEmitter {
         } else {
           h = terrainY;
         }
-        gamePos[1] = h ?? this.navManager.getFloorY(gamePos) ?? gamePos[1];
+        gamePos[1] = h ?? navFloorY ?? gamePos[1];
         if (
           gamePos[0] != npc.state.position[0] ||
           gamePos[2] != npc.state.position[2] ||

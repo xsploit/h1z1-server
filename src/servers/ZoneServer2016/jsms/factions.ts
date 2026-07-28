@@ -17,7 +17,8 @@ export enum Factions {
   ZOMBIE = 2,
   WOLF = 3,
   BEAR = 4,
-  PASSIVE = 5
+  PASSIVE = 5,
+  BANDIT = 6
 }
 
 const HOSTILITY: Record<Factions, Factions[]> = {
@@ -25,13 +26,25 @@ const HOSTILITY: Record<Factions, Factions[]> = {
   [Factions.HUMAN]: [],
   [Factions.ZOMBIE]: [
     Factions.HUMAN,
+    Factions.BANDIT,
     Factions.WOLF,
     Factions.BEAR,
     Factions.PASSIVE
   ],
-  [Factions.WOLF]: [Factions.HUMAN, Factions.ZOMBIE, Factions.PASSIVE],
-  [Factions.BEAR]: [Factions.HUMAN, Factions.ZOMBIE],
-  [Factions.PASSIVE]: []
+  [Factions.WOLF]: [
+    Factions.HUMAN,
+    Factions.BANDIT,
+    Factions.ZOMBIE,
+    Factions.PASSIVE
+  ],
+  [Factions.BEAR]: [Factions.HUMAN, Factions.BANDIT, Factions.ZOMBIE],
+  [Factions.PASSIVE]: [],
+  [Factions.BANDIT]: [
+    Factions.HUMAN,
+    Factions.ZOMBIE,
+    Factions.WOLF,
+    Factions.BEAR
+  ]
 };
 
 export function isHostile(attacker: Factions, target: Factions): boolean {

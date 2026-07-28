@@ -1240,6 +1240,70 @@ export abstract class BaseFullCharacter extends BaseLightweightCharacter {
     };
   }
 
+  pGetRemoteWeaponData(server: ZoneServer2016, item: BaseItem) {
+    const itemDefinition = server.getItemDefinition(item.itemDefinitionId);
+    const weaponDefinition = server.getWeaponDefinition(
+      itemDefinition?.PARAM1 ?? 0
+    );
+    const firegroups: Array<any> = weaponDefinition.FIRE_GROUPS || [];
+    return {
+      weaponDefinitionId: weaponDefinition.ID,
+      equipmentSlotId: this.getActiveEquipmentSlot(item),
+      firegroups: firegroups.map((firegroup: any) => {
+        const firegroupDefinition = server.getFiregroupDefinition(
+          firegroup.FIRE_GROUP_ID
+        );
+        const firemodes = firegroupDefinition?.FIRE_MODES || [];
+        return {
+          firegroupId: firegroup.FIRE_GROUP_ID,
+          unknownArray1: firemodes.map((firemode: any, index: number) => ({
+            unknownDword1: index,
+            unknownDword2: firemode.FIRE_MODE_ID
+          }))
+        };
+      })
+    };
+  }
+
+  pGetRemoteWeaponsData(server: ZoneServer2016) {
+    return Object.values(this._loadout)
+      .filter((item) => server.isWeapon(item.itemDefinitionId))
+      .map((item) => ({
+        guid: item.itemGuid,
+        ...this.pGetRemoteWeaponData(server, item)
+      }));
+  }
+
+  pGetRemoteWeaponExtraData(server: ZoneServer2016, item: BaseItem) {
+    const itemDefinition = server.getItemDefinition(item.itemDefinitionId);
+    const weaponDefinition = server.getWeaponDefinition(
+      itemDefinition?.PARAM1 ?? 0
+    );
+    const firegroups = weaponDefinition.FIRE_GROUPS || [];
+    return {
+      guid: item.itemGuid,
+      unknownByte1: 0,
+      unknownByte2: 0,
+      unknownByte3: -1,
+      unknownByte4: -1,
+      unknownByte5: 1,
+      unknownDword1: 0,
+      unknownByte6: 0,
+      unknownDword2: 0,
+      unknownArray1: firegroups.map(() => ({
+        unknownDword1: 0,
+        unknownBoolean1: false,
+        unknownBoolean2: false
+      }))
+    };
+  }
+
+  pGetRemoteWeaponsExtraData(server: ZoneServer2016) {
+    return Object.values(this._loadout)
+      .filter((item) => server.isWeapon(item.itemDefinitionId))
+      .map((item) => this.pGetRemoteWeaponExtraData(server, item));
+  }
+
   pGetItemData(server: ZoneServer2016, item: BaseItem, containerDefId: number) {
     return {
       itemDefinitionId: item.itemDefinitionId,
@@ -1300,7 +1364,7 @@ export abstract class BaseFullCharacter extends BaseLightweightCharacter {
       unknownArray3: { data: [] },
       unknownArray4: {},
       unknownArray5: { data: [] },
-      remoteWeapons: { data: {} },
+      remoteWeapons: { data: this.pGetRemoteWeaponsData(server) },
       materialType: this.materialType,
       itemsData: {
         items: this.pGetInventoryItems(server),
