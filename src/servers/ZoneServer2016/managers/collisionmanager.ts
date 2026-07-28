@@ -187,10 +187,13 @@ export class CollisionManager {
     }
 
     this._loaded = true;
-    let obstacleMeshes = 0;
-    for (let m = 0; m < meshCount; m++) if (this._meshKind[m]) obstacleMeshes++;
+    const kindCounts = [0, 0, 0, 0];
+    for (let m = 0; m < meshCount; m++) kindCounts[this._meshKind[m]]++;
     console.log(
-      `[Collision] loaded ${meshCount} meshes (${obstacleMeshes} obstacle), ${instCount} instances`
+      `[Collision] loaded ${meshCount} meshes ` +
+        `(${kindCounts[0]} walkable, ${kindCounts[1]} solid, ` +
+        `${kindCounts[2]} thin, ${kindCounts[3]} door), ` +
+        `${instCount} instances`
     );
   }
 

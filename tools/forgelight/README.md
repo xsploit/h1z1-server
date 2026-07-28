@@ -35,6 +35,11 @@ Mesh kinds are `0` walkable, `1` solid obstacle, `2` thin non-walkable, and
 
 Typical Z1 output: ~980 unique meshes, ~306k instances, ~80 MB.
 
+Classification is intentionally conservative: only explicit roads, sidewalks,
+floors, foundations, bridges, platforms, walkways, and known composite building
+interiors are walkable. Unknown props default to non-walkable, preventing small
+debris, furniture, spawners, and roof props from becoming false ground.
+
 ## Prerequisites
 
 - A legitimate copy of **H1Z1** (the `Resources/Assets/Assets_*.pack` archives).
