@@ -79,6 +79,7 @@ import { ZombieEvents } from "../../jsms/zombie.jsm";
 import { Wolf } from "../../entities/wolf";
 import { Bear } from "../../entities/bear";
 import { HostileSurvivor } from "../../entities/hostilesurvivor";
+import { Factions } from "../../jsms/factions";
 import { writeFileSync } from "node:fs";
 import { PluginManager } from "../../managers/pluginmanager";
 const itemDefinitions = PluginManager.loadServerData(
@@ -2357,7 +2358,10 @@ export const commands: Array<Command> = [
         bear: ModelIds.BEAR,
         bandit: ModelIds.SURVIVOR_MALE_HEAD_01,
         bandit_male: ModelIds.SURVIVOR_MALE_HEAD_01,
-        bandit_female: ModelIds.SURVIVAL_FEMALE_HEAD_01
+        bandit_female: ModelIds.SURVIVAL_FEMALE_HEAD_01,
+        survivor: ModelIds.SURVIVOR_MALE_HEAD_01,
+        survivor_male: ModelIds.SURVIVOR_MALE_HEAD_01,
+        survivor_female: ModelIds.SURVIVAL_FEMALE_HEAD_01
       };
       const availableTypes = Object.keys(npcTypes).join(", ");
       if (!args[0]) {
@@ -2390,7 +2394,7 @@ export const commands: Array<Command> = [
       };
       for (let i = 0; i < count; i++) {
         const spawnModelId =
-          args[0] === "bandit"
+          args[0] === "bandit" || args[0] === "survivor"
             ? Math.random() < 0.5
               ? ModelIds.SURVIVOR_MALE_HEAD_01
               : ModelIds.SURVIVAL_FEMALE_HEAD_01
@@ -2432,7 +2436,8 @@ export const commands: Array<Command> = [
           pos,
           client.character.state.lookAt,
           0,
-          npcIdMap[args[0]]
+          npcIdMap[args[0]],
+          args[0].startsWith("survivor") ? "survivor" : "bandit"
         );
       }
       server.sendChatText(
@@ -2462,12 +2467,25 @@ export const commands: Array<Command> = [
           npc instanceof Deer && npc.actorModelId === ModelIds.DEER_BUCK,
         wolf: (npc) => npc instanceof Wolf,
         bear: (npc) => npc instanceof Bear,
-        bandit: (npc) => npc instanceof HostileSurvivor,
+        bandit: (npc) =>
+          npc instanceof HostileSurvivor && npc.faction === Factions.BANDIT,
         bandit_male: (npc) =>
           npc instanceof HostileSurvivor &&
+          npc.faction === Factions.BANDIT &&
           npc.actorModelId === ModelIds.SURVIVOR_MALE_HEAD_01,
         bandit_female: (npc) =>
           npc instanceof HostileSurvivor &&
+          npc.faction === Factions.BANDIT &&
+          npc.actorModelId === ModelIds.SURVIVAL_FEMALE_HEAD_01,
+        survivor: (npc) =>
+          npc instanceof HostileSurvivor && npc.faction === Factions.SURVIVOR,
+        survivor_male: (npc) =>
+          npc instanceof HostileSurvivor &&
+          npc.faction === Factions.SURVIVOR &&
+          npc.actorModelId === ModelIds.SURVIVOR_MALE_HEAD_01,
+        survivor_female: (npc) =>
+          npc instanceof HostileSurvivor &&
+          npc.faction === Factions.SURVIVOR &&
           npc.actorModelId === ModelIds.SURVIVAL_FEMALE_HEAD_01,
         all: () => true
       };

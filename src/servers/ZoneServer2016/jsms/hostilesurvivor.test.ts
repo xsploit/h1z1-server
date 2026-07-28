@@ -15,6 +15,15 @@ test("bandits fight players and hostile creatures", () => {
   assert.equal(isHostile(Factions.ZOMBIE, Factions.BANDIT), true);
 });
 
+test("survivors ally with players and fight bandits and zombies", () => {
+  assert.equal(isHostile(Factions.SURVIVOR, Factions.HUMAN), false);
+  assert.equal(isHostile(Factions.HUMAN, Factions.SURVIVOR), false);
+  assert.equal(isHostile(Factions.SURVIVOR, Factions.BANDIT), true);
+  assert.equal(isHostile(Factions.SURVIVOR, Factions.ZOMBIE), true);
+  assert.equal(isHostile(Factions.BANDIT, Factions.SURVIVOR), true);
+  assert.equal(isHostile(Factions.ZOMBIE, Factions.SURVIVOR), true);
+});
+
 test("bandit firearm kits are weighted and deterministic at boundaries", () => {
   assert.equal(selectBanditWeaponKit(0).itemDefinitionId, Items.WEAPON_R380);
   assert.equal(

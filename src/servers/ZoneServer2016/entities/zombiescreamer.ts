@@ -185,7 +185,7 @@ export class ZombieScreamer extends Npc {
       server.addContainerItem(lootbag, item, container as LoadoutContainer);
     }
 
-    server._lootbags[characterId] = lootbag;
+    server.worldObjectManager.registerLootbag(server, lootbag);
   }
 
   protected onHarvest(server: ZoneServer2016, client: ZoneClient2016): void {
