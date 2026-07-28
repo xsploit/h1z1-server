@@ -67,6 +67,24 @@ import { ExplosiveEntity } from "../entities/explosiveentity";
 
 const fs = require("node:fs");
 const debug = require("debug")("ZoneServer");
+
+async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random()
+    .toString(16)
+    .slice(2)}.tmp`;
+  try {
+    await fs.promises.writeFile(temporaryPath, JSON.stringify(data, null, 2));
+    try {
+      await fs.promises.copyFile(filePath, `${filePath}.bak`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    await fs.promises.rename(temporaryPath, filePath);
+  } finally {
+    await fs.promises.unlink(temporaryPath).catch(() => undefined);
+  }
+}
+
 export interface WorldArg {
   lastGuidItem: bigint;
   characters: CharacterUpdateSaveData[];
@@ -258,10 +276,7 @@ export class WorldDataManager {
   }
   async deleteServerData() {
     if (this._soloMode) {
-      await fs.promises.writeFile(
-        `${this._appDataFolder}/worlddata/world.json`,
-        JSON.stringify({}, null, 2)
-      );
+      await writeJsonAtomic(`${this._appDataFolder}/worlddata/world.json`, {});
     } else {
       await this._db?.collection(DB_COLLECTIONS.WORLDS).deleteOne({
         worldId: this._worldId
@@ -271,9 +286,9 @@ export class WorldDataManager {
 
   async deleteCharacters() {
     if (this._soloMode) {
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/single_player_characters2016.json`,
-        JSON.stringify([], null, 2)
+        []
       );
     } else {
       await this._db?.collection(DB_COLLECTIONS.CHARACTERS).updateMany(
@@ -445,9 +460,9 @@ export class WorldDataManager {
       worldSaveVersion: this.worldSaveVersion
     };
     if (this._soloMode) {
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/worlddata/world.json`,
-        JSON.stringify(saveData, null, 2)
+        saveData
       );
     } else {
       await this._db?.collection(DB_COLLECTIONS.WORLDS).updateOne(
@@ -605,9 +620,9 @@ export class WorldDataManager {
         ...singlePlayerCharacter,
         ...characterSaveData
       };
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/single_player_characters2016.json`,
-        JSON.stringify([singlePlayerCharacter], null, 2)
+        [singlePlayerCharacter]
       );
     } else {
       await this._db?.collection(DB_COLLECTIONS.CHARACTERS).updateOne(
@@ -1101,9 +1116,9 @@ export class WorldDataManager {
     if (!constructions.length) return;
 
     if (this._soloMode) {
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/worlddata/construction.json`,
-        JSON.stringify(constructions, null, 2)
+        constructions
       );
       return;
     }
@@ -1165,9 +1180,9 @@ export class WorldDataManager {
 
   async saveCropData(crops: PlantingDiameterSaveData[]) {
     if (this._soloMode) {
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/worlddata/crops.json`,
-        JSON.stringify(crops, null, 2)
+        crops
       );
     } else {
       const collection = this._db?.collection(
@@ -1295,9 +1310,9 @@ export class WorldDataManager {
 
   async saveVehicles(vehicles: FullVehicleSaveData[]) {
     if (this._soloMode) {
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/worlddata/vehicles.json`,
-        JSON.stringify(vehicles, null, 2)
+        vehicles
       );
     } else {
       const collection = this._db?.collection(DB_COLLECTIONS.VEHICLES);
@@ -1327,9 +1342,9 @@ export class WorldDataManager {
     freeplaces: LootableConstructionSaveData[]
   ) {
     if (this._soloMode) {
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/worlddata/worldconstruction.json`,
-        JSON.stringify(freeplaces, null, 2)
+        freeplaces
       );
     } else {
       const collection = this._db?.collection(
@@ -1393,9 +1408,9 @@ export class WorldDataManager {
 
   async saveTrapData(traps: TrapSaveData[]) {
     if (this._soloMode) {
-      await fs.promises.writeFile(
+      await writeJsonAtomic(
         `${this._appDataFolder}/worlddata/traps.json`,
-        JSON.stringify(traps, null, 2)
+        traps
       );
     } else {
       const collection = this._db?.collection(
