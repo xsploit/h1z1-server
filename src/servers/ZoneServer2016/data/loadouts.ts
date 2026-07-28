@@ -34,6 +34,15 @@ export const characterDefaultLoadout = [
   { item: Items.GAUZE, count: 5 }
 ];
 
+export const characterSoloStarterLoadout: LoadoutKit = [
+  { item: Items.BACKPACK_SATCHEL },
+  ...characterDefaultLoadout,
+  { item: Items.WEAPON_HATCHET },
+  { item: Items.WATER_PURE, count: 2 },
+  { item: Items.CANNED_FOOD01, count: 2 },
+  { item: Items.BANDAGE_DRESSED, count: 2 }
+];
+
 export const characterKitLoadout = [
   { item: Items.BACKPACK_RASTA },
   { item: Items.WEAPON_308 },

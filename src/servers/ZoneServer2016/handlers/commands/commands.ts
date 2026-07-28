@@ -36,6 +36,7 @@ import {
   characterTestKitLoadout,
   characterSkinsLoadout,
   characterKitLoadout,
+  characterSoloStarterLoadout,
   characterVehicleKit,
   characterFarmKitLoadout
 } from "../../data/loadouts";
@@ -1961,6 +1962,25 @@ export const commands: Array<Command> = [
 
   //#region ADMIN PERMISSIONS
   {
+    name: "admin",
+    permissionLevel: PermissionLevels.ADMIN,
+    execute: (server: ZoneServer2016, client: Client) => {
+      server.sendChatText(
+        client,
+        [
+          "Admin menu:",
+          "/spawn <type> [count] - spawn NPCs",
+          "/despawn <type|all> - remove spawned NPCs",
+          "/banditchance <0-100> - tune survivor spawns",
+          "/kit starter|pvp|build|farm|parts|skins - grant a kit",
+          "/groundinfo - inspect terrain/nav grounding",
+          "/heal - restore health and survival resources",
+          "/help - list every available command"
+        ].join("\n")
+      );
+    }
+  },
+  {
     name: "parachute",
     permissionLevel: PermissionLevels.ADMIN,
     execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
@@ -3003,6 +3023,13 @@ export const commands: Array<Command> = [
       }
 
       switch (args[0]) {
+        case "starter":
+          client.character.equipLoadout(
+            server,
+            characterSoloStarterLoadout,
+            true
+          );
+          break;
         case "pvp":
           client.character.equipLoadout(server, characterKitLoadout, true);
           break;

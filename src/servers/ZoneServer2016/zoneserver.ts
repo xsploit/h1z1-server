@@ -147,6 +147,7 @@ import {
   WorldDataManager
 } from "./managers/worlddatamanager";
 import { UseOptions } from "./data/useoptions";
+import { characterSoloStarterLoadout } from "./data/loadouts";
 import {
   CONNECTION_REJECTION_FLAGS,
   DB_COLLECTIONS,
@@ -3603,7 +3604,10 @@ export class ZoneServer2016 extends EventEmitter {
       });
       client.character.updateEquipment(this);
     }
-    client.character.equipLoadout(this);
+    client.character.equipLoadout(
+      this,
+      this._soloMode ? characterSoloStarterLoadout : undefined
+    );
     client.character.state.position = position;
     client.character.resetResources(this);
     client.character.updateEquipment(this);
