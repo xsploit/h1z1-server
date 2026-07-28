@@ -14,16 +14,19 @@ surface — the man-made surfaces that the terrain heightmap alone cannot follow
 
 ## What it produces
 
-`z1_collision.bin` — format `H1COL1`:
+`z1_collision.bin` — format `H1COL2`:
 
 ```
-header     : magic "H1COL1\0\0" (8 bytes), version u32, meshCount u32, instCount u32
-meshes     : meshCount × [ vertCount u32, idxCount u32,
+header     : magic "H1COL2\0\0" (8 bytes), version u32, meshCount u32, instCount u32
+meshes     : meshCount × [ kind u8, vertCount u32, idxCount u32,
                            positions (vertCount*3 f32), indices (idxCount u32) ]
 instances  : meshIndex (instCount u32)
              transforms (instCount × 16 f32: tx ty tz, qx qy qz qw, sx sy sz,
                          worldAABB min xyz, worldAABB max xyz)
 ```
+
+Mesh kinds are `0` walkable, `1` solid obstacle, `2` thin non-walkable, and
+`3` door. Ground raycasts only consider walkable meshes.
 
 Typical Z1 output: ~980 unique meshes, ~306k instances, ~80 MB.
 
@@ -95,11 +98,11 @@ back to the heightmap — nothing breaks.
 
 ## Environment variables
 
-| var | meaning | default |
-|-----|---------|---------|
-| `H1Z1_ASSETS` | directory holding `Assets_*.pack` | `D:/h1z1/Resources/Assets` |
-| `Z1_ZONE` | optional pre-extracted `Z1.zone` (else pulled from packs) | — |
-| `COLLISION_OUT` | output `.bin` path | `./z1_collision.bin` |
+| var             | meaning                                                   | default                    |
+| --------------- | --------------------------------------------------------- | -------------------------- |
+| `H1Z1_ASSETS`   | directory holding `Assets_*.pack`                         | `D:/h1z1/Resources/Assets` |
+| `Z1_ZONE`       | optional pre-extracted `Z1.zone` (else pulled from packs) | —                          |
+| `COLLISION_OUT` | output `.bin` path                                        | `./z1_collision.bin`       |
 
 ## Notes / caveats
 

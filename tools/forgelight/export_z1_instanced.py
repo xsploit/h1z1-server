@@ -1,7 +1,7 @@
 """
 Export H1Z1 Z1 structures as an INSTANCED collision dataset for the server.
 
-Produces `z1_collision.bin` (format "H1COL1", consumed by the server's
+Produces `z1_collision.bin` (format "H1COL2", consumed by the server's
 CollisionManager):
   - deduplicated unique actor meshes (positions + indices, LOD0)
   - per-instance meshIndex + transform (T/R/S) + precomputed world AABB

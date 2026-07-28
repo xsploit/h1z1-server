@@ -21,6 +21,20 @@ map at fine resolution.
 NAV_STREAMING=1 npm start
 ```
 
+PowerShell:
+
+```powershell
+$env:NAV_STREAMING = "1"
+npm start
+```
+
+Windows Command Prompt:
+
+```bat
+set NAV_STREAMING=1
+npm start
+```
+
 At boot the server loads `data/2016/collision/z1_cache_*.bin` (TileCacheSet,
 magic `TSET`). If those files are **absent**, it logs a warning and falls back
 to the standard navmesh — no crash, but no streaming.
@@ -73,7 +87,7 @@ exactly, which is a good sanity check that the pipeline is set up correctly.
 
 ## Tunables (`src/utils/recast.ts`)
 
-| Constant | Default | Meaning |
-|---|---|---|
-| `STREAM_RADIUS` | `300` | meters around a player kept materialised |
-| `STREAM_INTERVAL` | `1000` | ms between window updates |
+| Constant          | Default | Meaning                                  |
+| ----------------- | ------- | ---------------------------------------- |
+| `STREAM_RADIUS`   | `300`   | meters around a player kept materialised |
+| `STREAM_INTERVAL` | `1000`  | ms between window updates                |

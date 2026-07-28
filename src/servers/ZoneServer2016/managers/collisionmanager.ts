@@ -89,8 +89,8 @@ export class CollisionManager {
     return Math.floor((v + MAP_HALF) / CELL);
   }
 
-  load(): void {
-    const path = join(
+  load(
+    path = join(
       __dirname,
       "..",
       "..",
@@ -100,7 +100,8 @@ export class CollisionManager {
       "2016",
       "collision",
       "z1_collision.bin"
-    );
+    )
+  ): void {
     let buf: Buffer;
     try {
       buf = readFileSync(path);
