@@ -9,6 +9,7 @@
     "strict": true /* Enable all strict type-checking options. */,
     "sourceMap": true,
     "paths": {
+      "three-mesh-bvh": ["./node_modules/three-mesh-bvh/src/index.d.ts"],
       "@h1z1-server/*": ["../*"],
       "*": ["./src/*"]
     },
