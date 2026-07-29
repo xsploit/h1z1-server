@@ -97,6 +97,7 @@ export class NavManager {
   private _crowdMaxAgentRadius = 2.0;
   private _crowdHealthy = true;
   private _crowdFaultReported = false;
+  private _successfulCrowdUpdates = 0;
   private _agentInvalidationHandler?: () => void;
   constructor() {}
 
@@ -128,7 +129,28 @@ export class NavManager {
     });
     this.lastTimeCall = Date.now();
     this._crowdHealthy = true;
-    this._crowdFaultReported = false;
+    this._successfulCrowdUpdates = 0;
+  }
+
+  private markCrowdFault(error: unknown, operation: string): void {
+    this._crowdHealthy = false;
+    this._successfulCrowdUpdates = 0;
+    if (this._crowdFaultReported) return;
+    this._crowdFaultReported = true;
+    let activeAgents: number | string = "unavailable";
+    let wrapperAgents: number | string = "unavailable";
+    try {
+      activeAgents = this.crowd.getActiveAgentCount();
+      wrapperAgents = this.crowd.getAgents().length;
+    } catch {}
+    console.error(
+      `[NAV] crowd disabled after ${operation} ` +
+        `(active=${activeAgents}, wrappers=${wrapperAgents}): ${
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error)
+        }`
+    );
   }
 
   resetCrowd(): void {
@@ -530,18 +552,11 @@ export class NavManager {
     if (!this._crowdHealthy) return;
     try {
       this.crowd.update(this.updateFrequency, timeSinceLastCalled, 1);
-    } catch (error) {
-      this._crowdHealthy = false;
-      if (!this._crowdFaultReported) {
-        this._crowdFaultReported = true;
-        console.error(
-          `[NAV] crowd disabled until lifecycle recovery: ${
-            error instanceof Error
-              ? (error.stack ?? error.message)
-              : String(error)
-          }`
-        );
+      if (++this._successfulCrowdUpdates >= 25) {
+        this._crowdFaultReported = false;
       }
+    } catch (error) {
+      this.markCrowdFault(error, "update");
     }
   }
 
@@ -612,6 +627,14 @@ export class NavManager {
         pathOptimizationRange: 4.0,
         separationWeight: 2.0
       });
+      if (
+        !Number.isInteger(agent.agentIndex) ||
+        agent.agentIndex < 0 ||
+        agent.agentIndex >= this._crowdMaxAgents
+      ) {
+        delete this.crowd.agents[String(agent.agentIndex)];
+        return undefined;
+      }
       debug(
         `createAgent: agentIdx=${agent.agentIndex} navPos=[${spawnPoint.x.toFixed(2)}, ${spawnPoint.y.toFixed(2)}, ${spawnPoint.z.toFixed(2)}]`
       );
@@ -634,8 +657,19 @@ export class NavManager {
       return undefined;
     }
     try {
-      const navPosition = this.getClosestNavPointVec3(gamePos);
-      return this.crowd.addAgent(navPosition, {
+      const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
+        NavManager.gameToNav(gamePos),
+        { halfExtents: { x: 10, y: 10, z: 10 } }
+      );
+      if (
+        !nearestRef ||
+        !Number.isFinite(nearestPoint.x) ||
+        !Number.isFinite(nearestPoint.y) ||
+        !Number.isFinite(nearestPoint.z)
+      ) {
+        return undefined;
+      }
+      const agent = this.crowd.addAgent(nearestPoint, {
         radius,
         height: 2,
         maxAcceleration: 0,
@@ -645,6 +679,15 @@ export class NavManager {
         separationWeight: 1,
         updateFlags: 0
       });
+      if (
+        !Number.isInteger(agent.agentIndex) ||
+        agent.agentIndex < 0 ||
+        agent.agentIndex >= this._crowdMaxAgents
+      ) {
+        delete this.crowd.agents[String(agent.agentIndex)];
+        return undefined;
+      }
+      return agent;
     } catch (error) {
       debugStream(
         `create-passive-agent rejected at [${gamePos[0]}, ${gamePos[1]}, ${gamePos[2]}]: ${
@@ -652,6 +695,29 @@ export class NavManager {
         }`
       );
       return undefined;
+    }
+  }
+
+  teleportAgent(agent: CrowdAgent, gamePos: Float32Array): boolean {
+    if (!this._crowdHealthy || !this.isPositionStreamed(gamePos)) return false;
+    try {
+      const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
+        NavManager.gameToNav(gamePos),
+        { halfExtents: { x: 10, y: 10, z: 10 } }
+      );
+      if (
+        !nearestRef ||
+        !Number.isFinite(nearestPoint.x) ||
+        !Number.isFinite(nearestPoint.y) ||
+        !Number.isFinite(nearestPoint.z)
+      ) {
+        return false;
+      }
+      agent.teleport(nearestPoint);
+      return true;
+    } catch (error) {
+      this.markCrowdFault(error, "agent teleport");
+      return false;
     }
   }
 

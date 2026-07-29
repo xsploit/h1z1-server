@@ -10898,10 +10898,13 @@ export class ZoneServer2016 extends EventEmitter {
         character.navAgent = this.navManager.createPassiveAgent(
           character.state.position
         );
-      } else {
-        character.navAgent.teleport(
-          NavManager.gameToNav(character.state.position)
-        );
+      } else if (
+        !this.navManager.teleportAgent(
+          character.navAgent,
+          character.state.position
+        )
+      ) {
+        character.navAgent = undefined;
       }
     }
 
@@ -10916,8 +10919,10 @@ export class ZoneServer2016 extends EventEmitter {
           vehicle.state.position,
           2.0
         );
-      } else {
-        vehicle.navAgent.teleport(NavManager.gameToNav(vehicle.state.position));
+      } else if (
+        !this.navManager.teleportAgent(vehicle.navAgent, vehicle.state.position)
+      ) {
+        vehicle.navAgent = undefined;
       }
     }
   }

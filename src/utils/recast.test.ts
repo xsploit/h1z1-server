@@ -167,6 +167,7 @@ test("streaming invalidates agents before tiles change and recreates the crowd a
 
 test("crowd update faults are contained and latched", () => {
   const navManager = new NavManager();
+  let faultReports = 0;
   navManager.tilecache = { obstacles: new Set() } as never;
   navManager.crowd = {
     update: () => {
@@ -174,6 +175,71 @@ test("crowd update faults are contained and latched", () => {
     }
   } as never;
 
-  assert.doesNotThrow(() => navManager.updt());
+  const originalConsoleError = console.error;
+  console.error = () => {
+    faultReports++;
+  };
+  try {
+    assert.doesNotThrow(() => navManager.updt());
+    Object.assign(navManager as object, { _crowdHealthy: true });
+    assert.doesNotThrow(() => navManager.updt());
+  } finally {
+    console.error = originalConsoleError;
+  }
   assert.equal(navManager.crowdHealthy, false);
+  assert.equal(faultReports, 1);
+});
+
+test("passive agents are rejected when no nav polygon exists", () => {
+  const navManager = new NavManager();
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 10,
+    _loadedCols: new Set(["0,0"])
+  });
+  navManager.navMeshQuery = {
+    findNearestPoly: () => ({
+      nearestRef: 0,
+      nearestPoint: { x: 0, y: 0, z: 0 }
+    })
+  } as never;
+  navManager.crowd = {
+    addAgent: () => assert.fail("off-nav passive agent must not enter crowd")
+  } as never;
+
+  assert.equal(
+    navManager.createPassiveAgent(new Float32Array([5, 5, 5, 1])),
+    undefined
+  );
+});
+
+test("passive-agent teleports snap to a validated nav polygon", () => {
+  const navManager = new NavManager();
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 10,
+    _loadedCols: new Set(["0,0"])
+  });
+  navManager.navMeshQuery = {
+    findNearestPoly: () => ({
+      nearestRef: 123,
+      nearestPoint: { x: 4, y: 7, z: 6 }
+    })
+  } as never;
+  let teleportedTo: unknown;
+  const agent = {
+    teleport: (position: unknown) => {
+      teleportedTo = position;
+    }
+  };
+
+  assert.equal(
+    navManager.teleportAgent(agent as never, new Float32Array([5, 100, 5, 1])),
+    true
+  );
+  assert.deepEqual(teleportedTo, { x: 4, y: 7, z: 6 });
 });

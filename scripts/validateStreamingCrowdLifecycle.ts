@@ -2,9 +2,10 @@ import { resolve } from "node:path";
 import type { CrowdAgent } from "recast-navigation";
 
 const cacheDir = process.argv[2];
+const agentsPerWindow = Number(process.argv[3] ?? 60);
 if (!cacheDir) {
   console.error(
-    "Usage: npx tsx scripts/validateStreamingCrowdLifecycle.ts <cache-dir>"
+    "Usage: npx tsx scripts/validateStreamingCrowdLifecycle.ts <cache-dir> [agents-per-window]"
   );
   process.exit(1);
 }
@@ -52,8 +53,8 @@ async function main() {
       );
     }
 
-    for (let i = 0; i < Math.min(points.length, 60); i++) {
-      const gamePoint = NavManager.navToGame(points[i]);
+    for (let i = 0; i < agentsPerWindow; i++) {
+      const gamePoint = NavManager.navToGame(points[i % points.length]);
       const agent =
         i % 6 === 0
           ? nav.createPassiveAgent(gamePoint)
