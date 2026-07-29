@@ -9379,15 +9379,6 @@ export class ZoneServer2016 extends EventEmitter {
   }
 
   containerError(client: Client, error: ContainerErrors) {
-    const mountedContainer = client.character.mountedContainer;
-    console.warn(
-      `[ContainerError] player=${client.character.characterId} ` +
-        `error=${ContainerErrors[error] ?? error} ` +
-        `mounted=${mountedContainer?.characterId ?? "none"} ` +
-        `items=${Object.values(mountedContainer?._containers ?? {})
-          .flatMap((container) => Object.keys(container.items))
-          .join(",")}`
-    );
     switch (error) {
       case ContainerErrors.DOES_NOT_ACCEPT_ITEMS:
         this.sendChatText(
