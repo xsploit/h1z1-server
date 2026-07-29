@@ -55,3 +55,46 @@ test("all crowd-agent references are invalidated before streamed tiles change", 
   assert.equal(character.navAgent, undefined);
   assert.equal(vehicle.navAgent, undefined);
 });
+
+test("NPC grounding preserves the previous replicated vertical layer", () => {
+  let replicatedPosition: Float32Array | undefined;
+  const npc = {
+    state: {
+      position: new Float32Array([10, 25, 10, 1])
+    },
+    navAgent: {
+      interpolatedPosition: { x: 11, y: 25.75, z: 12 }
+    },
+    goTo(position: Float32Array) {
+      replicatedPosition = position;
+    },
+    syncIdleIfStopped() {
+      assert.fail("moving NPC was incorrectly synchronized as idle");
+    }
+  };
+  const server = {
+    navManager: {
+      streaming: false,
+      crowdHealthy: true,
+      isPositionStreamed: () => true
+    },
+    _npcs: { npc },
+    _characters: {},
+    _vehicles: {},
+    getGroundInfo(_position: Float32Array, navY: number, currentY: number) {
+      assert.equal(navY, 25.75);
+      assert.equal(currentY, 25);
+      return {
+        selection: {
+          height: 25.75,
+          source: "navmesh"
+        }
+      };
+    }
+  };
+
+  ZoneServer2016.prototype.updatePathfindingPositions.call(server);
+
+  assert.ok(replicatedPosition);
+  assert.deepEqual(Array.from(replicatedPosition), [11, 25.75, 12, 0]);
+});

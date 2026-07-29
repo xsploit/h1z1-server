@@ -54,7 +54,7 @@ test("terrain sampling does not blur across a cliff", () => {
   assert.equal(sampleTerrainHeight(data, 2, 2, 0.5, -0.5, 1)?.height, 0);
 });
 
-test("ground selection prefers reachable structures above terrain", () => {
+test("ground selection stays on the current vertical layer", () => {
   assert.deepEqual(
     selectGroundSurface({
       terrainY: 10,
@@ -62,8 +62,20 @@ test("ground selection prefers reachable structures above terrain", () => {
       navY: 10.5,
       currentY: 10.5
     }),
-    { height: 11, source: "structure" }
+    { height: 10.5, source: "navmesh" }
   );
+  assert.deepEqual(
+    selectGroundSurface({
+      terrainY: 15,
+      structureY: null,
+      navY: 25.75,
+      currentY: 25.5
+    }),
+    { height: 25.75, source: "navmesh" }
+  );
+});
+
+test("ground selection rejects buried and implausibly distant polygons", () => {
   assert.deepEqual(
     selectGroundSurface({
       terrainY: 10,
@@ -72,6 +84,24 @@ test("ground selection prefers reachable structures above terrain", () => {
       currentY: 9
     }),
     { height: 10, source: "terrain" }
+  );
+  assert.deepEqual(
+    selectGroundSurface({
+      terrainY: 23,
+      structureY: null,
+      navY: 35,
+      currentY: 23
+    }),
+    { height: 23, source: "terrain" }
+  );
+  assert.deepEqual(
+    selectGroundSurface({
+      terrainY: 15,
+      structureY: null,
+      navY: 25,
+      currentY: 31
+    }),
+    { height: 31, source: "current" }
   );
 });
 

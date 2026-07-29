@@ -123,6 +123,39 @@ test("streamed random-point queries snap to a loaded floor and contain WASM erro
   );
 });
 
+test("active agents stay on the authored spawn floor", () => {
+  const navManager = new NavManager();
+  navManager.navMeshQuery = {
+    findNearestPoly: () => ({
+      nearestRef: 123,
+      nearestPoint: { x: 4, y: 20, z: 6 }
+    })
+  } as never;
+  navManager.crowd = {
+    addAgent: () => assert.fail("cross-floor agent must not enter crowd")
+  } as never;
+
+  assert.equal(
+    navManager.createAgent(new Float32Array([4, 25, 6, 1])),
+    undefined
+  );
+
+  let addedAt: unknown;
+  const expectedAgent = { agentIndex: 1 };
+  navManager.crowd = {
+    addAgent: (position: unknown) => {
+      addedAt = position;
+      return expectedAgent;
+    },
+    agents: {}
+  } as never;
+  assert.equal(
+    navManager.createAgent(new Float32Array([4, 20.5, 6, 1])),
+    expectedAgent
+  );
+  assert.deepEqual(addedAt, { x: 4, y: 20, z: 6 });
+});
+
 test("streaming removes agents before tiles change without reallocating the crowd", () => {
   const navManager = new NavManager();
   const events: string[] = [];

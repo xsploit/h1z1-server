@@ -42,14 +42,6 @@ import { ChallengeType } from "../managers/challengemanager";
 import { ProjectileEntity } from "./projectileentity";
 import { JSM } from "../jsms/jsm";
 import { Factions } from "../jsms/factions";
-import { CrowdAgent } from "recast-navigation";
-import { NavManager } from "../../../utils/recast";
-
-export function getInitialNpcNavPosition(
-  navAgent: Pick<CrowdAgent, "position">
-): Float32Array {
-  return NavManager.navToGame(navAgent.position());
-}
 
 export interface NpcMeleeTrace {
   reach: number;
@@ -160,11 +152,7 @@ export abstract class Npc extends BaseFullCharacter {
     this.server = server;
     this.variant = variant;
     if (!process.env.DISABLE_AI && this.server.aiEnabled) {
-      const navAgent = this.server.navManager.createAgent(this.state.position);
-      if (navAgent) {
-        this.navAgent = navAgent;
-        this.state.position = getInitialNpcNavPosition(navAgent);
-      }
+      this.navAgent = this.server.navManager.createAgent(this.state.position);
     }
     server.explosiveManager.addEntity(this);
   }

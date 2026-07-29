@@ -10788,7 +10788,11 @@ export class ZoneServer2016 extends EventEmitter {
     );
   }
 
-  getGroundInfo(pos: Float32Array, navY?: number | null) {
+  getGroundInfo(
+    pos: Float32Array,
+    navY?: number | null,
+    currentY: number = pos[1]
+  ) {
     const resolvedNavY =
       navY === undefined ? this.navManager.getFloorY(pos) : navY;
     const terrainSample = this._heightmapData
@@ -10810,7 +10814,7 @@ export class ZoneServer2016 extends EventEmitter {
       terrainY: terrainSample?.height ?? null,
       structureY,
       navY: resolvedNavY,
-      currentY: pos[1]
+      currentY
     });
     return { terrainSample, structureY, navY: resolvedNavY, selection };
   }
@@ -10863,7 +10867,11 @@ export class ZoneServer2016 extends EventEmitter {
         // cliff disambiguation/reference height instead of doing a second
         // nearest-poly query for every NPC on every update.
         const navFloorY = Number.isFinite(gamePos[1]) ? gamePos[1] : null;
-        const ground = this.getGroundInfo(gamePos, navFloorY);
+        const ground = this.getGroundInfo(
+          gamePos,
+          navFloorY,
+          npc.state.position[1]
+        );
         gamePos[1] = ground.selection.height;
         if (
           gamePos[0] != npc.state.position[0] ||

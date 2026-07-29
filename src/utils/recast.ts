@@ -62,6 +62,7 @@ const debugStream = require("debug")("nav:stream");
 
 const MAX_OBSTACLE = 20000;
 const MAX_PENDING_OBSTACLE = 50;
+const MAX_ACTIVE_AGENT_VERTICAL_SNAP = 1.5;
 
 // Streaming navmesh: a whole-map FINE navmesh stored as a compressed TileCache
 // on disk (data/2016/collision/z1_cache_*.bin, format "TSET", built by the
@@ -591,24 +592,23 @@ export class NavManager {
       );
       if (!nearestRef) return undefined;
       const navPosition = nearestPoint;
+      if (
+        !Number.isFinite(navPosition.y) ||
+        Math.abs(navPosition.y - gamePos[1]) > MAX_ACTIVE_AGENT_VERTICAL_SNAP
+      ) {
+        debugStream(
+          `create-agent rejected cross-floor snap at [${gamePos[0]}, ${gamePos[1]}, ${gamePos[2]}] -> navY=${navPosition.y}`
+        );
+        return undefined;
+      }
       debug(
         `createAgent: navPos=[${navPosition.x.toFixed(2)}, ${navPosition.y.toFixed(2)}, ${navPosition.z.toFixed(2)}]`
       );
 
-      const {
-        randomPoint: initialAgentPosition,
-        success,
-        status
-      } = this.navMeshQuery.findRandomPointAroundCircle(navPosition, 0.5);
-
-      if (!success) {
-        debug(
-          `createAgent: findRandomPointAroundCircle failed (${statusToReadableString(status)}), using navPosition directly`
-        );
-      }
-
-      const spawnPoint = success ? initialAgentPosition : navPosition;
-      const agent = this.crowd.addAgent(spawnPoint, {
+      // Preserve the exact nearest polygon selected from the authored spawn Y.
+      // A random X/Z nudge can select another floor in vertically layered
+      // buildings even though the points are only half a metre apart.
+      const agent = this.crowd.addAgent(navPosition, {
         radius: 0.3,
         height: 2,
         maxAcceleration: 1.0,
@@ -626,7 +626,7 @@ export class NavManager {
         return undefined;
       }
       debug(
-        `createAgent: agentIdx=${agent.agentIndex} navPos=[${spawnPoint.x.toFixed(2)}, ${spawnPoint.y.toFixed(2)}, ${spawnPoint.z.toFixed(2)}]`
+        `createAgent: agentIdx=${agent.agentIndex} navPos=[${navPosition.x.toFixed(2)}, ${navPosition.y.toFixed(2)}, ${navPosition.z.toFixed(2)}]`
       );
       return agent;
     } catch (error) {

@@ -1,6 +1,7 @@
 export const EXPECTED_HEIGHTMAP_SIZE = 8192;
 const MAX_BILINEAR_SPREAD = 4;
 const STRUCTURE_TERRAIN_TOLERANCE = 0.5;
+const MAX_GROUND_SNAP_DISTANCE = 1.5;
 
 export type TerrainSamplingMode = "bilinear" | "reference" | "nearest";
 export type GroundSource = "structure" | "terrain" | "navmesh" | "current";
@@ -118,18 +119,55 @@ export function selectGroundSurface(
   candidates: GroundCandidates
 ): GroundSelection {
   const { terrainY, structureY, navY, currentY } = candidates;
+  const terrainIsValid = terrainY !== null && Number.isFinite(terrainY);
+  const surfaces: GroundSelection[] = [];
+
   if (
     structureY !== null &&
     Number.isFinite(structureY) &&
-    (terrainY === null || structureY >= terrainY - STRUCTURE_TERRAIN_TOLERANCE)
+    (!terrainIsValid || structureY >= terrainY - STRUCTURE_TERRAIN_TOLERANCE)
   ) {
-    return { height: structureY, source: "structure" };
+    surfaces.push({ height: structureY, source: "structure" });
   }
-  if (terrainY !== null && Number.isFinite(terrainY)) {
-    return { height: terrainY, source: "terrain" };
+  if (terrainIsValid) {
+    surfaces.push({ height: terrainY, source: "terrain" });
   }
-  if (navY !== null && Number.isFinite(navY)) {
-    return { height: navY, source: "navmesh" };
+  if (
+    navY !== null &&
+    Number.isFinite(navY) &&
+    (!terrainIsValid || navY >= terrainY - STRUCTURE_TERRAIN_TOLERANCE)
+  ) {
+    surfaces.push({ height: navY, source: "navmesh" });
   }
-  return { height: currentY, source: "current" };
+
+  if (surfaces.length === 0) {
+    return { height: currentY, source: "current" };
+  }
+  if (!Number.isFinite(currentY)) return surfaces[0];
+
+  // H1Z1 has vertically layered walkable space: terrain, interiors, roofs,
+  // bridges and stairs can share the same X/Z. The NPC's previous replicated Y
+  // identifies its current layer. Selecting terrain unconditionally pulls
+  // valid interior agents through the building; selecting navmesh
+  // unconditionally can jump an agent onto an unrelated polygon above it.
+  let closest = surfaces[0];
+  for (const surface of surfaces.slice(1)) {
+    if (
+      Math.abs(surface.height - currentY) < Math.abs(closest.height - currentY)
+    ) {
+      closest = surface;
+    }
+  }
+
+  // A crowd step cannot legitimately change floors by several metres. Keep the
+  // last known-good Y until Recast reaches that layer through connected
+  // walkable geometry instead of visibly teleporting the NPC into the ground
+  // or sky.
+  if (
+    terrainIsValid &&
+    Math.abs(closest.height - currentY) > MAX_GROUND_SNAP_DISTANCE
+  ) {
+    return { height: currentY, source: "current" };
+  }
+  return closest;
 }
