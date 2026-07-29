@@ -93,7 +93,73 @@ export class NavManager {
   private _tcTileWidth = 25.6;
   private _loadedCols = new Set<string>(); // materialised tile columns "tx,tz"
   private _lastStreamMs = 0;
+  private _crowdMaxAgents = 2000;
+  private _crowdMaxAgentRadius = 2.0;
+  private _crowdHealthy = true;
+  private _crowdFaultReported = false;
+  private _agentInvalidationHandler?: () => void;
   constructor() {}
+
+  get crowdHealthy(): boolean {
+    return this._crowdHealthy;
+  }
+
+  setAgentInvalidationHandler(handler: () => void): void {
+    this._agentInvalidationHandler = handler;
+  }
+
+  private destroyCrowd(): void {
+    if (!this.crowd) return;
+    try {
+      this.crowd.destroy();
+    } catch (error) {
+      debugStream(
+        `failed to destroy crowd: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  private createCrowd(): void {
+    this.crowd = new Crowd(this.navmesh, {
+      maxAgents: this._crowdMaxAgents,
+      maxAgentRadius: this._crowdMaxAgentRadius
+    });
+    this.lastTimeCall = Date.now();
+    this._crowdHealthy = true;
+    this._crowdFaultReported = false;
+  }
+
+  resetCrowd(): void {
+    this._agentInvalidationHandler?.();
+    this.destroyCrowd();
+    this.createCrowd();
+  }
+
+  private mutateNavMesh(
+    mutation: () => void,
+    beforeMutation?: () => void
+  ): boolean {
+    (beforeMutation ?? this._agentInvalidationHandler)?.();
+    this.destroyCrowd();
+    this._crowdHealthy = false;
+    try {
+      mutation();
+      return true;
+    } catch (error) {
+      console.error(
+        `[NAV] navmesh mutation failed: ${
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error)
+        }`
+      );
+      return false;
+    } finally {
+      this.createCrowd();
+    }
+  }
   async loadNav() {
     const requestedMode = process.env.NAV_STREAMING;
     const storePath = STREAM_CACHE_DIR + "/z1_cache_0.bin";
@@ -136,10 +202,10 @@ export class NavManager {
     const { tileCache } = importTileCache(tcData, tileCacheMeshProcess);
     this.navmesh = navMesh;
     this.tilecache = tileCache;
-    const maxAgents = 2000;
-    const maxAgentRadius = 2.0;
+    this._crowdMaxAgents = 2000;
+    this._crowdMaxAgentRadius = 2.0;
     this.navMeshQuery = new NavMeshQuery(this.navmesh);
-    this.crowd = new Crowd(navMesh, { maxAgents, maxAgentRadius });
+    this.createCrowd();
     console.timeEnd("[NAV] Navmesh loaded");
   }
 
@@ -249,10 +315,9 @@ export class NavManager {
     }
 
     this.navMeshQuery = new NavMeshQuery(this.navmesh);
-    this.crowd = new Crowd(this.navmesh, {
-      maxAgents: 1000,
-      maxAgentRadius: 2.5
-    });
+    this._crowdMaxAgents = 1000;
+    this._crowdMaxAgentRadius = 2.5;
+    this.createCrowd();
     this.streaming = true;
     console.timeEnd("[NAV] streaming tilecache loaded");
     console.log(
@@ -263,10 +328,13 @@ export class NavManager {
   // Materialise the navmesh tiles within STREAM_RADIUS of any player from the
   // in-RAM tilecache (buildNavMeshTilesAt) and remove the columns that left the
   // window. Throttled. No-op unless streaming.
-  streamAround(positions: Float32Array[]): void {
-    if (!this.streaming) return;
+  streamAround(
+    positions: Float32Array[],
+    beforeMutation?: () => void
+  ): boolean {
+    if (!this.streaming) return false;
     const now = Date.now();
-    if (now - this._lastStreamMs < STREAM_INTERVAL) return;
+    if (now - this._lastStreamMs < STREAM_INTERVAL) return false;
     this._lastStreamMs = now;
     const tw = this._tcTileWidth;
     const rad = Math.ceil(STREAM_RADIUS / tw);
@@ -280,10 +348,14 @@ export class NavManager {
         }
       }
     }
+    const toRemove = [...this._loadedCols].filter((k) => !want.has(k));
+    const toAdd = [...want].filter((k) => !this._loadedCols.has(k));
+    if (!toRemove.length && !toAdd.length) return false;
     let removed = 0;
-    // unload columns outside the window
-    for (const k of this._loadedCols) {
-      if (!want.has(k)) {
+    let added = 0;
+    const success = this.mutateNavMesh(() => {
+      // unload columns outside the window
+      for (const k of toRemove) {
         const [tx, tz] = k.split(",").map(Number);
         const res = this.navmesh.getTilesAt(tx, tz, 8);
         for (let i = 0; i < res.tileCount(); i++) {
@@ -293,23 +365,22 @@ export class NavManager {
         this._loadedCols.delete(k);
         removed++;
       }
-    }
-    let added = 0;
-    // materialise columns entering the window; obstacles already registered in
-    // the tilecache are carved in automatically by buildNavMeshTilesAt
-    for (const k of want) {
-      if (this._loadedCols.has(k)) continue;
-      const [tx, tz] = k.split(",").map(Number);
-      this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh);
-      this._loadedCols.add(k);
-      added++;
-    }
+      // materialise columns entering the window; obstacles already registered
+      // in the tilecache are carved in by buildNavMeshTilesAt
+      for (const k of toAdd) {
+        const [tx, tz] = k.split(",").map(Number);
+        this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh);
+        this._loadedCols.add(k);
+        added++;
+      }
+    }, beforeMutation);
     // only log when the window actually changed (no spam while standing still)
     if ((added || removed) && debugStream.enabled) {
       debugStream(
         `+${added} -${removed} columns (loaded: ${this._loadedCols.size}, players: ${positions.length})`
       );
     }
+    return success;
   }
 
   isPositionStreamed(gamePos: Float32Array): boolean {
@@ -327,6 +398,7 @@ export class NavManager {
   }
 
   removeAgent(agent: CrowdAgent): void {
+    if (!this._crowdHealthy) return;
     try {
       this.crowd.removeAgent(agent);
     } catch (error) {
@@ -348,6 +420,7 @@ export class NavManager {
       !Number.isFinite(gameCenter[0]) ||
       !Number.isFinite(gameCenter[1]) ||
       !Number.isFinite(gameCenter[2]) ||
+      !this._crowdHealthy ||
       !this.isPositionStreamed(gameCenter)
     ) {
       return null;
@@ -397,12 +470,13 @@ export class NavManager {
       return null;
     }
     if (this.obstaclesRequestsPending >= MAX_PENDING_OBSTACLE) {
-      let upToDate = false;
-      // Should be only used at startup, but may be bad
-      while (!upToDate) {
-        ({ upToDate } = this.tilecache.update(this.navmesh));
-      }
-      this.obstaclesRequestsPending = 0;
+      const success = this.mutateNavMesh(() => {
+        let upToDate = false;
+        while (!upToDate) {
+          ({ upToDate } = this.tilecache.update(this.navmesh));
+        }
+      });
+      if (success) this.obstaclesRequestsPending = 0;
     }
     const { success, obstacle } = this.tilecache.addBoxObstacle(
       NavManager.gameToNav(position),
@@ -441,17 +515,34 @@ export class NavManager {
     // tilecache carving runs in both modes now: in streaming the obstacles are
     // applied to the materialised window tiles, in normal mode to the whole mesh
     if (this.obstaclesRequestsPending) {
-      let upToDate = false;
-      while (!upToDate) {
-        ({ upToDate } = this.tilecache.update(this.navmesh));
-      }
-      this.obstaclesRequestsPending = 0;
+      const success = this.mutateNavMesh(() => {
+        let upToDate = false;
+        while (!upToDate) {
+          ({ upToDate } = this.tilecache.update(this.navmesh));
+        }
+      });
+      if (success) this.obstaclesRequestsPending = 0;
     }
     debug(
       `requests: ${this.obstaclesRequestsPending}, total: ${this.tilecache.obstacles.size}`
     );
     this.lastTimeCall = now;
-    this.crowd.update(this.updateFrequency, timeSinceLastCalled, 1);
+    if (!this._crowdHealthy) return;
+    try {
+      this.crowd.update(this.updateFrequency, timeSinceLastCalled, 1);
+    } catch (error) {
+      this._crowdHealthy = false;
+      if (!this._crowdFaultReported) {
+        this._crowdFaultReported = true;
+        console.error(
+          `[NAV] crowd disabled until lifecycle recovery: ${
+            error instanceof Error
+              ? (error.stack ?? error.message)
+              : String(error)
+          }`
+        );
+      }
+    }
   }
 
   // Returns nearest navmesh point (in nav coords) to the given game position.
@@ -485,7 +576,9 @@ export class NavManager {
     // In streaming mode the navmesh only exists around players; if no tile is
     // loaded under this spawn point yet, defer (caller retries when it loads)
     // instead of placing the agent at a garbage position.
-    if (!this.isPositionStreamed(gamePos)) return undefined;
+    if (!this._crowdHealthy || !this.isPositionStreamed(gamePos)) {
+      return undefined;
+    }
     try {
       const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
         NavManager.gameToNav(gamePos),
@@ -533,19 +626,33 @@ export class NavManager {
     }
   }
 
-  createPassiveAgent(gamePos: Float32Array, radius: number = 0.5): CrowdAgent {
-    const navPosition = this.getClosestNavPointVec3(gamePos);
-    const agent = this.crowd.addAgent(navPosition, {
-      radius,
-      height: 2,
-      maxAcceleration: 0,
-      maxSpeed: 0,
-      collisionQueryRange: radius * 2,
-      pathOptimizationRange: 0,
-      separationWeight: 1,
-      updateFlags: 0
-    });
-    return agent;
+  createPassiveAgent(
+    gamePos: Float32Array,
+    radius: number = 0.5
+  ): CrowdAgent | undefined {
+    if (!this._crowdHealthy || !this.isPositionStreamed(gamePos)) {
+      return undefined;
+    }
+    try {
+      const navPosition = this.getClosestNavPointVec3(gamePos);
+      return this.crowd.addAgent(navPosition, {
+        radius,
+        height: 2,
+        maxAcceleration: 0,
+        maxSpeed: 0,
+        collisionQueryRange: radius * 2,
+        pathOptimizationRange: 0,
+        separationWeight: 1,
+        updateFlags: 0
+      });
+    } catch (error) {
+      debugStream(
+        `create-passive-agent rejected at [${gamePos[0]}, ${gamePos[1]}, ${gamePos[2]}]: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return undefined;
+    }
   }
 
   async dumpNavmesh() {

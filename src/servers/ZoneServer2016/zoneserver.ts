@@ -2092,6 +2092,9 @@ export class ZoneServer2016 extends EventEmitter {
   private async setupServer() {
     if (!process.env.DISABLE_AI && this.aiEnabled) {
       await this.navManager.loadNav();
+      this.navManager.setAgentInvalidationHandler(() =>
+        this.clearPathfindingAgentReferences()
+      );
       await this.initHeightmap();
       this.collisionManager.load();
       this.aiTickRoutine = setInterval(() => this.tickAi(), this.aiTickRate);
@@ -10704,6 +10707,7 @@ export class ZoneServer2016 extends EventEmitter {
   }
 
   private tickNpcFsms(dt: number): void {
+    if (!this.navManager.crowdHealthy) return;
     const safeDt = Math.min(dt, 1.0);
     for (const k in this._npcs) {
       const npc = this._npcs[k];
@@ -10811,7 +10815,19 @@ export class ZoneServer2016 extends EventEmitter {
     return { terrainSample, structureY, navY: resolvedNavY, selection };
   }
 
+  private clearPathfindingAgentReferences(): void {
+    for (const k in this._npcs) this._npcs[k].navAgent = undefined;
+    for (const k in this._characters) {
+      this._characters[k].navAgent = undefined;
+    }
+    for (const k in this._vehicles) this._vehicles[k].navAgent = undefined;
+  }
+
   updatePathfindingPositions(): void {
+    if (!this.navManager.crowdHealthy) {
+      this.clearPathfindingAgentReferences();
+      this.navManager.resetCrowd();
+    }
     // streaming navmesh: load the fine tiles around live players, unload the rest
     if (this.navManager.streaming) {
       const playerPositions: Float32Array[] = [];
@@ -10819,7 +10835,9 @@ export class ZoneServer2016 extends EventEmitter {
         const c = this._characters[k];
         if (c.isAlive) playerPositions.push(c.state.position);
       }
-      this.navManager.streamAround(playerPositions);
+      this.navManager.streamAround(playerPositions, () =>
+        this.clearPathfindingAgentReferences()
+      );
     }
     for (const k in this._npcs) {
       const npc = this._npcs[k];
@@ -10872,6 +10890,10 @@ export class ZoneServer2016 extends EventEmitter {
 
     for (const k in this._characters) {
       const character = this._characters[k];
+      if (!this.navManager.isPositionStreamed(character.state.position)) {
+        character.navAgent = undefined;
+        continue;
+      }
       if (!character.navAgent) {
         character.navAgent = this.navManager.createPassiveAgent(
           character.state.position
@@ -10885,6 +10907,10 @@ export class ZoneServer2016 extends EventEmitter {
 
     for (const k in this._vehicles) {
       const vehicle = this._vehicles[k];
+      if (!this.navManager.isPositionStreamed(vehicle.state.position)) {
+        vehicle.navAgent = undefined;
+        continue;
+      }
       if (!vehicle.navAgent) {
         vehicle.navAgent = this.navManager.createPassiveAgent(
           vehicle.state.position,

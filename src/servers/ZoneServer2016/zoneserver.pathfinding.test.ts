@@ -2,7 +2,7 @@ import assert from "node:assert";
 import test from "node:test";
 import { ZoneServer2016 } from "./zoneserver";
 
-test("NPC crowd agents are retired when their streamed tile unloads", () => {
+test("all crowd-agent references are invalidated before streamed tiles change", () => {
   const staleAgent = {
     interpolatedPosition: { x: 10, y: 10, z: 10 }
   };
@@ -18,24 +18,40 @@ test("NPC crowd agents are retired when their streamed tile unloads", () => {
       assert.fail("an unloaded NPC must not synchronize a stale agent");
     }
   };
-  let removedAgent: unknown;
+  const character = { state: npc.state, navAgent: staleAgent };
+  const vehicle = { state: npc.state, navAgent: staleAgent };
+  let invalidatedBeforeMutation = false;
   const server = {
     navManager: {
       streaming: true,
-      streamAround() {},
-      isPositionStreamed: () => false,
-      removeAgent(agent: unknown) {
-        removedAgent = agent;
+      crowdHealthy: true,
+      streamAround(
+        _positions: Float32Array[],
+        beforeMutation: (() => void) | undefined
+      ) {
+        beforeMutation?.();
+        invalidatedBeforeMutation =
+          npc.navAgent === undefined &&
+          character.navAgent === undefined &&
+          vehicle.navAgent === undefined;
       },
+      isPositionStreamed: () => false,
       createAgent: () => undefined
     },
     _npcs: { npc },
-    _characters: {},
-    _vehicles: {}
+    _characters: { character },
+    _vehicles: { vehicle },
+    clearPathfindingAgentReferences: (
+      ZoneServer2016.prototype as unknown as {
+        clearPathfindingAgentReferences(): void;
+      }
+    ).clearPathfindingAgentReferences
   };
 
   ZoneServer2016.prototype.updatePathfindingPositions.call(server);
 
-  assert.equal(removedAgent, staleAgent);
+  assert.equal(invalidatedBeforeMutation, true);
   assert.equal(npc.navAgent, undefined);
+  assert.equal(character.navAgent, undefined);
+  assert.equal(vehicle.navAgent, undefined);
 });

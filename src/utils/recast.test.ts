@@ -122,3 +122,58 @@ test("streamed random-point queries snap to a loaded floor and contain WASM erro
     null
   );
 });
+
+test("streaming invalidates agents before tiles change and recreates the crowd afterward", () => {
+  const navManager = new NavManager();
+  const events: string[] = [];
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 25.6,
+    _lastStreamMs: 0,
+    _loadedCols: new Set(["0,0"])
+  });
+  navManager.navmesh = {
+    getTilesAt: () => {
+      events.push("remove-tiles");
+      return { tileCount: () => 0 };
+    }
+  } as never;
+  navManager.tilecache = {
+    buildNavMeshTilesAt: () => {
+      events.push("build-tiles");
+    }
+  } as never;
+  Object.assign(navManager as object, {
+    destroyCrowd: () => events.push("destroy-crowd"),
+    createCrowd: () => events.push("create-crowd")
+  });
+  navManager.setAgentInvalidationHandler(() =>
+    events.push("invalidate-agents")
+  );
+
+  assert.equal(
+    navManager.streamAround([new Float32Array([1000, 0, 1000, 1])]),
+    true
+  );
+  assert.deepEqual(events.slice(0, 3), [
+    "invalidate-agents",
+    "destroy-crowd",
+    "remove-tiles"
+  ]);
+  assert.equal(events.at(-1), "create-crowd");
+});
+
+test("crowd update faults are contained and latched", () => {
+  const navManager = new NavManager();
+  navManager.tilecache = { obstacles: new Set() } as never;
+  navManager.crowd = {
+    update: () => {
+      throw new WebAssembly.RuntimeError("memory access out of bounds");
+    }
+  } as never;
+
+  assert.doesNotThrow(() => navManager.updt());
+  assert.equal(navManager.crowdHealthy, false);
+});
