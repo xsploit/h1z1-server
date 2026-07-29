@@ -27,19 +27,25 @@ test("solo starter loadout preserves defaults and includes the juggernaut kit", 
   }
 });
 
-test("juggernaut kit has armor, tactical weapons, and deep ammunition", () => {
+test("juggernaut kit has premium armor, weapons, supplies, and deep ammunition", () => {
   const expectedItems = new Map<Items, number | undefined>([
-    [Items.BACKPACK_MILITARY_GREEN_CAMO, undefined],
-    [Items.KEVLAR_DEFAULT, undefined],
-    [Items.HELMET_TACTICAL, undefined],
+    [Items.FULLY_GEARED_EXPLORER_BACKPACK, undefined],
+    [Items.HEAVY_ASSAULT_BODY_ARMOR, undefined],
+    [Items.HEAVY_ASSAULT_FULL_HELMET, undefined],
+    [Items.HEAVY_ASSAULT_MILITARY_PANTS, undefined],
     [Items.NV_GOGGLES, undefined],
-    [Items.WEAPON_AR15, undefined],
-    [Items.WEAPON_SHOTGUN, undefined],
-    [Items.WEAPON_308, undefined],
-    [Items.AMMO_223, 300],
-    [Items.AMMO_12GA, 120],
-    [Items.AMMO_308, 100],
-    [Items.FIRST_AID, 20]
+    [Items.WEAPON_FROSTBITE, undefined],
+    [Items.WEAPON_NAGAFENS_RAGE, undefined],
+    [Items.WEAPON_REAPER, undefined],
+    [Items.WEAPON_HEAVY_ASSAULT_MAGNUM, undefined],
+    [Items.WEAPON_TOXIC_COMBATKNIFE, undefined],
+    [Items.AMMO_762, 600],
+    [Items.AMMO_12GA, 240],
+    [Items.AMMO_308, 200],
+    [Items.AMMO_44, 240],
+    [Items.FIRST_AID, 30],
+    [Items.GUN_REPAIR_KIT, 20],
+    [Items.REPAIR_BOX, 10]
   ]);
 
   for (const [item, count] of expectedItems) {
@@ -47,6 +53,18 @@ test("juggernaut kit has armor, tactical weapons, and deep ammunition", () => {
       characterJuggernautLoadout.some(
         (entry) => entry.item === item && entry.count === count
       )
+    );
+  }
+
+  for (const vanillaWeapon of [
+    Items.WEAPON_AR15,
+    Items.WEAPON_SHOTGUN,
+    Items.WEAPON_308,
+    Items.WEAPON_M9
+  ]) {
+    assert.equal(
+      characterJuggernautLoadout.some((entry) => entry.item === vanillaWeapon),
+      false
     );
   }
 });
