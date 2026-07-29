@@ -10826,7 +10826,7 @@ export class ZoneServer2016 extends EventEmitter {
   updatePathfindingPositions(): void {
     if (!this.navManager.crowdHealthy) {
       this.clearPathfindingAgentReferences();
-      this.navManager.resetCrowd();
+      return;
     }
     // streaming navmesh: load the fine tiles around live players, unload the rest
     if (this.navManager.streaming) {
@@ -10838,6 +10838,7 @@ export class ZoneServer2016 extends EventEmitter {
       this.navManager.streamAround(playerPositions, () =>
         this.clearPathfindingAgentReferences()
       );
+      if (!this.navManager.crowdHealthy) return;
     }
     for (const k in this._npcs) {
       const npc = this._npcs[k];

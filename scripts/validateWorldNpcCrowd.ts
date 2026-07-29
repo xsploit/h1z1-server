@@ -72,10 +72,22 @@ async function main() {
   if (!playerAgent)
     throw new Error("failed to create saved-player passive agent");
   wrappers.push(playerAgent);
+  const validationPlayerId = "validation-player";
+  server._characters[validationPlayerId] = {
+    characterId: validationPlayerId,
+    isAlive: true,
+    isVanished: false,
+    isHidden: false,
+    isSpectator: false,
+    state: { position: center },
+    navAgent: playerAgent,
+    OnProjectileHit: () => undefined
+  } as never;
   for (const npc of Object.values(server._npcs)) {
     const agent =
       npc.navAgent ?? server.navManager.createAgent(npc.state.position);
     if (!agent) continue;
+    npc.navAgent = agent;
     wrappers.push(agent);
     agent.requestMoveTarget(centerSnap.nearestPoint);
     npcAgents++;
@@ -86,6 +98,7 @@ async function main() {
       2
     );
     if (!agent) continue;
+    vehicle.navAgent = agent;
     wrappers.push(agent);
     vehicleWrappers.push({ agent, position: vehicle.state.position });
     vehicleAgents++;
@@ -97,11 +110,16 @@ async function main() {
       (agentIndex) =>
         !Number.isInteger(agentIndex) || agentIndex < 0 || agentIndex >= 1000
     );
-  const tickNpcFsms = (
-    server as unknown as { tickNpcFsms(dt: number): void }
-  ).tickNpcFsms.bind(server);
+  const aiInternals = server as unknown as {
+    _rebuildAiTargetMap(): void;
+    tickNpcFsms(dt: number): void;
+  };
+  const rebuildAiTargetMap = aiInternals._rebuildAiTargetMap.bind(server);
+  const tickNpcFsms = aiInternals.tickNpcFsms.bind(server);
   for (let i = 0; i < crowdSteps; i++) {
+    rebuildAiTargetMap();
     tickNpcFsms(0.2);
+    server.updatePathfindingPositions();
     if (!server.navManager.teleportAgent(playerAgent, center)) {
       throw new Error("saved-player teleport validation failed");
     }
@@ -110,7 +128,10 @@ async function main() {
         throw new Error("world-vehicle teleport validation failed");
       }
     }
-    server.navManager.updt();
+    // Use the fixed-step form directly. NavManager.updt() measures wall time,
+    // so a tight validation loop otherwise performs almost no native crowd
+    // updates after its first iteration.
+    server.navManager.crowd.update(server.navManager.updateFrequency);
   }
 
   console.log(

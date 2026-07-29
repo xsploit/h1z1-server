@@ -3,9 +3,11 @@ import type { CrowdAgent } from "recast-navigation";
 
 const cacheDir = process.argv[2];
 const agentsPerWindow = Number(process.argv[3] ?? 60);
+const stepsPerWindow = Number(process.argv[4] ?? 25);
+const transitionCount = Number(process.argv[5] ?? 12);
 if (!cacheDir) {
   console.error(
-    "Usage: npx tsx scripts/validateStreamingCrowdLifecycle.ts <cache-dir> [agents-per-window]"
+    "Usage: npx tsx scripts/validateStreamingCrowdLifecycle.ts <cache-dir> [agents-per-window] [steps-per-window] [transition-count]"
   );
   process.exit(1);
 }
@@ -25,15 +27,11 @@ async function main() {
     invalidations++;
   });
 
-  const centers = Array.from({ length: 12 }, (_, index) => {
-    const angle = (index / 12) * Math.PI * 2;
-    return new Float32Array([
-      944 + Math.cos(angle) * 180,
-      14,
-      -2701 + Math.sin(angle) * 180,
-      1
-    ]);
-  });
+  const centers = Array.from({ length: transitionCount }, (_, index) =>
+    index % 2 === 0
+      ? new Float32Array([966.83, 14, -2691.36, 1])
+      : new Float32Array([-125.55, 23.41, -1131.71, 1])
+  );
 
   let created = 0;
   for (const center of centers) {
@@ -67,7 +65,9 @@ async function main() {
       }
     }
 
-    for (let i = 0; i < 8; i++) nav.updt();
+    for (let i = 0; i < stepsPerWindow; i++) {
+      nav.crowd.update(nav.updateFrequency);
+    }
     if (!nav.crowdHealthy) throw new Error("crowd faulted after stream change");
     for (const agent of agents) {
       const position = agent.interpolatedPosition;
@@ -100,6 +100,7 @@ async function main() {
       streamTransitions: centers.length,
       agentInvalidations: invalidations,
       agentsCreated: created,
+      stepsPerWindow,
       crowdHealthy: nav.crowdHealthy
     })
   );

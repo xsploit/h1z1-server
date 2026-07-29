@@ -123,7 +123,7 @@ test("streamed random-point queries snap to a loaded floor and contain WASM erro
   );
 });
 
-test("streaming invalidates agents before tiles change and recreates the crowd afterward", () => {
+test("streaming removes agents before tiles change without reallocating the crowd", () => {
   const navManager = new NavManager();
   const events: string[] = [];
   navManager.streaming = true;
@@ -145,10 +145,10 @@ test("streaming invalidates agents before tiles change and recreates the crowd a
       events.push("build-tiles");
     }
   } as never;
-  Object.assign(navManager as object, {
-    destroyCrowd: () => events.push("destroy-crowd"),
-    createCrowd: () => events.push("create-crowd")
-  });
+  navManager.crowd = {
+    getAgents: () => [{ agentIndex: 7 }],
+    removeAgent: () => events.push("remove-agent")
+  } as never;
   navManager.setAgentInvalidationHandler(() =>
     events.push("invalidate-agents")
   );
@@ -159,21 +159,25 @@ test("streaming invalidates agents before tiles change and recreates the crowd a
   );
   assert.deepEqual(events.slice(0, 3), [
     "invalidate-agents",
-    "destroy-crowd",
+    "remove-agent",
     "remove-tiles"
   ]);
-  assert.equal(events.at(-1), "create-crowd");
+  assert.equal(events.includes("build-tiles"), true);
 });
 
 test("crowd update faults are contained and latched", () => {
   const navManager = new NavManager();
   let faultReports = 0;
+  let invalidations = 0;
   navManager.tilecache = { obstacles: new Set() } as never;
   navManager.crowd = {
     update: () => {
       throw new WebAssembly.RuntimeError("memory access out of bounds");
     }
   } as never;
+  navManager.setAgentInvalidationHandler(() => {
+    invalidations++;
+  });
 
   const originalConsoleError = console.error;
   console.error = () => {
@@ -188,6 +192,35 @@ test("crowd update faults are contained and latched", () => {
   }
   assert.equal(navManager.crowdHealthy, false);
   assert.equal(faultReports, 1);
+  assert.equal(invalidations, 1);
+});
+
+test("a poisoned crowd is never re-entered during navmesh mutation", () => {
+  const navManager = new NavManager();
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _crowdHealthy: false,
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 25.6,
+    _lastStreamMs: 0,
+    _loadedCols: new Set(["0,0"])
+  });
+  navManager.crowd = {
+    getAgents: () => assert.fail("poisoned crowd must not be touched")
+  } as never;
+  navManager.navmesh = {
+    getTilesAt: () => assert.fail("navmesh must not mutate after crowd fault")
+  } as never;
+  navManager.tilecache = {
+    buildNavMeshTilesAt: () =>
+      assert.fail("tile cache must not mutate after crowd fault")
+  } as never;
+
+  assert.equal(
+    navManager.streamAround([new Float32Array([1000, 0, 1000, 1])]),
+    false
+  );
 });
 
 test("passive agents are rejected when no nav polygon exists", () => {

@@ -109,19 +109,6 @@ export class NavManager {
     this._agentInvalidationHandler = handler;
   }
 
-  private destroyCrowd(): void {
-    if (!this.crowd) return;
-    try {
-      this.crowd.destroy();
-    } catch (error) {
-      debugStream(
-        `failed to destroy crowd: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
-
   private createCrowd(): void {
     this.crowd = new Crowd(this.navmesh, {
       maxAgents: this._crowdMaxAgents,
@@ -142,7 +129,10 @@ export class NavManager {
     try {
       activeAgents = this.crowd.getActiveAgentCount();
       wrapperAgents = this.crowd.getAgents().length;
-    } catch {}
+    } catch {
+      // The native heap may already be poisoned; keep the fallback counts.
+    }
+    this._agentInvalidationHandler?.();
     console.error(
       `[NAV] crowd disabled after ${operation} ` +
         `(active=${activeAgents}, wrappers=${wrapperAgents}): ${
@@ -153,21 +143,23 @@ export class NavManager {
     );
   }
 
-  resetCrowd(): void {
-    this._agentInvalidationHandler?.();
-    this.destroyCrowd();
-    this.createCrowd();
-  }
-
   private mutateNavMesh(
     mutation: () => void,
     beforeMutation?: () => void
   ): boolean {
     (beforeMutation ?? this._agentInvalidationHandler)?.();
-    this.destroyCrowd();
-    this._crowdHealthy = false;
+    if (!this._crowdHealthy) return false;
+    try {
+      for (const agent of this.crowd.getAgents()) {
+        this.crowd.removeAgent(agent);
+      }
+    } catch (error) {
+      this.markCrowdFault(error, "agent invalidation");
+      return false;
+    }
     try {
       mutation();
+      this.lastTimeCall = Date.now();
       return true;
     } catch (error) {
       console.error(
@@ -178,8 +170,6 @@ export class NavManager {
         }`
       );
       return false;
-    } finally {
-      this.createCrowd();
     }
   }
   async loadNav() {
