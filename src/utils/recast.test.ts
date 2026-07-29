@@ -11,12 +11,7 @@ test("tile-cache parts are sorted by their suffix", () => {
       "z1_cache_1.bin",
       "z1_cache_0.bin"
     ]),
-    [
-      "z1_cache_0.bin",
-      "z1_cache_1.bin",
-      "z1_cache_2.bin",
-      "z1_cache_10.bin"
-    ]
+    ["z1_cache_0.bin", "z1_cache_1.bin", "z1_cache_2.bin", "z1_cache_10.bin"]
   );
 });
 

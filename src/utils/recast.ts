@@ -28,6 +28,7 @@ import {
   NavMesh,
   NavMeshParams,
   Raw,
+  statusSucceed,
   statusToReadableString,
   TileCache,
   UnsignedCharArray,
@@ -63,6 +64,8 @@ const MAX_PENDING_OBSTACLE = 50;
 // under the 32-bit polyref budget. Grid params (orig, tileWidth) come from the
 // TSET header. Construction obstacles carve natively via the tilecache.
 const STREAM_ENABLED = process.env.NAV_STREAMING === "1";
+const STREAM_CACHE_DIR =
+  process.env.NAV_CACHE_DIR ?? __dirname + "/../../data/2016/collision";
 const STREAM_RADIUS = 300; // materialise tiles within this many meters of a player
 const STREAM_INTERVAL = 1000; // ms between window updates
 
@@ -86,7 +89,7 @@ export class NavManager {
   constructor() {}
   async loadNav() {
     if (STREAM_ENABLED) {
-      const storePath = __dirname + "/../../data/2016/collision/z1_cache_0.bin";
+      const storePath = STREAM_CACHE_DIR + "/z1_cache_0.bin";
       if (existsSync(storePath)) return this.loadNavStreaming();
       console.warn(
         "[NAV] NAV_STREAMING=1 but data/2016/collision/z1_cache_*.bin is missing - falling back to the standard navmesh"
@@ -136,7 +139,7 @@ export class NavManager {
   private async loadNavStreaming() {
     console.time("[NAV] streaming tilecache loaded");
     await initRecast();
-    const dir = __dirname + "/../../data/2016/collision";
+    const dir = STREAM_CACHE_DIR;
     const parts = sortTileCacheParts(
       readdirSync(dir).filter((f) => /^z1_cache_\d+\.bin$/.test(f))
     );
@@ -160,8 +163,12 @@ export class NavManager {
       ("E".charCodeAt(0) << 8) |
       "T".charCodeAt(0);
     if (rI() !== TSET) throw new Error("[NAV] bad tilecache TSET magic");
-    rI(); // version
+    const version = rI();
+    if (version !== 1) {
+      throw new Error(`[NAV] unsupported tilecache TSET version ${version}`);
+    }
     const numTiles = rI();
+    if (numTiles <= 0) throw new Error("[NAV] tilecache contains no layers");
     const mesh = {
       orig: { x: rF(), y: rF(), z: rF() },
       tileWidth: rF(),
@@ -188,24 +195,46 @@ export class NavManager {
 
     const meshProcess = createDefaultTileCacheMeshProcess();
     this.tilecache = new TileCache();
-    this.tilecache.init(
-      DetourTileCacheParams.create(cache),
-      new (Raw as any).RecastLinearAllocator(1 << 20),
-      new (Raw as any).RecastFastLZCompressor(),
-      meshProcess
-    );
+    if (
+      !this.tilecache.init(
+        DetourTileCacheParams.create(cache),
+        new (Raw as any).RecastLinearAllocator(1 << 20),
+        new (Raw as any).RecastFastLZCompressor(),
+        meshProcess
+      )
+    ) {
+      throw new Error("[NAV] failed to initialize streaming tilecache");
+    }
     this.navmesh = new NavMesh();
-    this.navmesh.initTiled(NavMeshParams.create(mesh));
+    if (!this.navmesh.initTiled(NavMeshParams.create(mesh))) {
+      throw new Error("[NAV] failed to initialize streaming navmesh");
+    }
 
     const FREE = (Raw.Detour as any).DT_COMPRESSEDTILE_FREE_DATA ?? 1;
     for (let i = 0; i < numTiles; i++) {
+      if (o + 8 > buf.length) {
+        throw new Error(`[NAV] truncated tilecache before layer ${i}`);
+      }
       o += 4; // tileRef (recomputed by addTile)
       const dataSize = buf.readInt32LE(o);
       o += 4;
+      if (dataSize <= 0 || o + dataSize > buf.length) {
+        throw new Error(
+          `[NAV] invalid tilecache layer ${i} size ${dataSize} at offset ${o}`
+        );
+      }
       const arr = new UnsignedCharArray();
       arr.copy(buf.subarray(o, o + dataSize));
       o += dataSize;
-      this.tilecache.addTile(arr, FREE);
+      const result = this.tilecache.addTile(arr, FREE);
+      if (!statusSucceed(result.status)) {
+        throw new Error(
+          `[NAV] failed to add tilecache layer ${i}: ${statusToReadableString(result.status)}`
+        );
+      }
+    }
+    if (o !== buf.length) {
+      throw new Error(`[NAV] tilecache has ${buf.length - o} trailing bytes`);
     }
 
     this.navMeshQuery = new NavMeshQuery(this.navmesh);
