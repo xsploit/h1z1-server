@@ -2896,13 +2896,21 @@ export class ZonePacketHandlers {
         return;
       }
 
-      const sourceContainer = sourceCharacter.getItemContainer(itemGuid ?? "");
+      const mountedContainer = sourceCharacter.getContainer();
+      const externalItemGuid = resolveClientItemGuid(
+        requestedItemGuid,
+        mountedContainer ? Object.keys(mountedContainer.items) : []
+      ) ?? itemGuid;
+      const sourceContainer =
+        mountedContainer?.items[externalItemGuid] !== undefined
+          ? mountedContainer
+          : sourceCharacter.getItemContainer(externalItemGuid);
       if (!sourceContainer) {
         server.sendChatText(client, "Invalid source container 3!");
         return;
       }
 
-      const item = sourceContainer.items[itemGuid ?? ""];
+      const item = sourceContainer.items[externalItemGuid];
       if (!item) {
         server.containerError(client, ContainerErrors.NO_ITEM_IN_SLOT);
         return;
