@@ -18,8 +18,7 @@ export enum Factions {
   WOLF = 3,
   BEAR = 4,
   PASSIVE = 5,
-  BANDIT = 6,
-  SURVIVOR = 7
+  BANDIT = 6
 }
 
 const HOSTILITY: Record<Factions, Factions[]> = {
@@ -28,7 +27,6 @@ const HOSTILITY: Record<Factions, Factions[]> = {
   [Factions.ZOMBIE]: [
     Factions.HUMAN,
     Factions.BANDIT,
-    Factions.SURVIVOR,
     Factions.WOLF,
     Factions.BEAR,
     Factions.PASSIVE
@@ -36,26 +34,13 @@ const HOSTILITY: Record<Factions, Factions[]> = {
   [Factions.WOLF]: [
     Factions.HUMAN,
     Factions.BANDIT,
-    Factions.SURVIVOR,
     Factions.ZOMBIE,
     Factions.PASSIVE
   ],
-  [Factions.BEAR]: [
-    Factions.HUMAN,
-    Factions.BANDIT,
-    Factions.SURVIVOR,
-    Factions.ZOMBIE
-  ],
+  [Factions.BEAR]: [Factions.HUMAN, Factions.BANDIT, Factions.ZOMBIE],
   [Factions.PASSIVE]: [],
   [Factions.BANDIT]: [
     Factions.HUMAN,
-    Factions.SURVIVOR,
-    Factions.ZOMBIE,
-    Factions.WOLF,
-    Factions.BEAR
-  ],
-  [Factions.SURVIVOR]: [
-    Factions.BANDIT,
     Factions.ZOMBIE,
     Factions.WOLF,
     Factions.BEAR

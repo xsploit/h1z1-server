@@ -90,10 +90,7 @@ import {
 } from "./lootspawnworker";
 import type { ItemFunction } from "types/zoneserver";
 import { Gasser } from "../entities/gasser";
-import {
-  HostileSurvivor,
-  HumanNpcDisposition
-} from "../entities/hostilesurvivor";
+import { HostileSurvivor } from "../entities/hostilesurvivor";
 const debug = require("debug")("ZoneServer");
 const apm = require("elastic-apm-node");
 
@@ -674,8 +671,7 @@ export class WorldObjectManager {
     position: Float32Array,
     rotation: Float32Array,
     spawnerId: number = 0,
-    npcId?: NpcIds,
-    humanDisposition: HumanNpcDisposition = "bandit"
+    npcId?: NpcIds
   ) {
     const characterId = generateRandomGuid();
     const transientId = server.getTransientId(characterId);
@@ -772,8 +768,7 @@ export class WorldObjectManager {
           position,
           rotation,
           server,
-          spawnerId,
-          humanDisposition
+          spawnerId
         );
         break;
       default:
@@ -838,16 +833,6 @@ export class WorldObjectManager {
     return lootObj;
   }
 
-  registerLootbag(server: ZoneServer2016, lootbag: Lootbag): void {
-    server._lootbags[lootbag.characterId] = lootbag;
-    server.pushToGridCell(lootbag);
-    server.executeFuncForAllReadyClientsInRange((client) => {
-      if (client.spawnedEntities.has(lootbag)) return;
-      server.addLightweightNpc(client, lootbag);
-      client.spawnedEntities.add(lootbag);
-    }, lootbag);
-  }
-
   createLootbag(server: ZoneServer2016, entity: BaseFullCharacter) {
     const characterId = generateRandomGuid(),
       isCharacter = !!server._characters[entity.characterId],
@@ -869,7 +854,11 @@ export class WorldObjectManager {
       container.items = items;
     }
 
-    this.registerLootbag(server, lootbag);
+    server._lootbags[characterId] = lootbag;
+    server.executeFuncForAllReadyClientsInRange((client) => {
+      server.addLightweightNpc(client, lootbag);
+      client.spawnedEntities.add(lootbag);
+    }, lootbag);
   }
 
   createAirdropContainer(

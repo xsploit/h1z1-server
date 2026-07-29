@@ -190,7 +190,7 @@ export class ZombieWalker extends Npc {
       server.addContainerItem(lootbag, item, container as LoadoutContainer);
     }
 
-    server.worldObjectManager.registerLootbag(server, lootbag);
+    server._lootbags[characterId] = lootbag;
   }
 
   protected onHarvest(server: ZoneServer2016, client: ZoneClient2016): void {

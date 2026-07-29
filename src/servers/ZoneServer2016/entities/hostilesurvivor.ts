@@ -28,8 +28,6 @@ export interface BanditWeaponKit {
   soundRadius: number;
 }
 
-export type HumanNpcDisposition = "bandit" | "survivor";
-
 const BANDIT_WEAPON_KITS: BanditWeaponKit[] = [
   {
     itemDefinitionId: Items.WEAPON_R380,
@@ -79,8 +77,7 @@ export class HostileSurvivor extends Npc {
     position: Float32Array,
     rotation: Float32Array,
     server: ZoneServer2016,
-    spawnerId: number = 0,
-    disposition: HumanNpcDisposition = "bandit"
+    spawnerId: number = 0
   ) {
     super(
       characterId,
@@ -93,11 +90,10 @@ export class HostileSurvivor extends Npc {
     );
     this.materialType = MaterialTypes.FLESH;
     this.npcId = NpcIds.SURVIVOR;
-    this.faction =
-      disposition === "survivor" ? Factions.SURVIVOR : Factions.BANDIT;
+    this.faction = Factions.BANDIT;
     this.loadoutId = LoadoutIds.CHARACTER;
     this.usesPlayerReplication = true;
-    this.playerName = disposition === "survivor" ? "Survivor" : "Raider";
+    this.playerName = "Raider";
     this.movementStance = 66561;
     this.stationaryStance = 1089;
     this.npcMeleeDamage = 1400;
@@ -361,7 +357,7 @@ export class HostileSurvivor extends Npc {
     for (const item of lootItems) {
       server.addContainerItem(lootbag, item, container);
     }
-    server.worldObjectManager.registerLootbag(server, lootbag);
+    server._lootbags[characterId] = lootbag;
   }
 
   protected onHarvest(server: ZoneServer2016, client: ZoneClient2016): void {
