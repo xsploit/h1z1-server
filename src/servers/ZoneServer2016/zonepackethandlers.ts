@@ -930,9 +930,14 @@ export class ZonePacketHandlers {
         client.isLoading = false;
         if (!client.characterReleased) return;
         if (isFirstReleased) {
-          server.sendData<H1emuVoiceInit>(client, "H1emu.VoiceInit", {
-            args: `${server.voiceChatManager.serverAddress} ${server._worldId}`
-          });
+          const voiceInitArgs = server.voiceChatManager.getVoiceInitArgs(
+            server._worldId
+          );
+          if (voiceInitArgs) {
+            server.sendData<H1emuVoiceInit>(client, "H1emu.VoiceInit", {
+              args: voiceInitArgs
+            });
+          }
           server.sendData(
             client,
             "UpdateWeatherData",

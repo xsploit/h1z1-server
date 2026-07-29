@@ -20,6 +20,12 @@ export class VoiceChatManager {
   serverAccessToken!: string;
   serverAddress!: string;
 
+  getVoiceInitArgs(worldId: number): string | undefined {
+    const serverAddress = this.serverAddress?.trim();
+    if (!this.useVoiceChatV2 || !serverAddress) return;
+    return `${serverAddress} ${worldId}`;
+  }
+
   sendVoiceChatError(server: ZoneServer2016, client: Client, error: string) {
     server.sendChatText(client, `[Voicechat Error] ${error}`);
   }
@@ -39,12 +45,18 @@ export class VoiceChatManager {
     server.sendData(client, "UpdateWeatherData", server.weatherManager.weather);
   }
   handleVoiceChatInit(server: ZoneServer2016, client: Client) {
-    if (!this.useVoiceChatV2) {
-      server.sendChatText(client, `voicechat is disabled in the configuration`);
+    const args = this.getVoiceInitArgs(server._worldId);
+    if (!args) {
+      this.sendVoiceChatError(
+        server,
+        client,
+        "voicechat is disabled or has no server address"
+      );
+      return;
     }
     server.sendChatText(client, `connecting to voice chat`);
     if (!client.isInVoiceChat) {
-      server.sendData(client, "H1emu.VoiceInit", {});
+      server.sendData(client, "H1emu.VoiceInit", { args });
       setTimeout(() => {
         this.sendVoiceChatState(server, client);
         client.voiceChatTimer = setInterval(() => {
