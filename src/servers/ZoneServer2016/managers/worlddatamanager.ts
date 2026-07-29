@@ -149,9 +149,9 @@ export function constructContainer(
       item.stackCount
     );
     i.slotId = item.slotId;
-    i.containerGuid = item.containerGuid;
+    i.containerGuid = loadoutContainer.itemGuid;
     i.weapon = item.weapon ? new Weapon(i, item.weapon.ammoCount) : undefined;
-    loadoutContainer.items[item.itemGuid] = i;
+    loadoutContainer.items[i.itemGuid] = i;
   });
   return loadoutContainer;
 }

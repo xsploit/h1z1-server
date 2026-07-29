@@ -1237,7 +1237,7 @@ export class wrappedUint16 {
  * @returns The hexadecimal string representation of the BigInt.
  */
 export const toBigHex = (bigInt: bigint): string => {
-  return `0x${bigInt.toString(16)}`;
+  return `0x${bigInt.toString(16).padStart(16, "0")}`;
 };
 
 /**

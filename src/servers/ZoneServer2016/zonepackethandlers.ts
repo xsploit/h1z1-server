@@ -2843,7 +2843,14 @@ export class ZonePacketHandlers {
 
       const sourceContainer = sourceCharacter.getItemContainer(itemGuid ?? "");
       if (!sourceContainer) {
-        server.sendChatText(client, "Invalid source container 3!");
+        const availableItemGuids = Object.values(sourceCharacter._containers)
+          .flatMap((container) => Object.keys(container.items))
+          .join(",");
+        console.warn(
+          `[ContainerMoveItem] stale external item: requested=${itemGuid ?? ""} ` +
+            `container=${sourceCharacter.characterId} available=${availableItemGuids}`
+        );
+        client.character.mountContainer(server, sourceCharacter);
         return;
       }
 

@@ -13,6 +13,12 @@
 
 import { Weapon } from "./weapon";
 
+export function normalizeItemGuid(guid: string): string {
+  const match = /^0x([0-9a-f]+)$/i.exec(guid);
+  if (!match || match[1].length > 16) return guid;
+  return `0x${match[1].toLowerCase().padStart(16, "0")}`;
+}
+
 export class BaseItem {
   /** Id of the item - See ServerItemDefinitions.json for more information */
   itemDefinitionId: number;
@@ -41,7 +47,7 @@ export class BaseItem {
     stackCount: number
   ) {
     this.itemDefinitionId = itemDefinitionId;
-    this.itemGuid = guid;
+    this.itemGuid = normalizeItemGuid(guid);
     this.currentDurability = durability;
     if (stackCount < 0) {
       console.error(
