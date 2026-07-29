@@ -183,10 +183,23 @@ export function resolveItemUseCount(
     case ItemUseOptions.DROP:
     case ItemUseOptions.DROP_BATTERY:
     case ItemUseOptions.DROP_SPARKS:
+    case ItemUseOptions.LOOT_BATTERY:
+    case ItemUseOptions.LOOT_SPARKS:
+    case ItemUseOptions.LOOT_VEHICLE_LOADOUT:
       return 1;
     default:
       return 0;
   }
+}
+
+export function isVehicleLoadoutLootOption(
+  itemUseOption: number | undefined
+): boolean {
+  return (
+    itemUseOption === ItemUseOptions.LOOT_BATTERY ||
+    itemUseOption === ItemUseOptions.LOOT_SPARKS ||
+    itemUseOption === ItemUseOptions.LOOT_VEHICLE_LOADOUT
+  );
 }
 
 export function getClientWireItemGuid(itemGuid: string): string {
@@ -2211,7 +2224,9 @@ export class ZonePacketHandlers {
       return;
     }
 
-    let character = server.getEntity(sourceCharacterId);
+    let character = isVehicleLoadoutLootOption(itemUseOption)
+      ? client.character.mountedContainer
+      : server.getEntity(sourceCharacterId);
 
     if (!character && client.character.mountedContainer) {
       character = client.character.mountedContainer;
@@ -2488,7 +2503,7 @@ export class ZonePacketHandlers {
 
           if (
             loadoutItem instanceof LoadoutItem &&
-            character._loadout[item.slotId]
+            sourceCharacter._loadout[loadoutItem.slotId]
           ) {
             await server.pUtilizeHudTimer(
               client,
