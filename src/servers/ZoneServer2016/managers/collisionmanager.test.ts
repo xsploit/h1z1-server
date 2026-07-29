@@ -74,12 +74,19 @@ test("CollisionManager grounds NPCs and exposes solid obstacles", () => {
       positions: [-1, 1, -1, 1, 1, -1, 1, 1, 1, -1, 1, 1],
       indices: [0, 2, 1, 0, 3, 2]
     };
+    const wall = {
+      positions: [-1, 0, 0, 1, 0, 0, 1, 2, 0, -1, 2, 0],
+      indices: [0, 1, 2, 0, 2, 3]
+    };
     writeFileSync(
       fixturePath,
       buildCollisionFixture(
         [
           { kind: 0, ...plane },
-          { kind: 1, ...plane }
+          { kind: 1, ...plane },
+          // Building actors are kind 0 because they contain walkable floors,
+          // but their wall triangles must still block projectiles.
+          { kind: 0, ...wall }
         ],
         [
           {
@@ -93,6 +100,12 @@ test("CollisionManager grounds NPCs and exposes solid obstacles", () => {
             transformAndBounds: [
               10, 0, 10, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 20, 4, 20
             ]
+          },
+          {
+            meshIndex: 2,
+            transformAndBounds: [
+              0, 0, 0, 0, 0, 0, 1, 1, 1, 1, -1, 0, -0.05, 1, 2, 0.05
+            ]
           }
         ]
       )
@@ -104,6 +117,20 @@ test("CollisionManager grounds NPCs and exposes solid obstacles", () => {
     assert.strictEqual(manager.loaded, true);
     assert.strictEqual(manager.groundRaycast(0, 0, 0), 1);
     assert.strictEqual(manager.groundRaycast(10, 10, 0), null);
+    assert.strictEqual(
+      manager.segmentBlocked(
+        new Float32Array([0, 1, -2, 1]),
+        new Float32Array([0, 1, 2, 1])
+      ),
+      true
+    );
+    assert.strictEqual(
+      manager.segmentBlocked(
+        new Float32Array([3, 1, -2, 1]),
+        new Float32Array([3, 1, 2, 1])
+      ),
+      false
+    );
     assert.deepStrictEqual(manager.obstaclesNear(10, 10, 20), [
       {
         id: 1,

@@ -284,7 +284,11 @@ export class CollisionManager {
         const cell = this._grid[cz * GRID_W + cx];
         if (!cell) continue;
         for (const i of cell) {
-          if (seen.has(i) || this._meshKind[this._instMesh[i]] === 0) continue;
+          // Mesh kind describes navigation use, not projectile permeability.
+          // A house is tagged walkable because it contains floors and stairs,
+          // but the same mesh also contains its walls. Every triangle kind can
+          // therefore block a shot.
+          if (seen.has(i)) continue;
           seen.add(i);
           const b = i * 16;
           this._pos.set(
