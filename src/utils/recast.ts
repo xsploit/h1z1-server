@@ -33,6 +33,17 @@ import {
   UnsignedCharArray,
   Vector3
 } from "recast-navigation";
+
+export function sortTileCacheParts(parts: string[]): string[] {
+  return parts.sort((a, b) => {
+    const aPart = a.match(/^z1_cache_(\d+)\.bin$/);
+    const bPart = b.match(/^z1_cache_(\d+)\.bin$/);
+    if (!aPart || !bPart) {
+      throw new Error("[NAV] invalid tilecache part filename");
+    }
+    return Number(aPart[1]) - Number(bPart[1]);
+  });
+}
 import { NavMeshQuery } from "recast-navigation";
 import { Crowd } from "recast-navigation";
 import { createDefaultTileCacheMeshProcess } from "recast-navigation/generators";
@@ -126,12 +137,9 @@ export class NavManager {
     console.time("[NAV] streaming tilecache loaded");
     await initRecast();
     const dir = __dirname + "/../../data/2016/collision";
-    const parts = readdirSync(dir)
-      .filter((f) => /^z1_cache_\d+\.bin$/.test(f))
-      .sort(
-        (a, b) =>
-          parseInt(a.match(/\d+/)![0], 10) - parseInt(b.match(/\d+/)![0], 10)
-      );
+    const parts = sortTileCacheParts(
+      readdirSync(dir).filter((f) => /^z1_cache_\d+\.bin$/.test(f))
+    );
     const buf = Buffer.concat(parts.map((p) => readFileSync(`${dir}/${p}`)));
 
     // parse TileCacheSetHeader (magic, version, numTiles, meshParams, cacheParams)

@@ -1,7 +1,24 @@
 import assert from "node:assert";
 import test from "node:test";
 import type { BoxObstacle } from "recast-navigation";
-import { NavManager } from "./recast";
+import { NavManager, sortTileCacheParts } from "./recast";
+
+test("tile-cache parts are sorted by their suffix", () => {
+  assert.deepEqual(
+    sortTileCacheParts([
+      "z1_cache_10.bin",
+      "z1_cache_2.bin",
+      "z1_cache_1.bin",
+      "z1_cache_0.bin"
+    ]),
+    [
+      "z1_cache_0.bin",
+      "z1_cache_1.bin",
+      "z1_cache_2.bin",
+      "z1_cache_10.bin"
+    ]
+  );
+});
 
 test("removed tile-cache obstacles release their capacity exactly once", () => {
   const navManager = new NavManager();
