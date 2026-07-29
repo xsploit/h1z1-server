@@ -54,3 +54,71 @@ test("removed tile-cache obstacles release their capacity exactly once", () => {
   assert.equal(navManager.obstacleCount, 0);
   assert.equal(removeCalls, 1);
 });
+
+test("streamed random-point queries skip unloaded NPC positions", () => {
+  const navManager = new NavManager();
+  let queryCalls = 0;
+  navManager.streaming = true;
+  navManager.navMeshQuery = {
+    findNearestPoly: () => {
+      queryCalls++;
+      throw new Error("unloaded navmesh must not be queried");
+    }
+  } as never;
+
+  assert.equal(
+    navManager.findRandomNavPointAround(
+      new Float32Array([100, 10, 100, 1]),
+      60
+    ),
+    null
+  );
+  assert.equal(
+    navManager.createAgent(new Float32Array([100, 10, 100, 1])),
+    undefined
+  );
+  assert.equal(queryCalls, 0);
+});
+
+test("streamed random-point queries snap to a loaded floor and contain WASM errors", () => {
+  const navManager = new NavManager();
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 10
+  });
+  (navManager as unknown as { _loadedCols: Set<string> })._loadedCols.add(
+    "0,0"
+  );
+  navManager.navMeshQuery = {
+    findNearestPoly: () => ({
+      nearestRef: 1,
+      nearestPoint: { x: 5, y: 12, z: 5 }
+    }),
+    findRandomPointAroundCircle: () => ({
+      success: true,
+      randomPoint: { x: 7, y: 12, z: 8 }
+    })
+  } as never;
+
+  assert.deepEqual(
+    Array.from(
+      navManager.findRandomNavPointAround(
+        new Float32Array([5, 12, 5, 1]),
+        60
+      ) ?? []
+    ),
+    [7, 12, 8, 0]
+  );
+
+  navManager.navMeshQuery = {
+    findNearestPoly: () => {
+      throw new WebAssembly.RuntimeError("memory access out of bounds");
+    }
+  } as never;
+  assert.equal(
+    navManager.findRandomNavPointAround(new Float32Array([5, 12, 5, 1]), 60),
+    null
+  );
+});

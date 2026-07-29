@@ -83,12 +83,7 @@ test("human raider reuses zombie acquisition and chase behavior", () => {
   };
   const server = {
     navManager: {
-      navMeshQuery: {
-        findRandomPointAroundCircle: () => ({
-          success: true,
-          randomPoint: { x: 0, y: 0, z: 0 }
-        })
-      },
+      findRandomNavPointAround: () => new Float32Array([0, 0, 0, 0]),
       getClosestNavPointVec3: () => ({ x: 0, y: 0, z: 0 })
     },
     aiTargetSpatialMap: new Map([
@@ -162,12 +157,7 @@ test("raider melee lands once at the configured animation impact", () => {
   };
   const server = {
     navManager: {
-      navMeshQuery: {
-        findRandomPointAroundCircle: () => ({
-          success: true,
-          randomPoint: { x: 0, y: 0, z: 0 }
-        })
-      },
+      findRandomNavPointAround: () => new Float32Array([0, 0, 0, 0]),
       getClosestNavPointVec3: () => ({ x: 0, y: 0, z: 1 })
     },
     aiTargetSpatialMap: new Map([
@@ -241,12 +231,7 @@ test("ranged raider waits, checks line of sight, and uses its attack callback", 
   };
   const server = {
     navManager: {
-      navMeshQuery: {
-        findRandomPointAroundCircle: () => ({
-          success: true,
-          randomPoint: { x: 0, y: 0, z: 0 }
-        })
-      },
+      findRandomNavPointAround: () => new Float32Array([0, 0, 0, 0]),
       getClosestNavPointVec3: () => ({ x: 0, y: 0, z: 10 })
     },
     aiTargetSpatialMap: new Map([

@@ -312,6 +312,68 @@ export class NavManager {
     }
   }
 
+  isPositionStreamed(gamePos: Float32Array): boolean {
+    if (!this.streaming) return true;
+    if (
+      !Number.isFinite(gamePos[0]) ||
+      !Number.isFinite(gamePos[2]) ||
+      this._tcTileWidth <= 0
+    ) {
+      return false;
+    }
+    const tx = Math.floor((gamePos[0] - this._tcOrigX) / this._tcTileWidth);
+    const tz = Math.floor((gamePos[2] - this._tcOrigZ) / this._tcTileWidth);
+    return this._loadedCols.has(`${tx},${tz}`);
+  }
+
+  removeAgent(agent: CrowdAgent): void {
+    try {
+      this.crowd.removeAgent(agent);
+    } catch (error) {
+      debugStream(
+        `failed to remove stale crowd agent: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  findRandomNavPointAround(
+    gameCenter: Float32Array,
+    radius: number
+  ): Float32Array | null {
+    if (
+      radius <= 0 ||
+      !Number.isFinite(radius) ||
+      !Number.isFinite(gameCenter[0]) ||
+      !Number.isFinite(gameCenter[1]) ||
+      !Number.isFinite(gameCenter[2]) ||
+      !this.isPositionStreamed(gameCenter)
+    ) {
+      return null;
+    }
+    try {
+      const center = this.navMeshQuery.findNearestPoly(
+        NavManager.gameToNav(gameCenter),
+        { halfExtents: { x: 4, y: 8, z: 4 } }
+      );
+      if (!center.nearestRef) return null;
+      const result = this.navMeshQuery.findRandomPointAroundCircle(
+        center.nearestPoint,
+        radius
+      );
+      if (!result.success) return null;
+      return NavManager.navToGame(result.randomPoint);
+    } catch (error) {
+      debugStream(
+        `random-point query rejected at [${gameCenter[0]}, ${gameCenter[1]}, ${gameCenter[2]}]: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
   static gameToNav(f: Float32Array): Vector3 {
     return { x: f[0], y: f[1], z: f[2] };
   }
@@ -423,42 +485,52 @@ export class NavManager {
     // In streaming mode the navmesh only exists around players; if no tile is
     // loaded under this spawn point yet, defer (caller retries when it loads)
     // instead of placing the agent at a garbage position.
-    const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
-      NavManager.gameToNav(gamePos),
-      { halfExtents: { x: 10, y: 10, z: 10 } }
-    );
-    if (!nearestRef) return undefined;
-    const navPosition = nearestPoint;
-    debug(
-      `createAgent: navPos=[${navPosition.x.toFixed(2)}, ${navPosition.y.toFixed(2)}, ${navPosition.z.toFixed(2)}]`
-    );
-
-    const {
-      randomPoint: initialAgentPosition,
-      success,
-      status
-    } = this.navMeshQuery.findRandomPointAroundCircle(navPosition, 0.5);
-
-    if (!success) {
-      debug(
-        `createAgent: findRandomPointAroundCircle failed (${statusToReadableString(status)}), using navPosition directly`
+    if (!this.isPositionStreamed(gamePos)) return undefined;
+    try {
+      const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
+        NavManager.gameToNav(gamePos),
+        { halfExtents: { x: 10, y: 10, z: 10 } }
       );
-    }
+      if (!nearestRef) return undefined;
+      const navPosition = nearestPoint;
+      debug(
+        `createAgent: navPos=[${navPosition.x.toFixed(2)}, ${navPosition.y.toFixed(2)}, ${navPosition.z.toFixed(2)}]`
+      );
 
-    const spawnPoint = success ? initialAgentPosition : navPosition;
-    const agent = this.crowd.addAgent(spawnPoint, {
-      radius: 0.3,
-      height: 2,
-      maxAcceleration: 1.0,
-      maxSpeed: 1.0,
-      collisionQueryRange: 2.0,
-      pathOptimizationRange: 4.0,
-      separationWeight: 2.0
-    });
-    debug(
-      `createAgent: agentIdx=${agent.agentIndex} navPos=[${spawnPoint.x.toFixed(2)}, ${spawnPoint.y.toFixed(2)}, ${spawnPoint.z.toFixed(2)}]`
-    );
-    return agent;
+      const {
+        randomPoint: initialAgentPosition,
+        success,
+        status
+      } = this.navMeshQuery.findRandomPointAroundCircle(navPosition, 0.5);
+
+      if (!success) {
+        debug(
+          `createAgent: findRandomPointAroundCircle failed (${statusToReadableString(status)}), using navPosition directly`
+        );
+      }
+
+      const spawnPoint = success ? initialAgentPosition : navPosition;
+      const agent = this.crowd.addAgent(spawnPoint, {
+        radius: 0.3,
+        height: 2,
+        maxAcceleration: 1.0,
+        maxSpeed: 1.0,
+        collisionQueryRange: 2.0,
+        pathOptimizationRange: 4.0,
+        separationWeight: 2.0
+      });
+      debug(
+        `createAgent: agentIdx=${agent.agentIndex} navPos=[${spawnPoint.x.toFixed(2)}, ${spawnPoint.y.toFixed(2)}, ${spawnPoint.z.toFixed(2)}]`
+      );
+      return agent;
+    } catch (error) {
+      debugStream(
+        `create-agent query rejected at [${gamePos[0]}, ${gamePos[1]}, ${gamePos[2]}]: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return undefined;
+    }
   }
 
   createPassiveAgent(gamePos: Float32Array, radius: number = 0.5): CrowdAgent {

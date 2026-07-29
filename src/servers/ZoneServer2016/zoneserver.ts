@@ -10823,6 +10823,13 @@ export class ZoneServer2016 extends EventEmitter {
     }
     for (const k in this._npcs) {
       const npc = this._npcs[k];
+      if (
+        npc.navAgent &&
+        !this.navManager.isPositionStreamed(npc.state.position)
+      ) {
+        this.navManager.removeAgent(npc.navAgent);
+        npc.navAgent = undefined;
+      }
       if (!npc.navAgent) {
         // streaming: an NPC spawned where no navmesh tile was loaded yet gets no
         // agent; retry once a player's window has streamed its tile in (else

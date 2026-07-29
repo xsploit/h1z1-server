@@ -61,10 +61,7 @@ function pickPatrolPoint(
   server: ZoneServer2016,
   center: Float32Array
 ): Float32Array | null {
-  const navCenter = NavManager.gameToNav(center);
-  const { success, randomPoint } =
-    server.navManager.navMeshQuery.findRandomPointAroundCircle(navCenter, 60);
-  return success ? NavManager.navToGame(randomPoint) : null;
+  return server.navManager.findRandomNavPointAround(center, 60);
 }
 
 function pickFleePoint(
@@ -81,10 +78,9 @@ function pickFleePoint(
     npc.state.position[2] + (dz / len) * 50,
     0
   ]);
-  const navCenter = NavManager.gameToNav(fleeCenter);
-  const { success, randomPoint } =
-    server.navManager.navMeshQuery.findRandomPointAroundCircle(navCenter, 15);
-  return success ? NavManager.navToGame(randomPoint) : fleeCenter;
+  return (
+    server.navManager.findRandomNavPointAround(fleeCenter, 15) ?? fleeCenter
+  );
 }
 
 function moveToward(

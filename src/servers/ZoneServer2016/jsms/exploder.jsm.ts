@@ -41,10 +41,7 @@ function pickPatrolPoint(
   server: ZoneServer2016,
   center: Float32Array
 ): Float32Array | null {
-  const navCenter = NavManager.gameToNav(center);
-  const { success, randomPoint } =
-    server.navManager.navMeshQuery.findRandomPointAroundCircle(navCenter, 60);
-  return success ? NavManager.navToGame(randomPoint) : null;
+  return server.navManager.findRandomNavPointAround(center, 60);
 }
 
 function moveToward(
