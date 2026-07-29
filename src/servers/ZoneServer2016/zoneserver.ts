@@ -10833,10 +10833,12 @@ export class ZoneServer2016 extends EventEmitter {
       if (npc.navAgent) {
         const navPos = npc.navAgent.interpolatedPosition;
         const gamePos = NavManager.navToGame(navPos);
-        // Recast already resolved the walkable floor, including interiors,
-        // stairs and layered geometry. Re-grounding this position against the
-        // terrain/structure samplers can replace an interior floor with the
-        // terrain below it and visibly snap the NPC between surfaces.
+        // The crowd agent already carries the Recast floor Y. Use it as the
+        // cliff disambiguation/reference height instead of doing a second
+        // nearest-poly query for every NPC on every update.
+        const navFloorY = Number.isFinite(gamePos[1]) ? gamePos[1] : null;
+        const ground = this.getGroundInfo(gamePos, navFloorY);
+        gamePos[1] = ground.selection.height;
         if (
           gamePos[0] != npc.state.position[0] ||
           gamePos[2] != npc.state.position[2] ||
