@@ -88,6 +88,7 @@ import {
   NpcDespawnSnapshot,
   SpawnedItemSnapshot
 } from "./lootspawnworker";
+import { buildNpcSpawnCandidates, getNpcModelsForRoll } from "./npcspawn";
 import type { ItemFunction } from "types/zoneserver";
 import { Gasser } from "../entities/gasser";
 import {
@@ -497,11 +498,29 @@ export class WorldObjectManager {
       );
 
       let i = 0;
+      const created = {
+        zombies: 0,
+        bandits: 0,
+        deer: 0,
+        wolves: 0,
+        bears: 0
+      };
       for (const entry of plan) {
         const modelId = this.getNpcModelForSpawn(
           entry.modelId,
           server._soloMode
         );
+        if (modelId === 9002 || modelId === 9253) {
+          created.deer++;
+        } else if (modelId === 9003) {
+          created.wolves++;
+        } else if (modelId === 9187) {
+          created.bears++;
+        } else if (modelId !== entry.modelId) {
+          created.bandits++;
+        } else {
+          created.zombies++;
+        }
         this.createNpc(
           server,
           modelId,
@@ -512,6 +531,10 @@ export class WorldObjectManager {
         );
         if (++i % 100 === 0) await scheduler.yield();
       }
+      console.info(
+        `[WOM] NPCs created: ${created.zombies} zombies, ${created.bandits} bandits, ` +
+          `${created.deer} deer, ${created.wolves} wolves, ${created.bears} bears`
+      );
     } catch (error) {
       console.warn(
         `[WOM] createNpcsThreaded fallback to main thread: ${error}`
@@ -1493,89 +1516,81 @@ export class WorldObjectManager {
 
   private async createNpcs(server: ZoneServer2016) {
     // This is only for giving the world some life
-    for (const spawnerType of Z1_npcs) {
-      const authorizedModelId: number[] = [];
-
-      switch (spawnerType.actorDefinition) {
-        case "NPCSpawner_ZombieLazy.adr":
-          authorizedModelId.push(ModelIds.ZOMBIE_FEMALE_WALKER);
-          authorizedModelId.push(ModelIds.ZOMBIE_MALE_WALKER);
-          break;
-        case "NPCSpawner_ZombieWalker.adr":
-          authorizedModelId.push(ModelIds.ZOMBIE_FEMALE_WALKER);
-          authorizedModelId.push(ModelIds.ZOMBIE_MALE_WALKER);
-          break;
-        case "NPCSpawner_Deer001.adr":
-          authorizedModelId.push(9002);
-          authorizedModelId.push(9253);
-          break;
-        case "NPCSpawner_Wolf001.adr":
-          authorizedModelId.push(9003);
-          break;
-        case "Bear_Brown.adr":
-          authorizedModelId.push(9187);
-          break;
-        default:
-          break;
+    for (const candidate of buildNpcSpawnCandidates(Z1_npcs)) {
+      if (Object.keys(server._npcs).length >= this.npcSpawnCap) break;
+      const {
+        actorDefinition,
+        instance: npcInstance,
+        index: spawnIndex
+      } = candidate;
+      let position = new Float32Array(npcInstance.position);
+      if (spawnIndex > 0) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 4 + Math.random() * 4;
+        position = new Float32Array([
+          npcInstance.position[0] + Math.cos(angle) * distance,
+          npcInstance.position[1],
+          npcInstance.position[2] + Math.sin(angle) * distance,
+          1
+        ]);
       }
-      if (!authorizedModelId.length) continue;
-      for (const npcInstance of spawnerType.instances) {
-        let spawn = true;
-        let counter = 0;
-        for (const a in server._npcs) {
-          if (counter > 150) {
-            counter = 0;
-            await scheduler.yield();
-          }
-          counter++;
-          if (!server._npcs[a]) continue;
-          if (
-            isPosInRadius(
-              this.npcSpawnRadius,
-              npcInstance.position,
-              server._npcs[a].state.position
-            )
+      let spawn = true;
+      let counter = 0;
+      for (const a in server._npcs) {
+        if (counter > 150) {
+          counter = 0;
+          await scheduler.yield();
+        }
+        counter++;
+        if (!server._npcs[a]) continue;
+        if (
+          isPosInRadius(
+            this.npcSpawnRadius,
+            position,
+            server._npcs[a].state.position
+          )
+        ) {
+          spawn = false;
+          break;
+        }
+      }
+      if (!spawn) continue;
+      const spawnchance = Math.floor(Math.random() * 100) + 1; // temporary spawnchance
+      if (spawnchance <= this.chanceNpc) {
+        const screamerChance = Math.floor(Math.random() * 1000) + 1;
+        const authorizedModelId = getNpcModelsForRoll(
+          actorDefinition,
+          this.chanceScreamer,
+          screamerChance
+        );
+        const modelId = this.getNpcModelForSpawn(
+          authorizedModelId[
+            Math.floor(Math.random() * authorizedModelId.length)
+          ],
+          server._soloMode
+        );
+        let npcId: NpcIds | undefined;
+        if (
+          modelId === ModelIds.ZOMBIE_FEMALE_WALKER ||
+          modelId === ModelIds.ZOMBIE_MALE_WALKER
+        ) {
+          if (Math.floor(Math.random() * 1000) + 1 <= this.chanceExploder) {
+            npcId = NpcIds.EXPLODER;
+          } else if (
+            Math.floor(Math.random() * 1000) + 1 <=
+            this.chanceGasser
           ) {
-            spawn = false;
-            break;
+            npcId = NpcIds.GASSER;
           }
         }
-        if (!spawn) continue;
-        const spawnchance = Math.floor(Math.random() * 100) + 1; // temporary spawnchance
-        if (spawnchance <= this.chanceNpc) {
-          const screamerChance = Math.floor(Math.random() * 1000) + 1; // temporary spawnchance
-          if (screamerChance <= this.chanceScreamer) {
-            authorizedModelId.push(9667);
-          }
-          const modelId = this.getNpcModelForSpawn(
-            authorizedModelId[
-              Math.floor(Math.random() * authorizedModelId.length)
-            ],
-            server._soloMode
-          );
-          let npcId: NpcIds | undefined;
-          if (
-            modelId === ModelIds.ZOMBIE_FEMALE_WALKER ||
-            modelId === ModelIds.ZOMBIE_MALE_WALKER
-          ) {
-            if (Math.floor(Math.random() * 1000) + 1 <= this.chanceExploder) {
-              npcId = NpcIds.EXPLODER;
-            } else if (
-              Math.floor(Math.random() * 1000) + 1 <=
-              this.chanceGasser
-            ) {
-              npcId = NpcIds.GASSER;
-            }
-          }
-          this.createNpc(
-            server,
-            modelId,
-            new Float32Array(npcInstance.position),
-            new Float32Array(eul2quat(npcInstance.rotation)),
-            npcInstance.id,
-            npcId
-          );
-        }
+        this.createNpc(
+          server,
+          modelId,
+          position,
+          new Float32Array(eul2quat(new Float32Array(npcInstance.rotation))),
+          spawnIndex === 0 ? npcInstance.id : 0,
+          npcId
+        );
       }
     }
     debug("All npcs objects created");
