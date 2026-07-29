@@ -1,7 +1,11 @@
 import assert from "node:assert";
 import test from "node:test";
 import type { BoxObstacle } from "recast-navigation";
-import { NavManager, sortTileCacheParts } from "./recast";
+import {
+  NavManager,
+  shouldUseStreamingNav,
+  sortTileCacheParts
+} from "./recast";
 
 test("tile-cache parts are sorted by their suffix", () => {
   assert.deepEqual(
@@ -13,6 +17,14 @@ test("tile-cache parts are sorted by their suffix", () => {
     ]),
     ["z1_cache_0.bin", "z1_cache_1.bin", "z1_cache_2.bin", "z1_cache_10.bin"]
   );
+});
+
+test("a present streaming cache is used unless explicitly disabled", () => {
+  assert.equal(shouldUseStreamingNav(undefined, true), true);
+  assert.equal(shouldUseStreamingNav("1", true), true);
+  assert.equal(shouldUseStreamingNav("0", true), false);
+  assert.equal(shouldUseStreamingNav(undefined, false), false);
+  assert.equal(shouldUseStreamingNav("1", false), true);
 });
 
 test("removed tile-cache obstacles release their capacity exactly once", () => {

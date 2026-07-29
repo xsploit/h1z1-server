@@ -45,6 +45,14 @@ export function sortTileCacheParts(parts: string[]): string[] {
     return Number(aPart[1]) - Number(bPart[1]);
   });
 }
+
+export function shouldUseStreamingNav(
+  requestedMode: string | undefined,
+  cacheAvailable: boolean
+): boolean {
+  if (requestedMode === "0") return false;
+  return requestedMode === "1" || cacheAvailable;
+}
 import { NavMeshQuery } from "recast-navigation";
 import { Crowd } from "recast-navigation";
 import { createDefaultTileCacheMeshProcess } from "recast-navigation/generators";
@@ -63,7 +71,6 @@ const MAX_PENDING_OBSTACLE = 50;
 // (buildNavMeshTilesAt), the rest are removed, so the navmesh stays bounded and
 // under the 32-bit polyref budget. Grid params (orig, tileWidth) come from the
 // TSET header. Construction obstacles carve natively via the tilecache.
-const STREAM_ENABLED = process.env.NAV_STREAMING === "1";
 const STREAM_CACHE_DIR =
   process.env.NAV_CACHE_DIR ?? __dirname + "/../../data/2016/collision";
 const STREAM_RADIUS = 300; // materialise tiles within this many meters of a player
@@ -88,9 +95,13 @@ export class NavManager {
   private _lastStreamMs = 0;
   constructor() {}
   async loadNav() {
-    if (STREAM_ENABLED) {
-      const storePath = STREAM_CACHE_DIR + "/z1_cache_0.bin";
-      if (existsSync(storePath)) return this.loadNavStreaming();
+    const requestedMode = process.env.NAV_STREAMING;
+    const storePath = STREAM_CACHE_DIR + "/z1_cache_0.bin";
+    const cacheAvailable = existsSync(storePath);
+    if (shouldUseStreamingNav(requestedMode, cacheAvailable)) {
+      if (cacheAvailable) return this.loadNavStreaming();
+    }
+    if (requestedMode === "1") {
       console.warn(
         "[NAV] NAV_STREAMING=1 but data/2016/collision/z1_cache_*.bin is missing - falling back to the standard navmesh"
       );
