@@ -1,5 +1,4 @@
 import { ZoneClient2016 } from "../classes/zoneclient";
-import { LoadoutContainer } from "../classes/loadoutcontainer";
 import { createZombie } from "../jsms/zombie.jsm";
 import { Factions } from "../jsms/factions";
 import {
@@ -7,18 +6,12 @@ import {
   Items,
   LoadoutIds,
   MaterialTypes,
-  ModelIds,
   NpcIds,
   StringIds
 } from "../models/enums";
 import { ZoneServer2016 } from "../zoneserver";
-import {
-  generateRandomGuid,
-  getDistance,
-  randomIntFromInterval
-} from "../../../utils/utils";
+import { getDistance, randomIntFromInterval } from "../../../utils/utils";
 import { DamageInfo } from "../../../types/zoneserver";
-import { Lootbag } from "./lootbag";
 import { Npc } from "./npc";
 
 export interface BanditWeaponKit {
@@ -331,37 +324,21 @@ export class HostileSurvivor extends Npc {
     const ammoItemDefinitionId = server.getWeaponAmmoId(
       this.weaponKit.itemDefinitionId
     );
-    const lootItems = [
-      server.generateItem(this.weaponKit.itemDefinitionId, 1, true),
+    const supplies = [
       ammoItemDefinitionId
         ? server.generateItem(
             ammoItemDefinitionId,
             server.getWeaponMaxAmmo(this.weaponKit.itemDefinitionId)
           )
         : undefined,
-      server.generateItem(Items.WEAPON_COMBATKNIFE, 1, true),
       server.generateItem(Items.CLOTH, randomIntFromInterval(1, 3)),
       server.generateItem(Items.BANDAGE_DRESSED, randomIntFromInterval(1, 3))
     ].filter((item) => item != null);
 
-    const characterId = generateRandomGuid();
-    const lootbag = new Lootbag(
-      characterId,
-      server.getTransientId(characterId),
-      ModelIds.LOOT_BAG_CLEAN,
-      new Float32Array([
-        this.state.position[0] + 0.7,
-        this.state.position[1],
-        this.state.position[2] + 0.7
-      ]),
-      new Float32Array([0, 0, 0, 0]),
-      server
-    );
-    const container = lootbag.getContainer() as LoadoutContainer;
-    for (const item of lootItems) {
-      server.addContainerItem(lootbag, item, container);
+    for (const item of supplies) {
+      this.lootContainerItem(server, item, item.stackCount, false);
     }
-    server.worldObjectManager.registerLootbag(server, lootbag);
+    server.worldObjectManager.createLootbag(server, this);
   }
 
   protected onHarvest(server: ZoneServer2016, client: ZoneClient2016): void {

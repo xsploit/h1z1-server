@@ -2609,15 +2609,17 @@ export class ZonePacketHandlers {
       count,
       newSlotId
     } = packet.data;
-    const itemSource =
-      server.getEntity(characterId) ?? client.character.mountedContainer;
-    const itemGuid =
-      itemSource instanceof BaseFullCharacter
-        ? resolveClientItemGuid(
-            requestedItemGuid,
-            getCharacterItemGuids(itemSource)
-          )
-        : requestedItemGuid;
+    const itemSources = [
+      server.getEntity(characterId),
+      client.character.mountedContainer
+    ].filter(
+      (source, index, sources): source is BaseFullCharacter =>
+        source instanceof BaseFullCharacter && sources.indexOf(source) === index
+    );
+    const itemGuid = resolveClientItemGuid(
+      requestedItemGuid,
+      itemSources.flatMap(getCharacterItemGuids)
+    ) ?? "";
     if (client.hudTimer) {
       client.clearHudTimer();
     }

@@ -20,6 +20,14 @@ test("short server item GUIDs resolve from the client's wire representation", ()
     ]),
     "0x391ef"
   );
+  assert.equal(
+    resolveClientItemGuid("0x391e0e0000000000", ["0x391ee"]),
+    "0x391ee"
+  );
+  assert.equal(
+    resolveClientItemGuid("0x391f000000000000", ["0x391f0"]),
+    "0x391f0"
+  );
 });
 
 test("zero-count drop requests default to one item", () => {
