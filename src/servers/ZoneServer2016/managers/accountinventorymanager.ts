@@ -15,7 +15,7 @@ import { AccountItem } from "types/zoneserver";
 import { BaseItem } from "../classes/baseItem";
 import { ZoneServer2016 } from "../zoneserver";
 import { Collection } from "mongodb";
-import { getAppDataFolderPath } from "../../../utils/utils";
+import { getAppDataFolderPath, writeJsonAtomic } from "../../../utils/utils";
 import fs from "node:fs";
 import { LEGACY_CRATE_CONVERSION } from "../data/accountCrates";
 
@@ -42,7 +42,7 @@ export class AccountInventoryManager {
   }
 
   private async _saveSoloAccountItems(items: AccountItem[]) {
-    await fs.promises.writeFile(this._soloDataPath, JSON.stringify(items));
+    await writeJsonAtomic(this._soloDataPath, items);
   }
 
   async getAccountItems(loginSessionId: string): Promise<AccountItem[]> {

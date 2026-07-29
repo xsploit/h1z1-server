@@ -34,13 +34,42 @@ export const characterDefaultLoadout = [
   { item: Items.GAUZE, count: 5 }
 ];
 
-export const characterSoloStarterLoadout: LoadoutKit = [
-  { item: Items.BACKPACK_SATCHEL },
-  ...characterDefaultLoadout,
+export const characterJuggernautLoadout: LoadoutKit = [
+  { item: Items.FANNY_PACK_DEV },
+  { item: Items.BACKPACK_MILITARY_GREEN_CAMO },
+  { item: Items.MILITARY_SCRUBS_SHIRT },
+  { item: Items.MILITARY_SCRUBS_PANTS },
+  { item: Items.BOOTS_TAN },
+  { item: Items.KEVLAR_DEFAULT },
+  { item: Items.HELMET_TACTICAL },
+  { item: Items.NV_GOGGLES },
+  { item: Items.RESPIRATOR },
+  { item: Items.GLOVES_FINGERLESS },
+  { item: Items.WEAPON_AR15 },
+  { item: Items.WEAPON_SHOTGUN },
+  { item: Items.WEAPON_308 },
+  { item: Items.WEAPON_M9 },
+  { item: Items.WEAPON_COMBATKNIFE },
   { item: Items.WEAPON_HATCHET },
-  { item: Items.WATER_PURE, count: 2 },
-  { item: Items.CANNED_FOOD01, count: 2 },
-  { item: Items.BANDAGE_DRESSED, count: 2 }
+  { item: Items.WEAPON_BINOCULARS },
+  { item: Items.AMMO_223, count: 300 },
+  { item: Items.AMMO_12GA, count: 120 },
+  { item: Items.AMMO_308, count: 100 },
+  { item: Items.AMMO_9MM, count: 180 },
+  { item: Items.GRENADE_HE, count: 8 },
+  { item: Items.GRENADE_SMOKE, count: 6 },
+  { item: Items.FIRST_AID, count: 20 },
+  { item: Items.BANDAGE_DRESSED, count: 30 },
+  { item: Items.ADRENALINE_SHOT, count: 10 },
+  { item: Items.WATER_PURE, count: 10 },
+  { item: Items.CANNED_FOOD01, count: 10 },
+  { item: Items.MAP },
+  { item: Items.COMPASS }
+];
+
+export const characterSoloStarterLoadout: LoadoutKit = [
+  ...characterJuggernautLoadout,
+  ...characterDefaultLoadout
 ];
 
 export const characterKitLoadout = [

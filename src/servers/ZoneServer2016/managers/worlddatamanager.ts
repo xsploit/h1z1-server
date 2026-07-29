@@ -41,7 +41,8 @@ import {
   initMongo,
   removeUntransferableFields,
   requireFresh,
-  toBigHex
+  toBigHex,
+  writeJsonAtomic
 } from "../../../utils/utils";
 import { ZoneServer2016 } from "../zoneserver";
 import { LoadoutItem } from "../classes/loadoutItem";
@@ -67,23 +68,6 @@ import { ExplosiveEntity } from "../entities/explosiveentity";
 
 const fs = require("node:fs");
 const debug = require("debug")("ZoneServer");
-
-async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
-  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random()
-    .toString(16)
-    .slice(2)}.tmp`;
-  try {
-    await fs.promises.writeFile(temporaryPath, JSON.stringify(data, null, 2));
-    try {
-      await fs.promises.copyFile(filePath, `${filePath}.bak`);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    await fs.promises.rename(temporaryPath, filePath);
-  } finally {
-    await fs.promises.unlink(temporaryPath).catch(() => undefined);
-  }
-}
 
 export interface WorldArg {
   lastGuidItem: bigint;

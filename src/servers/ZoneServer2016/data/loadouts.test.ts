@@ -2,11 +2,12 @@ import assert from "node:assert";
 import test from "node:test";
 import {
   characterDefaultLoadout,
+  characterJuggernautLoadout,
   characterSoloStarterLoadout
 } from "./loadouts";
 import { Items } from "../models/enums";
 
-test("solo starter loadout preserves defaults and adds survival essentials", () => {
+test("solo starter loadout preserves defaults and includes the juggernaut kit", () => {
   for (const entry of characterDefaultLoadout) {
     assert.ok(
       characterSoloStarterLoadout.some(
@@ -16,17 +17,34 @@ test("solo starter loadout preserves defaults and adds survival essentials", () 
     );
   }
 
+  for (const entry of characterJuggernautLoadout) {
+    assert.ok(
+      characterSoloStarterLoadout.some(
+        (starterEntry) =>
+          starterEntry.item === entry.item && starterEntry.count === entry.count
+      )
+    );
+  }
+});
+
+test("juggernaut kit has armor, tactical weapons, and deep ammunition", () => {
   const expectedItems = new Map<Items, number | undefined>([
-    [Items.BACKPACK_SATCHEL, undefined],
-    [Items.WEAPON_HATCHET, undefined],
-    [Items.WATER_PURE, 2],
-    [Items.CANNED_FOOD01, 2],
-    [Items.BANDAGE_DRESSED, 2]
+    [Items.BACKPACK_MILITARY_GREEN_CAMO, undefined],
+    [Items.KEVLAR_DEFAULT, undefined],
+    [Items.HELMET_TACTICAL, undefined],
+    [Items.NV_GOGGLES, undefined],
+    [Items.WEAPON_AR15, undefined],
+    [Items.WEAPON_SHOTGUN, undefined],
+    [Items.WEAPON_308, undefined],
+    [Items.AMMO_223, 300],
+    [Items.AMMO_12GA, 120],
+    [Items.AMMO_308, 100],
+    [Items.FIRST_AID, 20]
   ]);
 
   for (const [item, count] of expectedItems) {
     assert.ok(
-      characterSoloStarterLoadout.some(
+      characterJuggernautLoadout.some(
         (entry) => entry.item === item && entry.count === count
       )
     );

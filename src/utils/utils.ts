@@ -519,6 +519,26 @@ export const getAppDataFolderPath = (): string => {
   return `${process.env.APPDATA || process.env.HOME}/${folderName}`;
 };
 
+export async function writeJsonAtomic(
+  filePath: string,
+  data: unknown
+): Promise<void> {
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random()
+    .toString(16)
+    .slice(2)}.tmp`;
+  try {
+    await fs.promises.writeFile(temporaryPath, JSON.stringify(data, null, 2));
+    try {
+      await fs.promises.copyFile(filePath, `${filePath}.bak`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    await fs.promises.rename(temporaryPath, filePath);
+  } finally {
+    await fs.promises.unlink(temporaryPath).catch(() => undefined);
+  }
+}
+
 /**
  * Decrypts the encrypted text using the provided key and initialization vector (IV).
  *

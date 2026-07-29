@@ -36,6 +36,7 @@ import {
   characterTestKitLoadout,
   characterSkinsLoadout,
   characterKitLoadout,
+  characterJuggernautLoadout,
   characterSoloStarterLoadout,
   characterVehicleKit,
   characterFarmKitLoadout
@@ -1974,7 +1975,7 @@ export const commands: Array<Command> = [
           "/spawn <type> [count] - spawn NPCs",
           "/despawn <type|all> - remove spawned NPCs",
           "/banditchance <0-100> - tune survivor spawns",
-          "/kit starter|pvp|build|farm|parts|skins - grant a kit",
+          "/kit starter|juggernaut|pvp|build|farm|parts|skins - grant a kit",
           "/groundinfo - inspect terrain/nav grounding",
           "/heal - restore health and survival resources",
           "/help - list every available command"
@@ -3070,6 +3071,13 @@ export const commands: Array<Command> = [
             true
           );
           break;
+        case "juggernaut":
+          client.character.equipLoadout(
+            server,
+            characterJuggernautLoadout,
+            true
+          );
+          break;
         case "pvp":
           client.character.equipLoadout(server, characterKitLoadout, true);
           break;
@@ -3104,7 +3112,7 @@ export const commands: Array<Command> = [
         default:
           server.sendChatText(
             client,
-            "Valid Kit Names Are pvp, parts, skins, build"
+            "Valid kit names: starter, juggernaut, pvp, parts, skins, build, farm"
           );
           return;
       }
@@ -3126,7 +3134,11 @@ export const commands: Array<Command> = [
   {
     name: "addallitems",
     permissionLevel: PermissionLevels.DEV,
-    execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
+    execute: async (
+      server: ZoneServer2016,
+      client: Client,
+      args: Array<string>
+    ) => {
       if (!server._soloMode) {
         server.sendChatText(client, "Disabled for now.");
         return;
@@ -3137,9 +3149,15 @@ export const commands: Array<Command> = [
       );
       server.sendChatText(client, "Adding 1x of all items to inventory.");
       for (const itemDef of Object.values(server._itemDefinitions)) {
-        client.character.lootItem(server, server.generateItem(itemDef.ID));
-        scheduler.yield();
+        const item = server.generateItem(itemDef.ID);
+        if (server.isAccountItem(itemDef.ID)) {
+          await server.lootAccountItem(server, client, item);
+        } else {
+          client.character.lootItem(server, item);
+        }
+        await scheduler.yield();
       }
+      server.sendChatText(client, "Finished adding all items.");
     }
   },
   {
