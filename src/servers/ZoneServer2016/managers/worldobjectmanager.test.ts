@@ -16,7 +16,8 @@ import assert from "node:assert";
 import { LootTableManager } from "./loottablemanager";
 import {
   getHostileSurvivorChancePerThousand,
-  HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND
+  HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND,
+  WorldObjectManager
 } from "./worldobjectmanager";
 
 test("solo mode favors bandits without changing multiplayer defaults", () => {
@@ -39,6 +40,33 @@ test("solo mode favors bandits without changing multiplayer defaults", () => {
       process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND = previousChance;
     }
   }
+});
+
+test("lootbag registration indexes and spawns a corpse bag", () => {
+  const manager = new WorldObjectManager();
+  const lootbag = { characterId: "lootbag" };
+  const spawnedEntities = new Set<object>();
+  let indexed: object | undefined;
+  let spawned: object | undefined;
+  const server = {
+    _lootbags: {} as Record<string, object>,
+    pushToGridCell: (entity: object) => {
+      indexed = entity;
+    },
+    executeFuncForAllReadyClientsInRange: (
+      callback: (client: { spawnedEntities: Set<object> }) => void
+    ) => callback({ spawnedEntities }),
+    addLightweightNpc: (_client: object, entity: object) => {
+      spawned = entity;
+    }
+  };
+
+  manager.registerLootbag(server as never, lootbag as never);
+
+  assert.equal(server._lootbags.lootbag, lootbag);
+  assert.equal(indexed, lootbag);
+  assert.equal(spawned, lootbag);
+  assert.equal(spawnedEntities.has(lootbag), true);
 });
 
 test("WorldObjectManager", { timeout: 10000 }, async (t) => {

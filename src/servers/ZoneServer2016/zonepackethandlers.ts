@@ -189,6 +189,42 @@ export function resolveItemUseCount(
   }
 }
 
+export function getClientWireItemGuid(itemGuid: string): string {
+  const match = /^0x([0-9a-f]+)$/i.exec(itemGuid);
+  if (!match || match[1].length > 16) return itemGuid.toLowerCase();
+  const wireHex = match[1]
+    .match(/.{1,2}/g)!
+    .map((byte) => byte.padStart(2, "0"))
+    .join("")
+    .padEnd(16, "0");
+  return `0x${wireHex}`;
+}
+
+export function resolveClientItemGuid(
+  requestedItemGuid: string | undefined,
+  availableItemGuids: Iterable<string>
+): string | undefined {
+  if (!requestedItemGuid) return requestedItemGuid;
+  const requested = requestedItemGuid.toLowerCase();
+  const available = Array.from(availableItemGuids);
+  return (
+    available.find((itemGuid) => itemGuid.toLowerCase() === requested) ??
+    available.find(
+      (itemGuid) => getClientWireItemGuid(itemGuid) === requested
+    ) ??
+    requestedItemGuid
+  );
+}
+
+function getCharacterItemGuids(character: BaseFullCharacter): string[] {
+  return [
+    ...Object.values(character._loadout).map((item) => item.itemGuid),
+    ...Object.values(character._containers).flatMap((container) =>
+      Object.keys(container.items)
+    )
+  ];
+}
+
 function getStanceFlags(num: number): StanceFlags {
   function getBit(bin: string, bit: number) {
     return bin.charAt(bit) === "1";
@@ -2144,8 +2180,12 @@ export class ZonePacketHandlers {
     packet: ReceivedPacket<ItemsRequestUseItem>
   ) {
     debug(packet.data);
-    const { itemGuid, itemUseOption, targetCharacterId, sourceCharacterId } =
-      packet.data;
+    const {
+      itemGuid: requestedItemGuid,
+      itemUseOption,
+      targetCharacterId,
+      sourceCharacterId
+    } = packet.data;
     const count = resolveItemUseCount(
       itemUseOption,
       (packet.data.itemSubData as any)?.count,
@@ -2166,7 +2206,7 @@ export class ZonePacketHandlers {
         if (!count || count < 1) return;
     }
 
-    if (!itemGuid) {
+    if (!requestedItemGuid) {
       server.sendChatText(client, "[ERROR] ItemGuid is invalid!");
       return;
     }
@@ -2185,6 +2225,10 @@ export class ZonePacketHandlers {
       server.sendChatText(client, "Invalid character!");
       return;
     }
+    const itemGuid = resolveClientItemGuid(
+      requestedItemGuid,
+      getCharacterItemGuids(character)
+    )!;
     const animationId =
       server._itemUseOptions[itemUseOption ?? 0]?.animationId ?? 0;
 
@@ -2560,11 +2604,22 @@ export class ZonePacketHandlers {
     const {
       containerGuid,
       characterId,
-      itemGuid,
+      itemGuid: requestedItemGuid,
       targetCharacterId,
       count,
       newSlotId
     } = packet.data;
+    const itemSources = [
+      server.getEntity(characterId),
+      client.character.mountedContainer
+    ].filter(
+      (source, index, sources): source is BaseFullCharacter =>
+        source instanceof BaseFullCharacter && sources.indexOf(source) === index
+    );
+    const itemGuid = resolveClientItemGuid(
+      requestedItemGuid,
+      itemSources.flatMap(getCharacterItemGuids)
+    ) ?? "";
     if (client.hudTimer) {
       client.clearHudTimer();
     }
@@ -2841,13 +2896,21 @@ export class ZonePacketHandlers {
         return;
       }
 
-      const sourceContainer = sourceCharacter.getItemContainer(itemGuid ?? "");
+      const mountedContainer = sourceCharacter.getContainer();
+      const externalItemGuid = resolveClientItemGuid(
+        requestedItemGuid,
+        mountedContainer ? Object.keys(mountedContainer.items) : []
+      ) ?? itemGuid;
+      const sourceContainer =
+        mountedContainer?.items[externalItemGuid] !== undefined
+          ? mountedContainer
+          : sourceCharacter.getItemContainer(externalItemGuid);
       if (!sourceContainer) {
         server.sendChatText(client, "Invalid source container 3!");
         return;
       }
 
-      const item = sourceContainer.items[itemGuid ?? ""];
+      const item = sourceContainer.items[externalItemGuid];
       if (!item) {
         server.containerError(client, ContainerErrors.NO_ITEM_IN_SLOT);
         return;
