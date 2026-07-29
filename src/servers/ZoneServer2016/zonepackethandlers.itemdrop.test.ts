@@ -1,7 +1,26 @@
 import assert from "node:assert";
 import test from "node:test";
 import { ItemUseOptions } from "./models/enums";
-import { resolveItemUseCount } from "./zonepackethandlers";
+import {
+  getClientWireItemGuid,
+  resolveClientItemGuid,
+  resolveItemUseCount
+} from "./zonepackethandlers";
+
+test("short server item GUIDs resolve from the client's wire representation", () => {
+  assert.equal(getClientWireItemGuid("0x391ee"), "0x391e0e0000000000");
+  assert.equal(getClientWireItemGuid("0x391ef"), "0x391e0f0000000000");
+  assert.equal(getClientWireItemGuid("0x391f0"), "0x391f000000000000");
+  assert.equal(
+    resolveClientItemGuid("0x391e0f0000000000", [
+      "0x391ee",
+      "0x391ef",
+      "0x391f0",
+      "0x391f1"
+    ]),
+    "0x391ef"
+  );
+});
 
 test("zero-count drop requests default to one item", () => {
   assert.equal(resolveItemUseCount(ItemUseOptions.DROP, undefined, 0), 1);
