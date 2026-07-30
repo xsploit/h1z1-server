@@ -165,7 +165,9 @@ test("streaming removes agents before tiles change without reallocating the crow
     _tcOrigZ: 0,
     _tcTileWidth: 25.6,
     _lastStreamMs: 0,
-    _loadedCols: new Set(["0,0"])
+    _loadedCols: new Set(["0,0"]),
+    _cacheLoadedCols: new Set(["39,39"]),
+    _streamCacheLayers: new Map([["39,39", []]])
   });
   navManager.navmesh = {
     getTilesAt: () => {

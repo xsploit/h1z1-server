@@ -14,8 +14,11 @@
 import {
   createWriteStream,
   existsSync,
+  openSync,
   readFileSync,
-  readdirSync
+  readSync,
+  readdirSync,
+  statSync
 } from "node:fs";
 import {
   BoxObstacle,
@@ -76,6 +79,24 @@ const STREAM_CACHE_DIR =
   process.env.NAV_CACHE_DIR ?? __dirname + "/../../data/2016/collision";
 const STREAM_RADIUS = 300; // materialise tiles within this many meters of a player
 const STREAM_INTERVAL = 1000; // ms between window updates
+// Keep compressed layers out of the WebAssembly heap until their columns are
+// actually visited. The generated whole-map cache has ~110k layers / ~600 MB;
+// preloading all of it leaves too little WASM address space for DetourCrowd and
+// eventually corrupts the native heap. This budget covers many distinct player
+// windows while keeping the cache bounded to a fraction of the old footprint.
+const STREAM_RUNTIME_CACHE_LAYERS = 32768;
+
+type StreamCachePart = {
+  path: string;
+  fd: number;
+  start: number;
+  length: number;
+};
+
+type StreamCacheLayer = {
+  offset: number;
+  length: number;
+};
 
 export class NavManager {
   navmesh!: NavMesh;
@@ -93,6 +114,12 @@ export class NavManager {
   private _tcOrigZ = 0;
   private _tcTileWidth = 25.6;
   private _loadedCols = new Set<string>(); // materialised tile columns "tx,tz"
+  private _cacheLoadedCols = new Set<string>();
+  private _streamCacheLayers = new Map<string, StreamCacheLayer[]>();
+  private _streamCacheParts: StreamCachePart[] = [];
+  private _streamCacheLength = 0;
+  private _streamCacheLayerCount = 0;
+  private _streamCacheCapacity = STREAM_RUNTIME_CACHE_LAYERS;
   private _lastStreamMs = 0;
   private _crowdMaxAgents = 2000;
   private _crowdMaxAgentRadius = 2.0;
@@ -142,6 +169,49 @@ export class NavManager {
             : String(error)
         }`
     );
+  }
+
+  private readStreamCacheRange(offset: number, length: number): Buffer {
+    if (offset < 0 || length < 0 || offset + length > this._streamCacheLength) {
+      throw new Error(
+        `[NAV] streaming cache read outside store (${offset}+${length}/${this._streamCacheLength})`
+      );
+    }
+    const output = Buffer.allocUnsafe(length);
+    let outputOffset = 0;
+    let sourceOffset = offset;
+    while (outputOffset < length) {
+      const part = this._streamCacheParts.find(
+        (candidate) =>
+          sourceOffset >= candidate.start &&
+          sourceOffset < candidate.start + candidate.length
+      );
+      if (!part) {
+        throw new Error(
+          `[NAV] streaming cache has no part for offset ${sourceOffset}`
+        );
+      }
+      const localOffset = sourceOffset - part.start;
+      const bytesToRead = Math.min(
+        length - outputOffset,
+        part.length - localOffset
+      );
+      const bytesRead = readSync(
+        part.fd,
+        output,
+        outputOffset,
+        bytesToRead,
+        localOffset
+      );
+      if (bytesRead !== bytesToRead) {
+        throw new Error(
+          `[NAV] short streaming cache read in ${part.path}: ${bytesRead}/${bytesToRead}`
+        );
+      }
+      outputOffset += bytesRead;
+      sourceOffset += bytesRead;
+    }
+    return output;
   }
 
   private mutateNavMesh(
@@ -233,17 +303,31 @@ export class NavManager {
     const parts = sortTileCacheParts(
       readdirSync(dir).filter((f) => /^z1_cache_\d+\.bin$/.test(f))
     );
-    const buf = Buffer.concat(parts.map((p) => readFileSync(`${dir}/${p}`)));
+    let storeLength = 0;
+    this._streamCacheParts = parts.map((part) => {
+      const path = `${dir}/${part}`;
+      const length = statSync(path).size;
+      const indexedPart = {
+        path,
+        fd: openSync(path, "r"),
+        start: storeLength,
+        length
+      };
+      storeLength += length;
+      return indexedPart;
+    });
+    this._streamCacheLength = storeLength;
 
     // parse TileCacheSetHeader (magic, version, numTiles, meshParams, cacheParams)
     let o = 0;
+    const header = this.readStreamCacheRange(0, 92);
     const rI = () => {
-      const v = buf.readInt32LE(o);
+      const v = header.readInt32LE(o);
       o += 4;
       return v;
     };
     const rF = () => {
-      const v = buf.readFloatLE(o);
+      const v = header.readFloatLE(o);
       o += 4;
       return v;
     };
@@ -276,12 +360,42 @@ export class NavManager {
       walkableRadius: rF(),
       walkableClimb: rF(),
       maxSimplificationError: rF(),
-      maxTiles: rI(),
+      maxTiles: Math.min(rI(), STREAM_RUNTIME_CACHE_LAYERS),
       maxObstacles: rI()
     };
     this._tcOrigX = mesh.orig.x;
     this._tcOrigZ = mesh.orig.z;
     this._tcTileWidth = mesh.tileWidth;
+    this._streamCacheCapacity = cache.maxTiles;
+
+    // Build a compact JS index over the split TSET files. Only the 28-byte
+    // entry/layer headers are inspected; compressed layer payloads remain on
+    // disk until streamAround() requests their column.
+    let cursor = 92;
+    for (let i = 0; i < numTiles; i++) {
+      if (cursor + 28 > storeLength) {
+        throw new Error(`[NAV] truncated tilecache before layer ${i}`);
+      }
+      const entryHeader = this.readStreamCacheRange(cursor, 28);
+      const dataSize = entryHeader.readInt32LE(4);
+      if (dataSize < 20 || cursor + 8 + dataSize > storeLength) {
+        throw new Error(
+          `[NAV] invalid tilecache layer ${i} size ${dataSize} at offset ${cursor + 8}`
+        );
+      }
+      const tx = entryHeader.readInt32LE(16);
+      const tz = entryHeader.readInt32LE(20);
+      const key = `${tx},${tz}`;
+      const layers = this._streamCacheLayers.get(key) ?? [];
+      layers.push({ offset: cursor + 8, length: dataSize });
+      this._streamCacheLayers.set(key, layers);
+      cursor += 8 + dataSize;
+    }
+    if (cursor !== storeLength) {
+      throw new Error(
+        `[NAV] tilecache has ${storeLength - cursor} trailing bytes`
+      );
+    }
 
     const meshProcess = createDefaultTileCacheMeshProcess();
     this.tilecache = new TileCache();
@@ -300,33 +414,6 @@ export class NavManager {
       throw new Error("[NAV] failed to initialize streaming navmesh");
     }
 
-    const FREE = (Raw.Detour as any).DT_COMPRESSEDTILE_FREE_DATA ?? 1;
-    for (let i = 0; i < numTiles; i++) {
-      if (o + 8 > buf.length) {
-        throw new Error(`[NAV] truncated tilecache before layer ${i}`);
-      }
-      o += 4; // tileRef (recomputed by addTile)
-      const dataSize = buf.readInt32LE(o);
-      o += 4;
-      if (dataSize <= 0 || o + dataSize > buf.length) {
-        throw new Error(
-          `[NAV] invalid tilecache layer ${i} size ${dataSize} at offset ${o}`
-        );
-      }
-      const arr = new UnsignedCharArray();
-      arr.copy(buf.subarray(o, o + dataSize));
-      o += dataSize;
-      const result = this.tilecache.addTile(arr, FREE);
-      if (!statusSucceed(result.status)) {
-        throw new Error(
-          `[NAV] failed to add tilecache layer ${i}: ${statusToReadableString(result.status)}`
-        );
-      }
-    }
-    if (o !== buf.length) {
-      throw new Error(`[NAV] tilecache has ${buf.length - o} trailing bytes`);
-    }
-
     this.navMeshQuery = new NavMeshQuery(this.navmesh);
     this._crowdMaxAgents = 1000;
     this._crowdMaxAgentRadius = 2.5;
@@ -334,7 +421,9 @@ export class NavManager {
     this.streaming = true;
     console.timeEnd("[NAV] streaming tilecache loaded");
     console.log(
-      `[NAV] streaming tilecache ready (${numTiles} layers, ${(buf.length / 1048576) | 0} MB in RAM)`
+      `[NAV] streaming tilecache ready (${numTiles} layers indexed, ` +
+        `${(storeLength / 1048576) | 0} MB disk-backed, ` +
+        `${this._streamCacheCapacity} layer runtime budget)`
     );
   }
 
@@ -357,7 +446,8 @@ export class NavManager {
         cz = Math.floor((p[2] - this._tcOrigZ) / tw);
       for (let dx = -rad; dx <= rad; dx++) {
         for (let dz = -rad; dz <= rad; dz++) {
-          want.add(`${cx + dx},${cz + dz}`);
+          const key = `${cx + dx},${cz + dz}`;
+          if (this._streamCacheLayers.has(key)) want.add(key);
         }
       }
     }
@@ -382,6 +472,38 @@ export class NavManager {
       // in the tilecache are carved in by buildNavMeshTilesAt
       for (const k of toAdd) {
         const [tx, tz] = k.split(",").map(Number);
+        if (!this._cacheLoadedCols.has(k)) {
+          const layers = this._streamCacheLayers.get(k) ?? [];
+          if (
+            this._streamCacheLayerCount + layers.length >
+            this._streamCacheCapacity
+          ) {
+            console.error(
+              `[NAV] streaming cache layer budget exhausted at ${this._streamCacheLayerCount}/` +
+                `${this._streamCacheCapacity}; refusing column ${k} instead of risking WASM corruption`
+            );
+            continue;
+          }
+          const FREE = (Raw.Detour as any).DT_COMPRESSEDTILE_FREE_DATA ?? 1;
+          let columnLoaded = true;
+          for (const layer of layers) {
+            const bytes = this.readStreamCacheRange(layer.offset, layer.length);
+            const arr = new UnsignedCharArray();
+            arr.copy(bytes);
+            const result = this.tilecache.addTile(arr, FREE);
+            if (!statusSucceed(result.status)) {
+              columnLoaded = false;
+              console.error(
+                `[NAV] failed to load streamed layer for ${k}: ` +
+                  statusToReadableString(result.status)
+              );
+              break;
+            }
+            this._streamCacheLayerCount++;
+          }
+          if (!columnLoaded) continue;
+          this._cacheLoadedCols.add(k);
+        }
         this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh);
         this._loadedCols.add(k);
         added++;

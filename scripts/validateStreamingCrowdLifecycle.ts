@@ -27,10 +27,16 @@ async function main() {
     invalidations++;
   });
 
-  const centers = Array.from({ length: transitionCount }, (_, index) =>
-    index % 2 === 0
-      ? new Float32Array([966.83, 14, -2691.36, 1])
-      : new Float32Array([-125.55, 23.41, -1131.71, 1])
+  const validationCenters = [
+    // Pleasant Valley police department: this layered interior previously
+    // reproduced the native crowd heap corruption seen by the live server.
+    new Float32Array([-1924.4, 62.6, -2148.8, 1]),
+    new Float32Array([966.83, 14, -2691.36, 1]),
+    new Float32Array([-125.55, 23.41, -1131.71, 1])
+  ];
+  const centers = Array.from(
+    { length: transitionCount },
+    (_, index) => validationCenters[index % validationCenters.length]
   );
 
   let created = 0;
