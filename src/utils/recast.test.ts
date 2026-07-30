@@ -183,6 +183,52 @@ test("active agents stay on the authored spawn floor", () => {
   assert.deepEqual(addedAt, { x: 4, y: 20, z: 6 });
 });
 
+test("non-finite agent coordinates never reach native nav queries", () => {
+  const navManager = new NavManager();
+  navManager.navMeshQuery = {
+    findNearestPoly: () =>
+      assert.fail("non-finite coordinates must not reach the navmesh")
+  } as never;
+  navManager.crowd = {
+    addAgent: () => assert.fail("non-finite coordinates must not enter crowd")
+  } as never;
+
+  const invalidPosition = new Float32Array([5, Number.NaN, 5, 1]);
+  assert.equal(navManager.createAgent(invalidPosition), undefined);
+  assert.equal(navManager.createPassiveAgent(invalidPosition), undefined);
+});
+
+test("instrumented crowd agents reject non-finite move targets", () => {
+  const navManager = new NavManager();
+  navManager.navMeshQuery = {
+    findNearestPoly: () => ({
+      nearestRef: 123,
+      nearestPoint: { x: 4, y: 20, z: 6 }
+    })
+  } as never;
+  let nativeMoveRequests = 0;
+  const agent = {
+    agentIndex: 1,
+    requestMoveTarget: () => {
+      nativeMoveRequests++;
+      return true;
+    }
+  };
+  navManager.crowd = {
+    addAgent: () => agent,
+    agents: {}
+  } as never;
+
+  const created = navManager.createAgent(new Float32Array([4, 20, 6, 1]));
+  assert.equal(
+    created?.requestMoveTarget({ x: Number.NaN, y: 20, z: 6 }),
+    false
+  );
+  assert.equal(nativeMoveRequests, 0);
+  assert.equal(created?.requestMoveTarget({ x: 5, y: 20, z: 6 }), true);
+  assert.equal(nativeMoveRequests, 1);
+});
+
 test("streaming removes agents before tiles change without reallocating the crowd", () => {
   const navManager = new NavManager();
   const events: string[] = [];

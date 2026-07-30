@@ -14,12 +14,15 @@
 import {
   createWriteStream,
   existsSync,
+  mkdirSync,
   openSync,
   readFileSync,
   readSync,
   readdirSync,
-  statSync
+  statSync,
+  writeFileSync
 } from "node:fs";
+import { join } from "node:path";
 import {
   BoxObstacle,
   CrowdAgent,
@@ -98,6 +101,22 @@ type StreamCacheLayer = {
   length: number;
 };
 
+type CrowdOperationTrace = {
+  sequence: number;
+  operation: string;
+  agentIndex?: number;
+  position?: [number, number, number];
+  detail?: string;
+};
+
+type CrowdAgentTrace = {
+  kind: "active" | "passive";
+  agentIndex: number;
+  createdFrom: [number, number, number];
+  createdAt: [number, number, number];
+  lastMoveTarget?: [number, number, number];
+};
+
 export class NavManager {
   navmesh!: NavMesh;
   tilecache!: TileCache;
@@ -127,6 +146,9 @@ export class NavManager {
   private _crowdFaultReported = false;
   private _successfulCrowdUpdates = 0;
   private _agentInvalidationHandler?: () => void;
+  private _crowdOperationSequence = 0;
+  private readonly _recentCrowdOperations: CrowdOperationTrace[] = [];
+  private readonly _crowdAgentTraces = new Map<number, CrowdAgentTrace>();
   constructor() {}
 
   get crowdHealthy(): boolean {
@@ -135,6 +157,134 @@ export class NavManager {
 
   setAgentInvalidationHandler(handler: () => void): void {
     this._agentInvalidationHandler = handler;
+  }
+
+  private traceCrowdOperation(
+    operation: string,
+    agentIndex?: number,
+    position?: Vector3 | Float32Array,
+    detail?: string
+  ): void {
+    const trace: CrowdOperationTrace = {
+      sequence: ++this._crowdOperationSequence,
+      operation
+    };
+    if (agentIndex !== undefined) trace.agentIndex = agentIndex;
+    if (position) {
+      trace.position = [
+        Number(position instanceof Float32Array ? position[0] : position.x),
+        Number(position instanceof Float32Array ? position[1] : position.y),
+        Number(position instanceof Float32Array ? position[2] : position.z)
+      ];
+    }
+    if (detail) trace.detail = detail;
+    this._recentCrowdOperations.push(trace);
+    if (this._recentCrowdOperations.length > 128) {
+      this._recentCrowdOperations.shift();
+    }
+  }
+
+  private instrumentAgent(
+    agent: CrowdAgent,
+    kind: "active" | "passive",
+    gamePosition: Float32Array,
+    navPosition: Vector3
+  ): CrowdAgent {
+    const agentIndex = agent.agentIndex;
+    this._crowdAgentTraces.set(agentIndex, {
+      kind,
+      agentIndex,
+      createdFrom: [gamePosition[0], gamePosition[1], gamePosition[2]],
+      createdAt: [navPosition.x, navPosition.y, navPosition.z]
+    });
+    this.traceCrowdOperation("agent-created", agentIndex, navPosition, kind);
+
+    if (typeof agent.requestMoveTarget !== "function") return agent;
+    const originalRequestMoveTarget = agent.requestMoveTarget.bind(agent);
+    agent.requestMoveTarget = (position: Vector3): boolean => {
+      const trace = this._crowdAgentTraces.get(agentIndex);
+      if (trace) {
+        trace.lastMoveTarget = [position.x, position.y, position.z];
+      }
+      this.traceCrowdOperation("move-request", agentIndex, position);
+      if (
+        !this._crowdHealthy ||
+        !Number.isFinite(position.x) ||
+        !Number.isFinite(position.y) ||
+        !Number.isFinite(position.z)
+      ) {
+        this.traceCrowdOperation(
+          "move-rejected",
+          agentIndex,
+          position,
+          "unhealthy-or-non-finite"
+        );
+        return false;
+      }
+      try {
+        return originalRequestMoveTarget(position);
+      } catch (error) {
+        this.markCrowdFault(error, "move request");
+        return false;
+      }
+    };
+    return agent;
+  }
+
+  private writeCrowdFaultReport(
+    error: unknown,
+    operation: string,
+    activeAgents: number | string,
+    wrapperAgents: number | string
+  ): string | undefined {
+    if (!this.streaming) return;
+    try {
+      const logDirectory = join(
+        process.env.APPDATA ?? process.cwd(),
+        "h1emu",
+        "logs"
+      );
+      mkdirSync(logDirectory, { recursive: true });
+      const reportPath = join(
+        logDirectory,
+        `nav-crowd-fault-${Date.now()}.json`
+      );
+      writeFileSync(
+        reportPath,
+        JSON.stringify(
+          {
+            timestamp: new Date().toISOString(),
+            operation,
+            error:
+              error instanceof Error ? (error.stack ?? error.message) : error,
+            activeAgents,
+            wrapperAgents,
+            loadedColumns: this._loadedCols.size,
+            indexedCacheColumns: this._streamCacheLayers.size,
+            indexedCacheLayers: [...this._streamCacheLayers.values()].reduce(
+              (total, layers) => total + layers.length,
+              0
+            ),
+            runtimeCacheLayers: this._streamCacheLayerCount,
+            runtimeCacheCapacity: this._streamCacheCapacity,
+            obstacles: this.obstacleCount,
+            pendingObstacles: this.obstaclesRequestsPending,
+            recentOperations: this._recentCrowdOperations,
+            agents: [...this._crowdAgentTraces.values()]
+          },
+          null,
+          2
+        )
+      );
+      return reportPath;
+    } catch (reportError) {
+      console.error(
+        `[NAV] failed to write crowd fault report: ${
+          reportError instanceof Error ? reportError.message : reportError
+        }`
+      );
+      return;
+    }
   }
 
   private createCrowd(): void {
@@ -160,6 +310,12 @@ export class NavManager {
     } catch {
       // The native heap may already be poisoned; keep the fallback counts.
     }
+    const reportPath = this.writeCrowdFaultReport(
+      error,
+      operation,
+      activeAgents,
+      wrapperAgents
+    );
     this._agentInvalidationHandler?.();
     console.error(
       `[NAV] crowd disabled after ${operation} ` +
@@ -167,7 +323,7 @@ export class NavManager {
           error instanceof Error
             ? (error.stack ?? error.message)
             : String(error)
-        }`
+        }${reportPath ? `\n[NAV] crowd fault report: ${reportPath}` : ""}`
     );
   }
 
@@ -224,6 +380,8 @@ export class NavManager {
       for (const agent of this.crowd.getAgents()) {
         this.crowd.removeAgent(agent);
       }
+      this._crowdAgentTraces.clear();
+      this.traceCrowdOperation("agents-invalidated");
     } catch (error) {
       this.markCrowdFault(error, "agent invalidation");
       return false;
@@ -441,7 +599,19 @@ export class NavManager {
     const tw = this._tcTileWidth;
     const rad = Math.ceil(STREAM_RADIUS / tw);
     const want = new Set<string>();
-    for (const p of positions) {
+    const validPositions = positions.filter(
+      (position) => Number.isFinite(position[0]) && Number.isFinite(position[2])
+    );
+    if (positions.length && !validPositions.length) {
+      this.traceCrowdOperation(
+        "stream-rejected",
+        undefined,
+        undefined,
+        "all player positions were non-finite"
+      );
+      return false;
+    }
+    for (const p of validPositions) {
       const cx = Math.floor((p[0] - this._tcOrigX) / tw),
         cz = Math.floor((p[2] - this._tcOrigZ) / tw);
       for (let dx = -rad; dx <= rad; dx++) {
@@ -454,6 +624,12 @@ export class NavManager {
     const toRemove = [...this._loadedCols].filter((k) => !want.has(k));
     const toAdd = [...want].filter((k) => !this._loadedCols.has(k));
     if (!toRemove.length && !toAdd.length) return false;
+    this.traceCrowdOperation(
+      "stream-mutation",
+      undefined,
+      undefined,
+      `add=${toAdd.length},remove=${toRemove.length},players=${validPositions.length}`
+    );
     let removed = 0;
     let added = 0;
     const success = this.mutateNavMesh(() => {
@@ -550,7 +726,9 @@ export class NavManager {
   removeAgent(agent: CrowdAgent): void {
     if (!this._crowdHealthy) return;
     try {
+      this.traceCrowdOperation("agent-removed", agent.agentIndex);
       this.crowd.removeAgent(agent);
+      this._crowdAgentTraces.delete(agent.agentIndex);
     } catch (error) {
       debugStream(
         `failed to remove stale crowd agent: ${
@@ -716,7 +894,10 @@ export class NavManager {
   // no polygon is found. Last-resort fallback when neither the structure BVH
   // (CollisionManager.groundRaycast) nor the terrain heightmap yields a height.
   getFloorY(gamePos: Float32Array): number | null {
-    const { nearestRef, nearestPoint } = this.findNearestPolyOnFloor(gamePos, 2);
+    const { nearestRef, nearestPoint } = this.findNearestPolyOnFloor(
+      gamePos,
+      2
+    );
     if (!nearestRef) return null;
     const res = this.navMeshQuery.getPolyHeight(nearestRef, nearestPoint);
     return res.success && Number.isFinite(res.height) ? res.height : null;
@@ -726,7 +907,13 @@ export class NavManager {
     // In streaming mode the navmesh only exists around players; if no tile is
     // loaded under this spawn point yet, defer (caller retries when it loads)
     // instead of placing the agent at a garbage position.
-    if (!this._crowdHealthy || !this.isPositionStreamed(gamePos)) {
+    if (
+      !this._crowdHealthy ||
+      !Number.isFinite(gamePos[0]) ||
+      !Number.isFinite(gamePos[1]) ||
+      !Number.isFinite(gamePos[2]) ||
+      !this.isPositionStreamed(gamePos)
+    ) {
       return undefined;
     }
     try {
@@ -734,7 +921,9 @@ export class NavManager {
       if (!nearestRef) return undefined;
       const navPosition = nearestPoint;
       if (
+        !Number.isFinite(navPosition.x) ||
         !Number.isFinite(navPosition.y) ||
+        !Number.isFinite(navPosition.z) ||
         Math.abs(navPosition.y - gamePos[1]) > MAX_ACTIVE_AGENT_VERTICAL_SNAP
       ) {
         debugStream(
@@ -769,7 +958,7 @@ export class NavManager {
       debug(
         `createAgent: agentIdx=${agent.agentIndex} navPos=[${navPosition.x.toFixed(2)}, ${navPosition.y.toFixed(2)}, ${navPosition.z.toFixed(2)}]`
       );
-      return agent;
+      return this.instrumentAgent(agent, "active", gamePos, navPosition);
     } catch (error) {
       debugStream(
         `create-agent query rejected at [${gamePos[0]}, ${gamePos[1]}, ${gamePos[2]}]: ${
@@ -784,7 +973,15 @@ export class NavManager {
     gamePos: Float32Array,
     radius: number = 0.5
   ): CrowdAgent | undefined {
-    if (!this._crowdHealthy || !this.isPositionStreamed(gamePos)) {
+    if (
+      !this._crowdHealthy ||
+      !Number.isFinite(gamePos[0]) ||
+      !Number.isFinite(gamePos[1]) ||
+      !Number.isFinite(gamePos[2]) ||
+      !Number.isFinite(radius) ||
+      radius <= 0 ||
+      !this.isPositionStreamed(gamePos)
+    ) {
       return undefined;
     }
     try {
@@ -815,7 +1012,7 @@ export class NavManager {
         delete this.crowd.agents[String(agent.agentIndex)];
         return undefined;
       }
-      return agent;
+      return this.instrumentAgent(agent, "passive", gamePos, nearestPoint);
     } catch (error) {
       debugStream(
         `create-passive-agent rejected at [${gamePos[0]}, ${gamePos[1]}, ${gamePos[2]}]: ${
@@ -827,7 +1024,15 @@ export class NavManager {
   }
 
   teleportAgent(agent: CrowdAgent, gamePos: Float32Array): boolean {
-    if (!this._crowdHealthy || !this.isPositionStreamed(gamePos)) return false;
+    if (
+      !this._crowdHealthy ||
+      !Number.isFinite(gamePos[0]) ||
+      !Number.isFinite(gamePos[1]) ||
+      !Number.isFinite(gamePos[2]) ||
+      !this.isPositionStreamed(gamePos)
+    ) {
+      return false;
+    }
     try {
       const { nearestRef, nearestPoint } = this.findNearestPolyOnFloor(gamePos);
       if (
@@ -838,6 +1043,11 @@ export class NavManager {
       ) {
         return false;
       }
+      this.traceCrowdOperation(
+        "agent-teleport",
+        agent.agentIndex,
+        nearestPoint
+      );
       agent.teleport(nearestPoint);
       return true;
     } catch (error) {

@@ -1,6 +1,12 @@
 process.env.DISABLE_PLUGINS = "true";
 process.env.FORCE_DISABLE_WS = "true";
 process.env.NAV_STREAMING = "1";
+const compiledRuntime = process.argv[7] === "compiled";
+const routeToCenter = process.argv[9] === "route";
+const routeStart = new Float32Array([-125.55, 23.41, -1131.71, 1]);
+if (process.argv[8]) {
+  process.env.NAV_CACHE_DIR = require("node:path").resolve(process.argv[8]);
+}
 
 const center = new Float32Array([
   Number(process.argv[2] ?? 966.83),
@@ -12,10 +18,12 @@ const spawnedNpcCount = Number(process.argv[5] ?? 500);
 const crowdSteps = Number(process.argv[6] ?? 1000);
 
 async function main() {
-  const { ZoneServer2016 } =
-    await import("../src/servers/ZoneServer2016/zoneserver");
-  const { ModelIds } =
-    await import("../src/servers/ZoneServer2016/models/enums");
+  const { ZoneServer2016 } = compiledRuntime
+    ? require("../out/servers/ZoneServer2016/zoneserver")
+    : await import("../src/servers/ZoneServer2016/zoneserver");
+  const { ModelIds } = compiledRuntime
+    ? require("../out/servers/ZoneServer2016/models/enums")
+    : await import("../src/servers/ZoneServer2016/models/enums");
   const server = new ZoneServer2016(
     12117,
     Buffer.from("F70IaxuU8C/w7FPXY1ibXw==", "base64"),
@@ -38,7 +46,7 @@ async function main() {
   if (internals.recastRoutine) clearInterval(internals.recastRoutine);
 
   Object.assign(server.navManager as object, { _lastStreamMs: 0 });
-  server.navManager.streamAround([center]);
+  server.navManager.streamAround([routeToCenter ? routeStart : center]);
 
   const centerSnap = server.navManager.navMeshQuery.findNearestPoly(
     { x: center[0], y: center[1], z: center[2] },
@@ -68,21 +76,24 @@ async function main() {
   const vehicleWrappers = [];
   let npcAgents = 0;
   let vehicleAgents = 0;
-  const playerAgent = server.navManager.createPassiveAgent(center);
+  const playerAgent = server.navManager.createPassiveAgent(
+    routeToCenter ? routeStart : center
+  );
   if (!playerAgent)
     throw new Error("failed to create saved-player passive agent");
   wrappers.push(playerAgent);
   const validationPlayerId = "validation-player";
-  server._characters[validationPlayerId] = {
+  const validationCharacter = {
     characterId: validationPlayerId,
     isAlive: true,
     isVanished: false,
     isHidden: false,
     isSpectator: false,
-    state: { position: center },
+    state: { position: routeToCenter ? routeStart : center },
     navAgent: playerAgent,
     OnProjectileHit: () => undefined
-  } as never;
+  };
+  server._characters[validationPlayerId] = validationCharacter as never;
   for (const npc of Object.values(server._npcs)) {
     const agent =
       npc.navAgent ?? server.navManager.createAgent(npc.state.position);
@@ -116,22 +127,33 @@ async function main() {
   };
   const rebuildAiTargetMap = aiInternals._rebuildAiTargetMap.bind(server);
   const tickNpcFsms = aiInternals.tickNpcFsms.bind(server);
-  for (let i = 0; i < crowdSteps; i++) {
-    rebuildAiTargetMap();
-    tickNpcFsms(0.2);
-    server.updatePathfindingPositions();
-    if (!server.navManager.teleportAgent(playerAgent, center)) {
-      throw new Error("saved-player teleport validation failed");
-    }
-    for (const vehicle of vehicleWrappers) {
-      if (!server.navManager.teleportAgent(vehicle.agent, vehicle.position)) {
-        throw new Error("world-vehicle teleport validation failed");
+  const realDateNow = Date.now;
+  let simulatedNow = realDateNow();
+  Date.now = () => simulatedNow;
+  try {
+    for (let i = 0; i < crowdSteps; i++) {
+      simulatedNow += 200;
+      if (routeToCenter) {
+        const progress = Math.min(1, i / Math.max(1, crowdSteps - 1));
+        validationCharacter.state.position = new Float32Array([
+          routeStart[0] + (center[0] - routeStart[0]) * progress,
+          routeStart[1] + (center[1] - routeStart[1]) * progress,
+          routeStart[2] + (center[2] - routeStart[2]) * progress,
+          1
+        ]);
+      }
+      rebuildAiTargetMap();
+      tickNpcFsms(0.2);
+      server.updatePathfindingPositions();
+      // Exercise the same obstacle-mutation and interpolated crowd-update path
+      // as the live server while advancing one deterministic fixed step.
+      server.navManager.updt();
+      if (!server.navManager.crowdHealthy) {
+        throw new Error(`crowd faulted on live update ${i}`);
       }
     }
-    // Use the fixed-step form directly. NavManager.updt() measures wall time,
-    // so a tight validation loop otherwise performs almost no native crowd
-    // updates after its first iteration.
-    server.navManager.crowd.update(server.navManager.updateFrequency);
+  } finally {
+    Date.now = realDateNow;
   }
 
   console.log(
