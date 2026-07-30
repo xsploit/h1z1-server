@@ -35,6 +35,7 @@ test("removed tile-cache obstacles release their capacity exactly once", () => {
     addBoxObstacle: () => ({ success: true, obstacle }),
     removeObstacle: () => {
       removeCalls++;
+      return { success: true };
     }
   } as never;
 
@@ -53,6 +54,97 @@ test("removed tile-cache obstacles release their capacity exactly once", () => {
   navManager.removeObstacle(obstacle);
   assert.equal(navManager.obstacleCount, 0);
   assert.equal(removeCalls, 1);
+});
+
+test("tile-cache rebuild work is bounded per server tick", () => {
+  const navManager = new NavManager();
+  let tileCacheUpdates = 0;
+  let crowdUpdates = 0;
+  navManager.navmesh = {} as never;
+  navManager.obstaclesRequestsPending = 1;
+  navManager.tilecache = {
+    obstacles: new Set(),
+    update: () => {
+      tileCacheUpdates++;
+      return { success: true, status: 0, upToDate: false };
+    }
+  } as never;
+  navManager.crowd = {
+    getAgents: () => [],
+    removeAgent: () => undefined,
+    update: () => {
+      crowdUpdates++;
+    }
+  } as never;
+
+  assert.doesNotThrow(() => navManager.updt());
+  assert.equal(tileCacheUpdates, 5);
+  assert.equal(navManager.obstaclesRequestsPending, 1);
+  assert.equal(crowdUpdates, 1);
+  assert.equal(navManager.obstacleUpdatesHealthy, true);
+});
+
+test("tile-cache rebuild clears pending work when it catches up", () => {
+  const navManager = new NavManager();
+  let tileCacheUpdates = 0;
+  navManager.navmesh = {} as never;
+  navManager.obstaclesRequestsPending = 4;
+  navManager.tilecache = {
+    obstacles: new Set(),
+    update: () => ({
+      success: true,
+      status: 0,
+      upToDate: ++tileCacheUpdates === 3
+    })
+  } as never;
+  navManager.crowd = {
+    getAgents: () => [],
+    removeAgent: () => undefined,
+    update: () => undefined
+  } as never;
+
+  navManager.updt();
+  assert.equal(tileCacheUpdates, 3);
+  assert.equal(navManager.obstaclesRequestsPending, 0);
+  assert.equal(navManager.obstacleUpdatesHealthy, true);
+});
+
+test("a native tile-cache failure disables obstacle updates without stopping the crowd", () => {
+  const navManager = new NavManager();
+  let crowdUpdates = 0;
+  navManager.navmesh = {} as never;
+  navManager.obstaclesRequestsPending = 1;
+  navManager.tilecache = {
+    obstacles: new Set(),
+    update: () => ({ success: false, status: 2147483656, upToDate: false })
+  } as never;
+  navManager.crowd = {
+    getAgents: () => [],
+    removeAgent: () => undefined,
+    update: () => {
+      crowdUpdates++;
+    }
+  } as never;
+
+  const originalConsoleError = console.error;
+  console.error = () => undefined;
+  try {
+    assert.doesNotThrow(() => navManager.updt());
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(navManager.obstacleUpdatesHealthy, false);
+  assert.equal(navManager.obstaclesRequestsPending, 0);
+  assert.equal(crowdUpdates, 1);
+  assert.equal(
+    navManager.addObstacle(new Float32Array([0, 0, 0, 1]), {
+      x: 1,
+      y: 1,
+      z: 1
+    }),
+    null
+  );
 });
 
 test("streamed random-point queries skip unloaded NPC positions", () => {
@@ -232,6 +324,7 @@ test("instrumented crowd agents reject non-finite move targets", () => {
 test("streaming removes agents before tiles change without reallocating the crowd", () => {
   const navManager = new NavManager();
   const events: string[] = [];
+  let requestedTileCapacity = 0;
   navManager.streaming = true;
   Object.assign(navManager as object, {
     _tcOrigX: 0,
@@ -240,10 +333,14 @@ test("streaming removes agents before tiles change without reallocating the crow
     _lastStreamMs: 0,
     _loadedCols: new Set(["0,0"]),
     _cacheLoadedCols: new Set(["39,39"]),
-    _streamCacheLayers: new Map([["39,39", []]])
+    _streamCacheLayers: new Map([
+      ["0,0", Array.from({ length: 12 }, () => ({ offset: 0, length: 1 }))],
+      ["39,39", []]
+    ])
   });
   navManager.navmesh = {
-    getTilesAt: () => {
+    getTilesAt: (_x: number, _z: number, maxTiles: number) => {
+      requestedTileCapacity = maxTiles;
       events.push("remove-tiles");
       return { tileCount: () => 0 };
     }
@@ -271,6 +368,7 @@ test("streaming removes agents before tiles change without reallocating the crow
     "remove-tiles"
   ]);
   assert.equal(events.includes("build-tiles"), true);
+  assert.equal(requestedTileCapacity, 12);
 });
 
 test("crowd update faults are contained and latched", () => {

@@ -68,6 +68,8 @@ const debugStream = require("debug")("nav:stream");
 
 const MAX_OBSTACLE = 20000;
 const MAX_PENDING_OBSTACLE = 50;
+const MAX_TILE_CACHE_UPDATES_PER_TICK = 5;
+const TILE_CACHE_BACKLOG_WARNING_TICKS = 25;
 const MAX_ACTIVE_AGENT_VERTICAL_SNAP = 1.5;
 
 // Streaming navmesh: a whole-map FINE navmesh stored as a compressed TileCache
@@ -145,6 +147,9 @@ export class NavManager {
   private _crowdHealthy = true;
   private _crowdFaultReported = false;
   private _successfulCrowdUpdates = 0;
+  private _obstacleUpdatesHealthy = true;
+  private _incompleteObstacleUpdateTicks = 0;
+  private _obstacleBacklogWarningReported = false;
   private _agentInvalidationHandler?: () => void;
   private _crowdOperationSequence = 0;
   private readonly _recentCrowdOperations: CrowdOperationTrace[] = [];
@@ -153,6 +158,10 @@ export class NavManager {
 
   get crowdHealthy(): boolean {
     return this._crowdHealthy;
+  }
+
+  get obstacleUpdatesHealthy(): boolean {
+    return this._obstacleUpdatesHealthy;
   }
 
   setAgentInvalidationHandler(handler: () => void): void {
@@ -401,6 +410,70 @@ export class NavManager {
       return false;
     }
   }
+
+  private processPendingObstacleRequests(): boolean {
+    if (
+      !this.obstaclesRequestsPending ||
+      !this._obstacleUpdatesHealthy ||
+      !this._crowdHealthy
+    ) {
+      return true;
+    }
+
+    let upToDate = false;
+    let updateFailed = false;
+    let updates = 0;
+    const mutationSucceeded = this.mutateNavMesh(() => {
+      while (!upToDate && updates < MAX_TILE_CACHE_UPDATES_PER_TICK) {
+        const result = this.tilecache.update(this.navmesh);
+        updates++;
+        if (!result.success) {
+          updateFailed = true;
+          const unsignedStatus = result.status >>> 0;
+          console.error(
+            `[NAV] tilecache update failed: ${statusToReadableString(result.status)} ` +
+              `(status=${result.status}, hex=0x${unsignedStatus.toString(16)}); ` +
+              "dynamic obstacle updates disabled"
+          );
+          break;
+        }
+        upToDate = result.upToDate;
+      }
+    });
+
+    this.traceCrowdOperation(
+      "tilecache-update",
+      undefined,
+      undefined,
+      `updates=${updates},upToDate=${upToDate},pending=${this.obstaclesRequestsPending}`
+    );
+
+    if (!mutationSucceeded || updateFailed) {
+      this._obstacleUpdatesHealthy = false;
+      this.obstaclesRequestsPending = 0;
+      return true;
+    }
+    if (upToDate) {
+      this.obstaclesRequestsPending = 0;
+      this._incompleteObstacleUpdateTicks = 0;
+      this._obstacleBacklogWarningReported = false;
+      return true;
+    }
+
+    this._incompleteObstacleUpdateTicks++;
+    if (
+      !this._obstacleBacklogWarningReported &&
+      this._incompleteObstacleUpdateTicks >= TILE_CACHE_BACKLOG_WARNING_TICKS
+    ) {
+      this._obstacleBacklogWarningReported = true;
+      console.warn(
+        `[NAV] tilecache rebuild remains pending after ${this._incompleteObstacleUpdateTicks} ticks; ` +
+          `work is capped at ${MAX_TILE_CACHE_UPDATES_PER_TICK} updates per tick`
+      );
+    }
+    return false;
+  }
+
   async loadNav() {
     const requestedMode = process.env.NAV_STREAMING;
     const storePath = STREAM_CACHE_DIR + "/z1_cache_0.bin";
@@ -636,7 +709,12 @@ export class NavManager {
       // unload columns outside the window
       for (const k of toRemove) {
         const [tx, tz] = k.split(",").map(Number);
-        const res = this.navmesh.getTilesAt(tx, tz, 8);
+        const authoredLayerCount = this._streamCacheLayers.get(k)?.length ?? 0;
+        const res = this.navmesh.getTilesAt(
+          tx,
+          tz,
+          Math.max(8, authoredLayerCount)
+        );
         for (let i = 0; i < res.tileCount(); i++) {
           const ref = this.navmesh.getTileRef(res.tiles(i));
           if (ref) this.navmesh.removeTile(ref);
@@ -784,8 +862,10 @@ export class NavManager {
 
   removeObstacle(obstacle: BoxObstacle) {
     if (!this._activeObstacles.delete(obstacle)) return;
-    this.tilecache.removeObstacle(obstacle);
-    this.obstaclesRequestsPending++;
+    if (this._obstacleUpdatesHealthy) {
+      const result = this.tilecache.removeObstacle(obstacle);
+      if (result.success) this.obstaclesRequestsPending++;
+    }
     this.obstacleCount--;
   }
 
@@ -797,14 +877,9 @@ export class NavManager {
     if (this.obstacleCount >= MAX_OBSTACLE) {
       return null;
     }
+    if (!this._obstacleUpdatesHealthy) return null;
     if (this.obstaclesRequestsPending >= MAX_PENDING_OBSTACLE) {
-      const success = this.mutateNavMesh(() => {
-        let upToDate = false;
-        while (!upToDate) {
-          ({ upToDate } = this.tilecache.update(this.navmesh));
-        }
-      });
-      if (success) this.obstaclesRequestsPending = 0;
+      if (!this.processPendingObstacleRequests()) return null;
     }
     const { success, obstacle } = this.tilecache.addBoxObstacle(
       NavManager.gameToNav(position),
@@ -856,13 +931,7 @@ export class NavManager {
     // tilecache carving runs in both modes now: in streaming the obstacles are
     // applied to the materialised window tiles, in normal mode to the whole mesh
     if (this.obstaclesRequestsPending) {
-      const success = this.mutateNavMesh(() => {
-        let upToDate = false;
-        while (!upToDate) {
-          ({ upToDate } = this.tilecache.update(this.navmesh));
-        }
-      });
-      if (success) this.obstaclesRequestsPending = 0;
+      this.processPendingObstacleRequests();
     }
     debug(
       `requests: ${this.obstaclesRequestsPending}, total: ${this.tilecache.obstacles.size}`
