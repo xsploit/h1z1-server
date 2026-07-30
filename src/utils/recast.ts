@@ -518,7 +518,10 @@ export class NavManager {
     return success;
   }
 
-  isPositionStreamed(gamePos: Float32Array): boolean {
+  isPositionStreamed(
+    gamePos: Float32Array,
+    horizontalExtent: number = 10
+  ): boolean {
     if (!this.streaming) return true;
     if (
       !Number.isFinite(gamePos[0]) ||
@@ -529,7 +532,19 @@ export class NavManager {
     }
     const tx = Math.floor((gamePos[0] - this._tcOrigX) / this._tcTileWidth);
     const tz = Math.floor((gamePos[2] - this._tcOrigZ) / this._tcTileWidth);
-    return this._loadedCols.has(`${tx},${tz}`);
+    // A spawn may sit inside a solid prop/room column which has no compressed
+    // nav layer of its own, while its nearest walkable polygon is in an
+    // adjacent loaded column. Match the horizontal extent used by our
+    // nearest-poly queries instead of deferring that agent forever.
+    const columnRadius = Math.ceil(
+      Math.max(0, horizontalExtent) / this._tcTileWidth
+    );
+    for (let dx = -columnRadius; dx <= columnRadius; dx++) {
+      for (let dz = -columnRadius; dz <= columnRadius; dz++) {
+        if (this._loadedCols.has(`${tx + dx},${tz + dz}`)) return true;
+      }
+    }
+    return false;
   }
 
   removeAgent(agent: CrowdAgent): void {
@@ -633,6 +648,19 @@ export class NavManager {
     return n;
   }
 
+  private findNearestPolyOnFloor(
+    gamePos: Float32Array,
+    horizontalExtent: number = 10
+  ) {
+    return this.navMeshQuery.findNearestPoly(NavManager.gameToNav(gamePos), {
+      halfExtents: {
+        x: horizontalExtent,
+        y: MAX_ACTIVE_AGENT_VERTICAL_SNAP,
+        z: horizontalExtent
+      }
+    });
+  }
+
   raycast(origin: Float32Array, target: Float32Array) {
     const origin_data = this.getClosestNavPoint(origin);
 
@@ -673,13 +701,11 @@ export class NavManager {
     }
   }
 
-  // Returns nearest navmesh point (in nav coords) to the given game position.
-  // Uses large halfExtents so Y offset doesn't prevent finding a polygon.
+  // Returns the nearest navmesh point on the entity's current floor. Interiors
+  // such as PV PD have floors only ~3.2m apart, so a tall nearest-poly search
+  // can silently select the story above or below.
   getClosestNavPointVec3(gamePos: Float32Array): Vector3 {
-    const navInput = NavManager.gameToNav(gamePos);
-    const n = this.navMeshQuery.findNearestPoly(navInput, {
-      halfExtents: { x: 10, y: 10, z: 10 }
-    });
+    const n = this.findNearestPolyOnFloor(gamePos);
     debug(
       `getClosestNavPoint gameIn=[${gamePos[0].toFixed(2)}, ${gamePos[1].toFixed(2)}, ${gamePos[2].toFixed(2)}] navOut=[${n.nearestPoint.x.toFixed(2)}, ${n.nearestPoint.y.toFixed(2)}, ${n.nearestPoint.z.toFixed(2)}] polyRef=${n.nearestRef}`
     );
@@ -690,11 +716,7 @@ export class NavManager {
   // no polygon is found. Last-resort fallback when neither the structure BVH
   // (CollisionManager.groundRaycast) nor the terrain heightmap yields a height.
   getFloorY(gamePos: Float32Array): number | null {
-    const navInput = NavManager.gameToNav(gamePos);
-    const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
-      navInput,
-      { halfExtents: { x: 2, y: 8, z: 2 } }
-    );
+    const { nearestRef, nearestPoint } = this.findNearestPolyOnFloor(gamePos, 2);
     if (!nearestRef) return null;
     const res = this.navMeshQuery.getPolyHeight(nearestRef, nearestPoint);
     return res.success && Number.isFinite(res.height) ? res.height : null;
@@ -708,10 +730,7 @@ export class NavManager {
       return undefined;
     }
     try {
-      const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
-        NavManager.gameToNav(gamePos),
-        { halfExtents: { x: 10, y: 10, z: 10 } }
-      );
+      const { nearestRef, nearestPoint } = this.findNearestPolyOnFloor(gamePos);
       if (!nearestRef) return undefined;
       const navPosition = nearestPoint;
       if (
@@ -769,10 +788,7 @@ export class NavManager {
       return undefined;
     }
     try {
-      const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
-        NavManager.gameToNav(gamePos),
-        { halfExtents: { x: 10, y: 10, z: 10 } }
-      );
+      const { nearestRef, nearestPoint } = this.findNearestPolyOnFloor(gamePos);
       if (
         !nearestRef ||
         !Number.isFinite(nearestPoint.x) ||
@@ -813,10 +829,7 @@ export class NavManager {
   teleportAgent(agent: CrowdAgent, gamePos: Float32Array): boolean {
     if (!this._crowdHealthy || !this.isPositionStreamed(gamePos)) return false;
     try {
-      const { nearestRef, nearestPoint } = this.navMeshQuery.findNearestPoly(
-        NavManager.gameToNav(gamePos),
-        { halfExtents: { x: 10, y: 10, z: 10 } }
-      );
+      const { nearestRef, nearestPoint } = this.findNearestPolyOnFloor(gamePos);
       if (
         !nearestRef ||
         !Number.isFinite(nearestPoint.x) ||

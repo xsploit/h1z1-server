@@ -80,6 +80,26 @@ test("streamed random-point queries skip unloaded NPC positions", () => {
   assert.equal(queryCalls, 0);
 });
 
+test("streamed positions accept an adjacent loaded walkable column", () => {
+  const navManager = new NavManager();
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 10,
+    _loadedCols: new Set(["1,0"])
+  });
+
+  assert.equal(
+    navManager.isPositionStreamed(new Float32Array([5, 5, 5, 1])),
+    true
+  );
+  assert.equal(
+    navManager.isPositionStreamed(new Float32Array([35, 5, 5, 1])),
+    false
+  );
+});
+
 test("streamed random-point queries snap to a loaded floor and contain WASM errors", () => {
   const navManager = new NavManager();
   navManager.streaming = true;
@@ -125,11 +145,15 @@ test("streamed random-point queries snap to a loaded floor and contain WASM erro
 
 test("active agents stay on the authored spawn floor", () => {
   const navManager = new NavManager();
+  let queryExtents: unknown;
   navManager.navMeshQuery = {
-    findNearestPoly: () => ({
-      nearestRef: 123,
-      nearestPoint: { x: 4, y: 20, z: 6 }
-    })
+    findNearestPoly: (_position: unknown, options: unknown) => {
+      queryExtents = options;
+      return {
+        nearestRef: 123,
+        nearestPoint: { x: 4, y: 20, z: 6 }
+      };
+    }
   } as never;
   navManager.crowd = {
     addAgent: () => assert.fail("cross-floor agent must not enter crowd")
@@ -139,6 +163,9 @@ test("active agents stay on the authored spawn floor", () => {
     navManager.createAgent(new Float32Array([4, 25, 6, 1])),
     undefined
   );
+  assert.deepEqual(queryExtents, {
+    halfExtents: { x: 10, y: 1.5, z: 10 }
+  });
 
   let addedAt: unknown;
   const expectedAgent = { agentIndex: 1 };
@@ -283,7 +310,7 @@ test("passive agents are rejected when no nav polygon exists", () => {
   );
 });
 
-test("passive-agent teleports snap to a validated nav polygon", () => {
+test("passive-agent teleports stay within the entity's current floor", () => {
   const navManager = new NavManager();
   navManager.streaming = true;
   Object.assign(navManager as object, {
@@ -292,11 +319,15 @@ test("passive-agent teleports snap to a validated nav polygon", () => {
     _tcTileWidth: 10,
     _loadedCols: new Set(["0,0"])
   });
+  let queryExtents: unknown;
   navManager.navMeshQuery = {
-    findNearestPoly: () => ({
-      nearestRef: 123,
-      nearestPoint: { x: 4, y: 7, z: 6 }
-    })
+    findNearestPoly: (_position: unknown, options: unknown) => {
+      queryExtents = options;
+      return {
+        nearestRef: 123,
+        nearestPoint: { x: 4, y: 7, z: 6 }
+      };
+    }
   } as never;
   let teleportedTo: unknown;
   const agent = {
@@ -306,8 +337,11 @@ test("passive-agent teleports snap to a validated nav polygon", () => {
   };
 
   assert.equal(
-    navManager.teleportAgent(agent as never, new Float32Array([5, 100, 5, 1])),
+    navManager.teleportAgent(agent as never, new Float32Array([5, 7, 5, 1])),
     true
   );
+  assert.deepEqual(queryExtents, {
+    halfExtents: { x: 10, y: 1.5, z: 10 }
+  });
   assert.deepEqual(teleportedTo, { x: 4, y: 7, z: 6 });
 });
