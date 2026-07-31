@@ -10865,8 +10865,10 @@ export class ZoneServer2016 extends EventEmitter {
         const c = this._characters[k];
         if (c.isAlive) playerPositions.push(c.state.position);
       }
-      this.navManager.streamAround(playerPositions, () =>
-        this.clearPathfindingAgentReferences()
+      runRuntimePhase("path-stream-window", () =>
+        this.navManager.streamAround(playerPositions, () =>
+          this.clearPathfindingAgentReferences()
+        )
       );
       if (!this.navManager.crowdHealthy) return;
     }
@@ -10876,27 +10878,38 @@ export class ZoneServer2016 extends EventEmitter {
         npc.navAgent &&
         !this.navManager.isPositionStreamed(npc.state.position)
       ) {
-        this.navManager.removeAgent(npc.navAgent);
+        runRuntimePhase("path-npc-remove", () =>
+          this.navManager.removeAgent(npc.navAgent!)
+        );
         npc.navAgent = undefined;
       }
       if (!npc.navAgent) {
         // streaming: an NPC spawned where no navmesh tile was loaded yet gets no
         // agent; retry once a player's window has streamed its tile in (else
         // natural world spawns far from any player simply stay agentless).
-        npc.navAgent =
-          this.navManager.createAgent(npc.state.position) ?? undefined;
+        npc.navAgent = runRuntimePhase(
+          "path-npc-create",
+          () => this.navManager.createAgent(npc.state.position) ?? undefined
+        );
       }
       if (npc.navAgent) {
-        const navPos = npc.navAgent.interpolatedPosition;
+        const navPos = runRuntimePhase(
+          "path-npc-read",
+          () => npc.navAgent!.interpolatedPosition
+        );
         const gamePos = NavManager.navToGame(navPos);
         // The crowd agent already carries the Recast floor Y. Use it as the
         // cliff disambiguation/reference height instead of doing a second
         // nearest-poly query for every NPC on every update.
         const navFloorY = Number.isFinite(gamePos[1]) ? gamePos[1] : null;
-        const ground = this.getGroundInfo(
-          gamePos,
-          navFloorY,
-          npc.state.position[1]
+        const ground = runRuntimePhase(
+          "path-npc-ground",
+          () =>
+            this.getGroundInfo(
+              gamePos,
+              navFloorY,
+              npc.state.position[1]
+            )
         );
         gamePos[1] = ground.selection.height;
         if (
@@ -10916,9 +10929,11 @@ export class ZoneServer2016 extends EventEmitter {
           ) {
             continue;
           }
-          npc.goTo(gamePos);
+          runRuntimePhase("path-npc-replicate", () => npc.goTo(gamePos));
         } else {
-          npc.syncIdleIfStopped();
+          runRuntimePhase("path-npc-replicate", () =>
+            npc.syncIdleIfStopped()
+          );
         }
       }
     }
@@ -10930,13 +10945,17 @@ export class ZoneServer2016 extends EventEmitter {
         continue;
       }
       if (!character.navAgent) {
-        character.navAgent = this.navManager.createPassiveAgent(
-          character.state.position
+        character.navAgent = runRuntimePhase(
+          "path-character-create",
+          () =>
+            this.navManager.createPassiveAgent(character.state.position)
         );
       } else if (
-        !this.navManager.teleportAgent(
-          character.navAgent,
-          character.state.position
+        !runRuntimePhase("path-character-teleport", () =>
+          this.navManager.teleportAgent(
+            character.navAgent!,
+            character.state.position
+          )
         )
       ) {
         character.navAgent = undefined;
@@ -10950,12 +10969,18 @@ export class ZoneServer2016 extends EventEmitter {
         continue;
       }
       if (!vehicle.navAgent) {
-        vehicle.navAgent = this.navManager.createPassiveAgent(
-          vehicle.state.position,
-          2.0
+        vehicle.navAgent = runRuntimePhase(
+          "path-vehicle-create",
+          () =>
+            this.navManager.createPassiveAgent(vehicle.state.position, 2.0)
         );
       } else if (
-        !this.navManager.teleportAgent(vehicle.navAgent, vehicle.state.position)
+        !runRuntimePhase("path-vehicle-teleport", () =>
+          this.navManager.teleportAgent(
+            vehicle.navAgent!,
+            vehicle.state.position
+          )
+        )
       ) {
         vehicle.navAgent = undefined;
       }

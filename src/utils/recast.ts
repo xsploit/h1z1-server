@@ -813,16 +813,20 @@ export class NavManager {
       // unload columns outside the window
       for (const k of toRemove) {
         const [tx, tz] = k.split(",").map(Number);
-        const authoredLayerCount = this._streamCacheLayers.get(k)?.length ?? 0;
-        const res = this.navmesh.getTilesAt(
-          tx,
-          tz,
-          Math.max(8, authoredLayerCount)
-        );
-        for (let i = 0; i < res.tileCount(); i++) {
-          const ref = this.navmesh.getTileRef(res.tiles(i));
-          if (ref) this.navmesh.removeTile(ref);
-        }
+          const authoredLayerCount = this._streamCacheLayers.get(k)?.length ?? 0;
+          const res = this.navmesh.getTilesAt(
+            tx,
+            tz,
+            Math.max(8, authoredLayerCount)
+          );
+          for (let i = 0; i < res.tileCount(); i++) {
+            const ref = this.navmesh.getTileRef(res.tiles(i));
+            if (ref) {
+              runRuntimePhase("nav-mesh-remove-tile", () =>
+                this.navmesh.removeTile(ref)
+              );
+            }
+          }
         this._loadedCols.delete(k);
         removed++;
       }
@@ -848,7 +852,9 @@ export class NavManager {
             const bytes = this.readStreamCacheRange(layer.offset, layer.length);
             const arr = new UnsignedCharArray();
             arr.copy(bytes);
-            const result = this.tilecache.addTile(arr, FREE);
+            const result = runRuntimePhase("nav-cache-add-layer", () =>
+              this.tilecache.addTile(arr, FREE)
+            );
             if (!statusSucceed(result.status)) {
               columnLoaded = false;
               console.error(
@@ -862,7 +868,9 @@ export class NavManager {
           if (!columnLoaded) continue;
           this._cacheLoadedCols.add(k);
         }
-        this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh);
+        runRuntimePhase("nav-cache-build-column", () =>
+          this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh)
+        );
         this._loadedCols.add(k);
         added++;
       }
@@ -910,7 +918,9 @@ export class NavManager {
     if (!this._crowdHealthy) return;
     try {
       this.traceCrowdOperation("agent-removed", agent.agentIndex);
-      this.crowd.removeAgent(agent);
+      runRuntimePhase("nav-agent-remove", () =>
+        this.crowd.removeAgent(agent)
+      );
       this._crowdAgentTraces.delete(agent.agentIndex);
     } catch (error) {
       debugStream(
@@ -1104,13 +1114,15 @@ export class NavManager {
     gamePos: Float32Array,
     horizontalExtent: number = 10
   ) {
-    return this.navMeshQuery.findNearestPoly(NavManager.gameToNav(gamePos), {
-      halfExtents: {
-        x: horizontalExtent,
-        y: MAX_ACTIVE_AGENT_VERTICAL_SNAP,
-        z: horizontalExtent
-      }
-    });
+    return runRuntimePhase("nav-nearest-poly", () =>
+      this.navMeshQuery.findNearestPoly(NavManager.gameToNav(gamePos), {
+        halfExtents: {
+          x: horizontalExtent,
+          y: MAX_ACTIVE_AGENT_VERTICAL_SNAP,
+          z: horizontalExtent
+        }
+      })
+    );
   }
 
   raycast(origin: Float32Array, target: Float32Array) {
@@ -1213,15 +1225,17 @@ export class NavManager {
       // Preserve the exact nearest polygon selected from the authored spawn Y.
       // A random X/Z nudge can select another floor in vertically layered
       // buildings even though the points are only half a metre apart.
-      const agent = this.crowd.addAgent(navPosition, {
-        radius: 0.3,
-        height: 2,
-        maxAcceleration: 1.0,
-        maxSpeed: 1.0,
-        collisionQueryRange: 2.0,
-        pathOptimizationRange: 4.0,
-        separationWeight: 2.0
-      });
+      const agent = runRuntimePhase("nav-agent-add", () =>
+        this.crowd.addAgent(navPosition, {
+          radius: 0.3,
+          height: 2,
+          maxAcceleration: 1.0,
+          maxSpeed: 1.0,
+          collisionQueryRange: 2.0,
+          pathOptimizationRange: 4.0,
+          separationWeight: 2.0
+        })
+      );
       if (
         !Number.isInteger(agent.agentIndex) ||
         agent.agentIndex < 0 ||
@@ -1269,16 +1283,18 @@ export class NavManager {
       ) {
         return undefined;
       }
-      const agent = this.crowd.addAgent(nearestPoint, {
-        radius,
-        height: 2,
-        maxAcceleration: 0,
-        maxSpeed: 0,
-        collisionQueryRange: radius * 2,
-        pathOptimizationRange: 0,
-        separationWeight: 1,
-        updateFlags: 0
-      });
+      const agent = runRuntimePhase("nav-agent-add", () =>
+        this.crowd.addAgent(nearestPoint, {
+          radius,
+          height: 2,
+          maxAcceleration: 0,
+          maxSpeed: 0,
+          collisionQueryRange: radius * 2,
+          pathOptimizationRange: 0,
+          separationWeight: 1,
+          updateFlags: 0
+        })
+      );
       if (
         !Number.isInteger(agent.agentIndex) ||
         agent.agentIndex < 0 ||
@@ -1323,7 +1339,9 @@ export class NavManager {
         agent.agentIndex,
         nearestPoint
       );
-      agent.teleport(nearestPoint);
+      runRuntimePhase("nav-agent-teleport", () =>
+        agent.teleport(nearestPoint)
+      );
       return true;
     } catch (error) {
       this.markCrowdFault(error, "agent teleport");
