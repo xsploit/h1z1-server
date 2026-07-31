@@ -94,14 +94,28 @@ test("POI survivor posts spawn once and reuse stable spawner slots", () => {
     isPvE: false,
     _npcs: {} as Record<string, object>,
     navManager: {
-      findRandomNavPointAround: (position: Float32Array) => position
+      getClosestNavPointVec3: (position: Float32Array) => ({
+        x: position[0] + 0.25,
+        y: position[1],
+        z: position[2] + 0.25
+      })
     }
   };
-  const spawned: number[] = [];
+  const spawned: Array<{
+    spawnerId: number;
+    position: number[];
+    disposition: string;
+    role: string;
+  }> = [];
   manager.createNpc = ((_server: unknown, ...args: unknown[]) => {
     const spawnerId = args[3] as number;
     const characterId = `poi-${spawnerId}`;
-    spawned.push(spawnerId);
+    spawned.push({
+      spawnerId,
+      position: Array.from(args[1] as Float32Array),
+      disposition: args[5] as string,
+      role: args[6] as string
+    });
     manager.spawnedNpcs[spawnerId] = characterId;
     server._npcs[characterId] = {};
     return {};
@@ -109,7 +123,10 @@ test("POI survivor posts spawn once and reuse stable spawner slots", () => {
 
   assert.equal(manager.createPoiHumanNpcs(server as never), 18);
   assert.equal(manager.createPoiHumanNpcs(server as never), 0);
-  assert.equal(new Set(spawned).size, 18);
+  assert.equal(new Set(spawned.map(({ spawnerId }) => spawnerId)).size, 18);
+  assert.ok(spawned.every(({ disposition }) => disposition === "survivor"));
+  assert.equal(spawned.filter(({ role }) => role === "military").length, 5);
+  assert.ok(spawned.every(({ position }) => position[3] === 1));
 });
 
 test("WorldObjectManager", { timeout: 10000 }, async (t) => {

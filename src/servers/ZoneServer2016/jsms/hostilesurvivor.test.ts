@@ -5,6 +5,8 @@ import { createZombie } from "./zombie.jsm";
 import { isMeleeTargetInArc } from "../entities/npc";
 import {
   getBanditHitChance,
+  getHumanNpcRoleConfig,
+  selectHumanNpcWeaponKit,
   selectBanditWeaponKit
 } from "../entities/hostilesurvivor";
 import { Items } from "../models/enums";
@@ -33,6 +35,30 @@ test("bandit firearm kits are weighted and deterministic at boundaries", () => {
   assert.equal(selectBanditWeaponKit(0.35).itemDefinitionId, Items.WEAPON_M9);
   assert.equal(selectBanditWeaponKit(0.799).itemDefinitionId, Items.WEAPON_M9);
   assert.equal(selectBanditWeaponKit(0.8).itemDefinitionId, Items.WEAPON_AR15);
+});
+
+test("POI human roles receive distinct durable combat identities", () => {
+  const military = getHumanNpcRoleConfig("military");
+  const police = getHumanNpcRoleConfig("police");
+  const medic = getHumanNpcRoleConfig("medic");
+
+  assert.equal(military.health, 25000);
+  assert.equal(police.health, 17500);
+  assert.equal(medic.health, 15000);
+  assert.ok(military.health > police.health);
+  assert.ok(police.health > medic.health);
+  assert.equal(
+    selectHumanNpcWeaponKit("military", 0).itemDefinitionId,
+    Items.WEAPON_AR15
+  );
+  assert.equal(
+    selectHumanNpcWeaponKit("police", 0).itemDefinitionId,
+    Items.WEAPON_M9
+  );
+  assert.equal(
+    selectHumanNpcWeaponKit("medic", 0).itemDefinitionId,
+    Items.WEAPON_R380
+  );
 });
 
 test("bandit accuracy falls with range and remains bounded", () => {

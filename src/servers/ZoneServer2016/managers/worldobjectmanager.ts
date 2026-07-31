@@ -95,7 +95,8 @@ import type { ItemFunction } from "types/zoneserver";
 import { Gasser } from "../entities/gasser";
 import {
   HostileSurvivor,
-  HumanNpcDisposition
+  HumanNpcDisposition,
+  HumanNpcRole
 } from "../entities/hostilesurvivor";
 const debug = require("debug")("ZoneServer");
 const apm = require("elastic-apm-node");
@@ -553,9 +554,15 @@ export class WorldObjectManager {
       const existingCharacterId = this.spawnedNpcs[slot.spawnerId];
       if (existingCharacterId && server._npcs[existingCharacterId]) continue;
       const anchor = new Float32Array(slot.position);
-      const position =
-        server.navManager.findRandomNavPointAround(anchor, slot.patrolRadius) ??
-        anchor;
+      const nearestNavPoint = server.navManager.getClosestNavPointVec3(anchor);
+      const position = nearestNavPoint
+        ? new Float32Array([
+            nearestNavPoint.x,
+            nearestNavPoint.y,
+            nearestNavPoint.z,
+            1
+          ])
+        : anchor;
       const modelId =
         slot.slot % 2 === 0
           ? ModelIds.SURVIVOR_MALE_HEAD_01
@@ -567,7 +574,12 @@ export class WorldObjectManager {
         new Float32Array([0, 0, 0, 1]),
         slot.spawnerId,
         undefined,
-        slot.disposition
+        slot.disposition,
+        slot.role
+      );
+      console.info(
+        `[WOM] POI spawn ${slot.label} #${slot.slot + 1} role=${slot.role} ` +
+          `at ${position[0].toFixed(1)},${position[1].toFixed(1)},${position[2].toFixed(1)}`
       );
       created++;
     }
@@ -730,7 +742,9 @@ export class WorldObjectManager {
     rotation: Float32Array,
     spawnerId: number = 0,
     npcId?: NpcIds,
-    humanDisposition: HumanNpcDisposition = "bandit"
+    humanDisposition: HumanNpcDisposition = "bandit",
+    humanRole: HumanNpcRole =
+      humanDisposition === "survivor" ? "survivor" : "bandit"
   ) {
     return runRuntimePhase("npc-spawn", () =>
       this.createNpcUnwatched(
@@ -740,7 +754,8 @@ export class WorldObjectManager {
         rotation,
         spawnerId,
         npcId,
-        humanDisposition
+        humanDisposition,
+        humanRole
       )
     );
   }
@@ -752,7 +767,9 @@ export class WorldObjectManager {
     rotation: Float32Array,
     spawnerId: number = 0,
     npcId?: NpcIds,
-    humanDisposition: HumanNpcDisposition = "bandit"
+    humanDisposition: HumanNpcDisposition = "bandit",
+    humanRole: HumanNpcRole =
+      humanDisposition === "survivor" ? "survivor" : "bandit"
   ) {
     const characterId = generateRandomGuid();
     const transientId = server.getTransientId(characterId);
@@ -850,7 +867,8 @@ export class WorldObjectManager {
           rotation,
           server,
           spawnerId,
-          humanDisposition
+          humanDisposition,
+          humanRole
         );
         break;
       default:

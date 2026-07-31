@@ -14,24 +14,31 @@ test("POI human profiles create stable unique slots", () => {
   assert.equal(slots.filter(({ id }) => id === "hospital").length, 3);
   assert.equal(slots.filter(({ id }) => id.startsWith("police-")).length, 10);
   assert.ok(slots.every(({ disposition }) => disposition === "survivor"));
+  assert.equal(slots.filter(({ role }) => role === "military").length, 5);
+  assert.equal(slots.filter(({ role }) => role === "medic").length, 3);
+  assert.equal(slots.filter(({ role }) => role === "police").length, 10);
 });
 
-test("POI profiles remain bounded to their extracted map anchors", () => {
-  assert.deepEqual(POI_HUMAN_SPAWN_PROFILES[0].position, [
-    844,
-    16.1,
-    -2659,
+test("POI profiles use deterministic surface posts instead of wide random areas", () => {
+  assert.deepEqual(POI_HUMAN_SPAWN_PROFILES[0].positions[0], [
+    930.43,
+    14,
+    -2704.97,
     1
   ]);
-  assert.deepEqual(POI_HUMAN_SPAWN_PROFILES[1].position, [
-    1814.4,
-    99.1,
-    -2788.4,
+  assert.deepEqual(POI_HUMAN_SPAWN_PROFILES[1].positions[0], [
+    1895.92,
+    93.69,
+    -2747.17,
     1
   ]);
   assert.ok(
     POI_HUMAN_SPAWN_PROFILES.every(
-      ({ count, patrolRadius }) => count <= 5 && patrolRadius <= 100
+      ({ positions, patrolRadius }) =>
+        positions.length <= 5 && patrolRadius <= 80
     )
+  );
+  assert.ok(
+    getPoiHumanSpawnSlots().every(({ position }) => position.length === 4)
   );
 });

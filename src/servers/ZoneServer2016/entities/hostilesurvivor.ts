@@ -22,6 +22,20 @@ export interface BanditWeaponKit {
 }
 
 export type HumanNpcDisposition = "bandit" | "survivor";
+export type HumanNpcRole =
+  | "bandit"
+  | "survivor"
+  | "military"
+  | "police"
+  | "medic";
+
+export interface HumanNpcRoleConfig {
+  health: number;
+  playerName: string;
+  patrolRadius: number;
+  detectionRange: number;
+  weaponKits: Array<{ weight: number; kit: BanditWeaponKit }>;
+}
 
 const BANDIT_WEAPON_KITS: BanditWeaponKit[] = [
   {
@@ -44,12 +58,97 @@ const BANDIT_WEAPON_KITS: BanditWeaponKit[] = [
   }
 ];
 
+const SHOTGUN_KIT: BanditWeaponKit = {
+  itemDefinitionId: Items.WEAPON_SHOTGUN,
+  attackRange: 22,
+  attackCooldownSeconds: 1.05,
+  soundRadius: 110
+};
+
+const AK47_KIT: BanditWeaponKit = {
+  itemDefinitionId: Items.WEAPON_AK47,
+  attackRange: 38,
+  attackCooldownSeconds: 0.5,
+  soundRadius: 110
+};
+
+const HUMAN_NPC_ROLE_CONFIGS: Record<HumanNpcRole, HumanNpcRoleConfig> = {
+  bandit: {
+    health: 10000,
+    playerName: "Raider",
+    patrolRadius: 100,
+    detectionRange: 55,
+    weaponKits: [
+      { weight: 0.35, kit: BANDIT_WEAPON_KITS[0] },
+      { weight: 0.45, kit: BANDIT_WEAPON_KITS[1] },
+      { weight: 0.2, kit: BANDIT_WEAPON_KITS[2] }
+    ]
+  },
+  survivor: {
+    health: 12500,
+    playerName: "Survivor",
+    patrolRadius: 80,
+    detectionRange: 55,
+    weaponKits: [
+      { weight: 0.35, kit: BANDIT_WEAPON_KITS[0] },
+      { weight: 0.45, kit: BANDIT_WEAPON_KITS[1] },
+      { weight: 0.2, kit: BANDIT_WEAPON_KITS[2] }
+    ]
+  },
+  military: {
+    health: 25000,
+    playerName: "Military",
+    patrolRadius: 80,
+    detectionRange: 70,
+    weaponKits: [
+      { weight: 0.65, kit: BANDIT_WEAPON_KITS[2] },
+      { weight: 0.25, kit: AK47_KIT },
+      { weight: 0.1, kit: SHOTGUN_KIT }
+    ]
+  },
+  police: {
+    health: 17500,
+    playerName: "Police Officer",
+    patrolRadius: 45,
+    detectionRange: 60,
+    weaponKits: [
+      { weight: 0.75, kit: BANDIT_WEAPON_KITS[1] },
+      { weight: 0.25, kit: SHOTGUN_KIT }
+    ]
+  },
+  medic: {
+    health: 15000,
+    playerName: "Hospital Survivor",
+    patrolRadius: 60,
+    detectionRange: 55,
+    weaponKits: [
+      { weight: 0.65, kit: BANDIT_WEAPON_KITS[0] },
+      { weight: 0.35, kit: BANDIT_WEAPON_KITS[1] }
+    ]
+  }
+};
+
+export function getHumanNpcRoleConfig(role: HumanNpcRole): HumanNpcRoleConfig {
+  return HUMAN_NPC_ROLE_CONFIGS[role];
+}
+
+export function selectHumanNpcWeaponKit(
+  role: HumanNpcRole,
+  randomValue: number = Math.random()
+): BanditWeaponKit {
+  const kits = HUMAN_NPC_ROLE_CONFIGS[role].weaponKits;
+  let cumulativeWeight = 0;
+  for (const entry of kits) {
+    cumulativeWeight += entry.weight;
+    if (randomValue < cumulativeWeight) return entry.kit;
+  }
+  return kits[kits.length - 1].kit;
+}
+
 export function selectBanditWeaponKit(
   randomValue: number = Math.random()
 ): BanditWeaponKit {
-  if (randomValue < 0.35) return BANDIT_WEAPON_KITS[0];
-  if (randomValue < 0.8) return BANDIT_WEAPON_KITS[1];
-  return BANDIT_WEAPON_KITS[2];
+  return selectHumanNpcWeaponKit("bandit", randomValue);
 }
 
 export function getBanditHitChance(distance: number): number {
@@ -62,6 +161,7 @@ function randomItem(items: Items[]): Items {
 
 export class HostileSurvivor extends Npc {
   private readonly weaponKit: BanditWeaponKit;
+  readonly role: HumanNpcRole;
   private reloadReadyAt = 0;
   private shotSequence = 0;
 
@@ -73,7 +173,8 @@ export class HostileSurvivor extends Npc {
     rotation: Float32Array,
     server: ZoneServer2016,
     spawnerId: number = 0,
-    disposition: HumanNpcDisposition = "bandit"
+    disposition: HumanNpcDisposition = "bandit",
+    role: HumanNpcRole = disposition === "survivor" ? "survivor" : "bandit"
   ) {
     super(
       characterId,
@@ -90,7 +191,10 @@ export class HostileSurvivor extends Npc {
       disposition === "survivor" ? Factions.SURVIVOR : Factions.BANDIT;
     this.loadoutId = LoadoutIds.CHARACTER;
     this.usesPlayerReplication = true;
-    this.playerName = disposition === "survivor" ? "Survivor" : "Raider";
+    this.role = role;
+    const roleConfig = getHumanNpcRoleConfig(role);
+    this.health = roleConfig.health;
+    this.playerName = roleConfig.playerName;
     this.movementStance = 66561;
     this.stationaryStance = 1089;
     this.npcMeleeDamage = 1400;
@@ -102,24 +206,9 @@ export class HostileSurvivor extends Npc {
       verticalTolerance: 1.25
     };
     this.infectsTargetOnMelee = false;
-    this.weaponKit = selectBanditWeaponKit();
+    this.weaponKit = selectHumanNpcWeaponKit(role);
 
-    for (const itemDefinitionId of [
-      randomItem([
-        Items.SHIRT_DEFAULT,
-        Items.BLUE_FLANNEL_SHIRT,
-        Items.BROWN_FLANNEL_SHIRT,
-        Items.GREEN_FLANNEL_SHIRT,
-        Items.RED_FLANNEL_SHIRT
-      ]),
-      randomItem([Items.PANTS_DEFAULT, Items.POLICE_SLACKS]),
-      randomItem([Items.BOOTS_TAN, Items.BOOTS_GRAY_BLUE]),
-      randomItem([
-        Items.BACKPACK_BLUE_ORANGE,
-        Items.BACKPACK_MILITARY_TAN,
-        Items.BACKPACK_MILITARY_GREEN_CAMO
-      ])
-    ]) {
+    for (const itemDefinitionId of this.getRoleLoadout(role)) {
       this.equipItem(server, server.generateItem(itemDefinitionId), false);
     }
 
@@ -153,8 +242,8 @@ export class HostileSurvivor extends Npc {
         canFeed: false,
         fixedPatrolOrigin: true,
         patrolWakeSeconds: 12,
-        patrolRadius: 100,
-        detectionRange: 55,
+        patrolRadius: roleConfig.patrolRadius,
+        detectionRange: roleConfig.detectionRange,
         attackRange: this.weaponKit.attackRange,
         attackImpactSeconds: 0.12,
         attackRecoverySeconds: 0.3,
@@ -168,6 +257,57 @@ export class HostileSurvivor extends Npc {
           this.fireRangedWeapon(targetCharacterId)
       });
     }
+  }
+
+  private getRoleLoadout(role: HumanNpcRole): Items[] {
+    if (role === "military") {
+      return [
+        Items.HEAVY_ASSAULT_POLO_SHIRT,
+        Items.HEAVY_ASSAULT_MILITARY_PANTS,
+        Items.HEAVY_ASSAULT_COMBAT_BOOTS,
+        Items.DEFAULT_TACTICAL_HELMET,
+        Items.KEVLAR_DEFAULT,
+        randomItem([
+          Items.BACKPACK_MILITARY_TAN,
+          Items.BACKPACK_MILITARY_GREEN_CAMO
+        ])
+      ];
+    }
+    if (role === "police") {
+      return [
+        Items.POLICE_SHIRT,
+        Items.POLICE_SLACKS,
+        Items.BOOTS_GRAY_BLUE,
+        Items.POLICE_HAT,
+        Items.POLICE_BODY_ARMOR,
+        Items.BACKPACK_MILITARY_TAN
+      ];
+    }
+    if (role === "medic") {
+      return [
+        Items.PARAMEDIC_UNIFORM,
+        Items.PARAMEDIC_SLACKS,
+        Items.BOOTS_GRAY_BLUE,
+        Items.SURGEON_MASK_AQUA,
+        Items.BACKPACK_BLUE_ORANGE
+      ];
+    }
+    return [
+      randomItem([
+        Items.SHIRT_DEFAULT,
+        Items.BLUE_FLANNEL_SHIRT,
+        Items.BROWN_FLANNEL_SHIRT,
+        Items.GREEN_FLANNEL_SHIRT,
+        Items.RED_FLANNEL_SHIRT
+      ]),
+      randomItem([Items.PANTS_DEFAULT, Items.POLICE_SLACKS]),
+      randomItem([Items.BOOTS_TAN, Items.BOOTS_GRAY_BLUE]),
+      randomItem([
+        Items.BACKPACK_BLUE_ORANGE,
+        Items.BACKPACK_MILITARY_TAN,
+        Items.BACKPACK_MILITARY_GREEN_CAMO
+      ])
+    ];
   }
 
   private getShotOrigin(): Float32Array {
