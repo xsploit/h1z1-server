@@ -74,9 +74,9 @@ const MAX_ACTIVE_AGENT_VERTICAL_SNAP = 1.5;
 
 // Streaming navmesh: a whole-map FINE navmesh stored as a compressed TileCache
 // on disk (data/2016/collision/z1_cache_*.bin, format "TSET", built by the
-// h1emu-recast pipeline compiled fine, cs=0.2). The whole compressed tilecache
-// (~600 MB / ~108k layers) is preloaded into RAM at boot; only the tiles within
-// STREAM_RADIUS of a player are materialised into the live navmesh
+// h1emu-recast pipeline compiled fine, cs=0.2). The compressed tilecache
+// (~600 MB / ~108k layers) stays disk-backed; only the tiles within
+// STREAM_RADIUS of a player are loaded and materialised into the live navmesh
 // (buildNavMeshTilesAt), the rest are removed, so the navmesh stays bounded and
 // under the 32-bit polyref budget. Grid params (orig, tileWidth) come from the
 // TSET header. Construction obstacles carve natively via the tilecache.
@@ -84,12 +84,25 @@ const STREAM_CACHE_DIR =
   process.env.NAV_CACHE_DIR ?? __dirname + "/../../data/2016/collision";
 const STREAM_RADIUS = 300; // materialise tiles within this many meters of a player
 const STREAM_INTERVAL = 1000; // ms between window updates
+const STREAM_CACHE_RECYCLE_LAYERS = 3072;
 // Keep compressed layers out of the WebAssembly heap until their columns are
 // actually visited. The generated whole-map cache has ~110k layers / ~600 MB;
 // preloading all of it leaves too little WASM address space for DetourCrowd and
 // eventually corrupts the native heap. This budget covers many distinct player
 // windows while keeping the cache bounded to a fraction of the old footprint.
 const STREAM_RUNTIME_CACHE_LAYERS = 32768;
+
+export function shouldRecycleStreamingCache(
+  currentLayers: number,
+  incomingLayers: number,
+  recycleThreshold: number = STREAM_CACHE_RECYCLE_LAYERS
+): boolean {
+  return (
+    currentLayers > 0 &&
+    incomingLayers > 0 &&
+    currentLayers + incomingLayers > recycleThreshold
+  );
+}
 
 type StreamCachePart = {
   path: string;
@@ -128,6 +141,7 @@ export class NavManager {
   lastTimeCall: number = Date.now();
   updateFrequency = 1 / 5;
   obstacleCount = 0;
+  private readonly _knownObstacles = new Set<BoxObstacle>();
   private readonly _activeObstacles = new Set<BoxObstacle>();
   // streaming state
   streaming = false;
@@ -141,6 +155,16 @@ export class NavManager {
   private _streamCacheLength = 0;
   private _streamCacheLayerCount = 0;
   private _streamCacheCapacity = STREAM_RUNTIME_CACHE_LAYERS;
+  private _streamRuntimeRecycles = 0;
+  private _streamMeshConfig?: Parameters<typeof NavMeshParams.create>[0];
+  private _streamCacheConfig?: Parameters<
+    typeof DetourTileCacheParams.create
+  >[0];
+  private _streamAllocator?: any;
+  private _streamCompressor?: any;
+  private _streamMeshProcess?: ReturnType<
+    typeof createDefaultTileCacheMeshProcess
+  >;
   private _lastStreamMs = 0;
   private _crowdMaxAgents = 2000;
   private _crowdMaxAgentRadius = 2.0;
@@ -523,10 +547,88 @@ export class NavManager {
     console.timeEnd("[NAV] Navmesh loaded");
   }
 
-  // Streaming mode: preload the whole compressed TileCache (z1_cache_*.bin, TSET
-  // format from h1emu-recast) into RAM, build an empty tiled navmesh, and add
-  // every compressed layer to the tilecache. Tiles are materialised on demand
-  // around players in streamAround() (buildNavMeshTilesAt).
+  private initializeStreamingRuntime(): void {
+    if (!this._streamMeshConfig || !this._streamCacheConfig) {
+      throw new Error("[NAV] streaming runtime configuration is unavailable");
+    }
+
+    const allocator = new (Raw as any).RecastLinearAllocator(1 << 20);
+    const compressor = new (Raw as any).RecastFastLZCompressor();
+    const meshProcess = createDefaultTileCacheMeshProcess();
+    const tilecache = new TileCache();
+    if (
+      !tilecache.init(
+        DetourTileCacheParams.create(this._streamCacheConfig),
+        allocator,
+        compressor,
+        meshProcess
+      )
+    ) {
+      Raw.destroy(allocator);
+      Raw.destroy(compressor);
+      Raw.destroy(meshProcess.raw);
+      throw new Error("[NAV] failed to initialize streaming tilecache");
+    }
+
+    const navmesh = new NavMesh();
+    if (!navmesh.initTiled(NavMeshParams.create(this._streamMeshConfig))) {
+      tilecache.destroy();
+      Raw.destroy(allocator);
+      Raw.destroy(compressor);
+      Raw.destroy(meshProcess.raw);
+      throw new Error("[NAV] failed to initialize streaming navmesh");
+    }
+
+    this.tilecache = tilecache;
+    this.navmesh = navmesh;
+    this.navMeshQuery = new NavMeshQuery(navmesh);
+    this._streamAllocator = allocator;
+    this._streamCompressor = compressor;
+    this._streamMeshProcess = meshProcess;
+    this.createCrowd();
+  }
+
+  private destroyStreamingRuntime(): void {
+    this.crowd?.destroy();
+    this.navMeshQuery?.destroy();
+    this.navmesh?.destroy();
+    this.tilecache?.destroy();
+    if (this._streamAllocator) Raw.destroy(this._streamAllocator);
+    if (this._streamCompressor) Raw.destroy(this._streamCompressor);
+    if (this._streamMeshProcess) Raw.destroy(this._streamMeshProcess.raw);
+    this._streamAllocator = undefined;
+    this._streamCompressor = undefined;
+    this._streamMeshProcess = undefined;
+  }
+
+  private recycleStreamingRuntime(): void {
+    this.destroyStreamingRuntime();
+    this._loadedCols.clear();
+    this._cacheLoadedCols.clear();
+    this._streamCacheLayerCount = 0;
+    this.obstaclesRequestsPending = 0;
+    this._activeObstacles.clear();
+    this._obstacleUpdatesHealthy = true;
+    this._incompleteObstacleUpdateTicks = 0;
+    this._obstacleBacklogWarningReported = false;
+    this.initializeStreamingRuntime();
+
+    this._streamRuntimeRecycles++;
+    this.traceCrowdOperation(
+      "stream-runtime-recycled",
+      undefined,
+      undefined,
+      `recycles=${this._streamRuntimeRecycles},knownObstacles=${this.obstacleCount}`
+    );
+    console.log(
+      `[NAV] streaming runtime recycled (${this._streamRuntimeRecycles}); ` +
+        `${this.obstacleCount} logical obstacles retained`
+    );
+  }
+
+  // Streaming mode: index the disk-backed compressed TileCache
+  // (z1_cache_*.bin, TSET format from h1emu-recast), build an empty tiled
+  // navmesh, and load/materialise layers on demand around players.
   private async loadNavStreaming() {
     console.time("[NAV] streaming tilecache loaded");
     await initRecast();
@@ -598,6 +700,8 @@ export class NavManager {
     this._tcOrigZ = mesh.orig.z;
     this._tcTileWidth = mesh.tileWidth;
     this._streamCacheCapacity = cache.maxTiles;
+    this._streamMeshConfig = mesh;
+    this._streamCacheConfig = cache;
 
     // Build a compact JS index over the split TSET files. Only the 28-byte
     // entry/layer headers are inspected; compressed layer payloads remain on
@@ -628,27 +732,9 @@ export class NavManager {
       );
     }
 
-    const meshProcess = createDefaultTileCacheMeshProcess();
-    this.tilecache = new TileCache();
-    if (
-      !this.tilecache.init(
-        DetourTileCacheParams.create(cache),
-        new (Raw as any).RecastLinearAllocator(1 << 20),
-        new (Raw as any).RecastFastLZCompressor(),
-        meshProcess
-      )
-    ) {
-      throw new Error("[NAV] failed to initialize streaming tilecache");
-    }
-    this.navmesh = new NavMesh();
-    if (!this.navmesh.initTiled(NavMeshParams.create(mesh))) {
-      throw new Error("[NAV] failed to initialize streaming navmesh");
-    }
-
-    this.navMeshQuery = new NavMeshQuery(this.navmesh);
     this._crowdMaxAgents = 1000;
     this._crowdMaxAgentRadius = 2.5;
-    this.createCrowd();
+    this.initializeStreamingRuntime();
     this.streaming = true;
     console.timeEnd("[NAV] streaming tilecache loaded");
     console.log(
@@ -694,18 +780,35 @@ export class NavManager {
         }
       }
     }
-    const toRemove = [...this._loadedCols].filter((k) => !want.has(k));
-    const toAdd = [...want].filter((k) => !this._loadedCols.has(k));
+    let toRemove = [...this._loadedCols].filter((k) => !want.has(k));
+    let toAdd = [...want].filter((k) => !this._loadedCols.has(k));
     if (!toRemove.length && !toAdd.length) return false;
+    const incomingCacheLayers = toAdd.reduce(
+      (total, key) =>
+        total +
+        (this._cacheLoadedCols.has(key)
+          ? 0
+          : (this._streamCacheLayers.get(key)?.length ?? 0)),
+      0
+    );
+    const recycleRuntime = shouldRecycleStreamingCache(
+      this._streamCacheLayerCount,
+      incomingCacheLayers
+    );
+    if (recycleRuntime) {
+      toRemove = [];
+      toAdd = [...want];
+    }
     this.traceCrowdOperation(
       "stream-mutation",
       undefined,
       undefined,
-      `add=${toAdd.length},remove=${toRemove.length},players=${validPositions.length}`
+      `add=${toAdd.length},remove=${toRemove.length},players=${validPositions.length},recycle=${recycleRuntime}`
     );
     let removed = 0;
     let added = 0;
     const success = this.mutateNavMesh(() => {
+      if (recycleRuntime) this.recycleStreamingRuntime();
       // unload columns outside the window
       for (const k of toRemove) {
         const [tx, tz] = k.split(",").map(Number);
@@ -769,6 +872,7 @@ export class NavManager {
         `+${added} -${removed} columns (loaded: ${this._loadedCols.size}, players: ${positions.length})`
       );
     }
+    if (success) this.syncStreamedObstacles();
     return success;
   }
 
@@ -860,13 +964,92 @@ export class NavManager {
     return new Float32Array([v.x, v.y, v.z, 0]);
   }
 
+  private isObstacleInStreamWindow(obstacle: BoxObstacle): boolean {
+    if (!this.streaming) return true;
+    if (this._tcTileWidth <= 0) return false;
+    const minTx = Math.floor(
+      (obstacle.position.x - obstacle.halfExtents.x - this._tcOrigX) /
+        this._tcTileWidth
+    );
+    const maxTx = Math.floor(
+      (obstacle.position.x + obstacle.halfExtents.x - this._tcOrigX) /
+        this._tcTileWidth
+    );
+    const minTz = Math.floor(
+      (obstacle.position.z - obstacle.halfExtents.z - this._tcOrigZ) /
+        this._tcTileWidth
+    );
+    const maxTz = Math.floor(
+      (obstacle.position.z + obstacle.halfExtents.z - this._tcOrigZ) /
+        this._tcTileWidth
+    );
+    for (let tx = minTx; tx <= maxTx; tx++) {
+      for (let tz = minTz; tz <= maxTz; tz++) {
+        if (this._loadedCols.has(`${tx},${tz}`)) return true;
+      }
+    }
+    return false;
+  }
+
+  private syncStreamedObstacles(): void {
+    if (
+      !this.streaming ||
+      !this._obstacleUpdatesHealthy ||
+      this.obstaclesRequestsPending ||
+      !this._loadedCols.size
+    ) {
+      return;
+    }
+
+    let queued = 0;
+    for (const obstacle of this._activeObstacles) {
+      if (
+        this._knownObstacles.has(obstacle) &&
+        this.isObstacleInStreamWindow(obstacle)
+      ) {
+        continue;
+      }
+      const result = this.tilecache.removeObstacle(obstacle);
+      if (!result.success) continue;
+      this._activeObstacles.delete(obstacle);
+      this.obstaclesRequestsPending++;
+      if (++queued >= MAX_PENDING_OBSTACLE) return;
+    }
+    if (queued) return;
+
+    for (const obstacle of this._knownObstacles) {
+      if (
+        this._activeObstacles.has(obstacle) ||
+        !this.isObstacleInStreamWindow(obstacle)
+      ) {
+        continue;
+      }
+      const result = this.tilecache.addBoxObstacle(
+        obstacle.position,
+        obstacle.halfExtents,
+        obstacle.angle
+      );
+      if (!result.success) return;
+      Object.assign(obstacle, result.obstacle);
+      this.tilecache.obstacles.set(obstacle.ref, obstacle);
+      this._activeObstacles.add(obstacle);
+      this.obstaclesRequestsPending++;
+      if (++queued >= MAX_PENDING_OBSTACLE) return;
+    }
+  }
+
   removeObstacle(obstacle: BoxObstacle) {
+    if (!this._knownObstacles.delete(obstacle)) return;
+    this.obstacleCount--;
+    if (this.streaming) {
+      this.syncStreamedObstacles();
+      return;
+    }
     if (!this._activeObstacles.delete(obstacle)) return;
     if (this._obstacleUpdatesHealthy) {
       const result = this.tilecache.removeObstacle(obstacle);
       if (result.success) this.obstaclesRequestsPending++;
     }
-    this.obstacleCount--;
   }
 
   addObstacle(
@@ -878,17 +1061,32 @@ export class NavManager {
       return null;
     }
     if (!this._obstacleUpdatesHealthy) return null;
+    const navPosition = NavManager.gameToNav(position);
+    if (this.streaming) {
+      const obstacle: BoxObstacle = {
+        type: "box",
+        ref: 0,
+        position: navPosition,
+        halfExtents,
+        angle: yRotation
+      };
+      this._knownObstacles.add(obstacle);
+      this.obstacleCount++;
+      this.syncStreamedObstacles();
+      return obstacle;
+    }
     if (this.obstaclesRequestsPending >= MAX_PENDING_OBSTACLE) {
       if (!this.processPendingObstacleRequests()) return null;
     }
     const { success, obstacle } = this.tilecache.addBoxObstacle(
-      NavManager.gameToNav(position),
+      navPosition,
       halfExtents,
       yRotation
     );
     if (success) {
       this.obstaclesRequestsPending++;
       this.obstacleCount++;
+      this._knownObstacles.add(obstacle);
       this._activeObstacles.add(obstacle);
       return obstacle;
     }
@@ -933,6 +1131,7 @@ export class NavManager {
     if (this.obstaclesRequestsPending) {
       this.processPendingObstacleRequests();
     }
+    this.syncStreamedObstacles();
     debug(
       `requests: ${this.obstaclesRequestsPending}, total: ${this.tilecache.obstacles.size}`
     );

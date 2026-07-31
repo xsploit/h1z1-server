@@ -119,6 +119,11 @@ function setObstacle(
   position: Float32Array,
   rotation: Float32Array
 ): BoxObstacle | null {
+  // The fine streaming cache is generated from the complete world collision
+  // mesh, including these map-authored fences. Registering them again as
+  // TileCache obstacles duplicates baked geometry and can exceed a tile's
+  // polygon budget. Player construction remains dynamically carved.
+  if (server.navManager.streaming) return null;
   const yaw = rotation[1];
   switch (actorModelId) {
     case ModelIds.FENCES_WOOD_PLANKS_GREY_PLANK:

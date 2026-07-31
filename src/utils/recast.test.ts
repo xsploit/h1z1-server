@@ -3,6 +3,7 @@ import test from "node:test";
 import type { BoxObstacle } from "recast-navigation";
 import {
   NavManager,
+  shouldRecycleStreamingCache,
   shouldUseStreamingNav,
   sortTileCacheParts
 } from "./recast";
@@ -25,6 +26,13 @@ test("a present streaming cache is used unless explicitly disabled", () => {
   assert.equal(shouldUseStreamingNav("0", true), false);
   assert.equal(shouldUseStreamingNav(undefined, false), false);
   assert.equal(shouldUseStreamingNav("1", false), true);
+});
+
+test("streaming cache recycling starts only when new layers cross the safe watermark", () => {
+  assert.equal(shouldRecycleStreamingCache(0, 4000), false);
+  assert.equal(shouldRecycleStreamingCache(3000, 0), false);
+  assert.equal(shouldRecycleStreamingCache(2000, 1072), false);
+  assert.equal(shouldRecycleStreamingCache(2000, 1073), true);
 });
 
 test("removed tile-cache obstacles release their capacity exactly once", () => {
@@ -54,6 +62,74 @@ test("removed tile-cache obstacles release their capacity exactly once", () => {
   navManager.removeObstacle(obstacle);
   assert.equal(navManager.obstacleCount, 0);
   assert.equal(removeCalls, 1);
+});
+
+test("streaming activates only obstacles intersecting the loaded window", () => {
+  const navManager = new NavManager();
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 10,
+    _loadedCols: new Set(["0,0"])
+  });
+  let nextRef = 1;
+  let addCalls = 0;
+  let removeCalls = 0;
+  navManager.tilecache = {
+    obstacles: new Map(),
+    addBoxObstacle: (
+      position: { x: number; y: number; z: number },
+      halfExtents: { x: number; y: number; z: number },
+      angle: number
+    ) => {
+      addCalls++;
+      return {
+        success: true,
+        obstacle: {
+          type: "box",
+          ref: nextRef++,
+          position,
+          halfExtents,
+          angle
+        }
+      };
+    },
+    removeObstacle: () => {
+      removeCalls++;
+      return { success: true };
+    }
+  } as never;
+
+  const near = navManager.addObstacle(new Float32Array([5, 0, 5, 1]), {
+    x: 1,
+    y: 1,
+    z: 1
+  });
+  const far = navManager.addObstacle(new Float32Array([55, 0, 5, 1]), {
+    x: 1,
+    y: 1,
+    z: 1
+  });
+  assert.ok(near);
+  assert.ok(far);
+  assert.equal(addCalls, 1);
+  assert.equal(navManager.obstacleCount, 2);
+
+  navManager.obstaclesRequestsPending = 0;
+  Object.assign(navManager as object, { _loadedCols: new Set(["5,0"]) });
+  (
+    navManager as unknown as { syncStreamedObstacles(): void }
+  ).syncStreamedObstacles();
+  assert.equal(removeCalls, 1);
+  assert.equal(addCalls, 1);
+
+  navManager.obstaclesRequestsPending = 0;
+  (
+    navManager as unknown as { syncStreamedObstacles(): void }
+  ).syncStreamedObstacles();
+  assert.equal(addCalls, 2);
+  assert.equal(far.ref, 2);
 });
 
 test("tile-cache rebuild work is bounded per server tick", () => {

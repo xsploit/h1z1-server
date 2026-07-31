@@ -207,6 +207,19 @@ async function main() {
       if (!server.navManager.crowdHealthy) {
         throw new Error(`crowd faulted on live update ${i}`);
       }
+      if (!server.navManager.obstacleUpdatesHealthy) {
+        const activeObstacles = [
+          ...(
+            server.navManager as unknown as {
+              _activeObstacles: Set<unknown>;
+            }
+          )._activeObstacles
+        ];
+        throw new Error(
+          `obstacle updates faulted on live update ${i}; active=${activeObstacles.length}; ` +
+            `tail=${JSON.stringify(activeObstacles.slice(-5))}`
+        );
+      }
     }
   } finally {
     if (activeObstacle) {
