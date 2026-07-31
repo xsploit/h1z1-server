@@ -80,6 +80,7 @@ import { Deer } from "../entities/deer";
 import { Wolf } from "../entities/wolf";
 import { Bear } from "../entities/bear";
 import { scheduler } from "node:timers/promises";
+import { runRuntimePhase } from "../../../utils/runtimewatchdog";
 import {
   ContainerPropSnapshot,
   ItemDespawnSnapshot,
@@ -692,6 +693,28 @@ export class WorldObjectManager {
   }
 
   createNpc(
+    server: ZoneServer2016,
+    modelId: number,
+    position: Float32Array,
+    rotation: Float32Array,
+    spawnerId: number = 0,
+    npcId?: NpcIds,
+    humanDisposition: HumanNpcDisposition = "bandit"
+  ) {
+    return runRuntimePhase("npc-spawn", () =>
+      this.createNpcUnwatched(
+        server,
+        modelId,
+        position,
+        rotation,
+        spawnerId,
+        npcId,
+        humanDisposition
+      )
+    );
+  }
+
+  private createNpcUnwatched(
     server: ZoneServer2016,
     modelId: number,
     position: Float32Array,
