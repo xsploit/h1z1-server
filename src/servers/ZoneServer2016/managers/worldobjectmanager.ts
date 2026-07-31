@@ -90,6 +90,7 @@ import {
   SpawnedItemSnapshot
 } from "./lootspawnworker";
 import { buildNpcSpawnCandidates, getNpcModelsForRoll } from "./npcspawn";
+import { getPoiHumanSpawnSlots } from "./poihumanspawns";
 import type { ItemFunction } from "types/zoneserver";
 import { Gasser } from "../entities/gasser";
 import {
@@ -542,6 +543,36 @@ export class WorldObjectManager {
       );
       await this.createNpcs(server);
     }
+    this.createPoiHumanNpcs(server);
+  }
+
+  createPoiHumanNpcs(server: ZoneServer2016): number {
+    if (!server._soloMode && !server.isPvE) return 0;
+    let created = 0;
+    for (const slot of getPoiHumanSpawnSlots()) {
+      const existingCharacterId = this.spawnedNpcs[slot.spawnerId];
+      if (existingCharacterId && server._npcs[existingCharacterId]) continue;
+      const anchor = new Float32Array(slot.position);
+      const position =
+        server.navManager.findRandomNavPointAround(anchor, slot.patrolRadius) ??
+        anchor;
+      const modelId =
+        slot.slot % 2 === 0
+          ? ModelIds.SURVIVOR_MALE_HEAD_01
+          : ModelIds.SURVIVAL_FEMALE_HEAD_01;
+      this.createNpc(
+        server,
+        modelId,
+        position,
+        new Float32Array([0, 0, 0, 1]),
+        slot.spawnerId,
+        undefined,
+        slot.disposition
+      );
+      created++;
+    }
+    if (created) console.info(`[WOM] POI survivors created: ${created}`);
+    return created;
   }
 
   private async despawnEntities(server: ZoneServer2016) {

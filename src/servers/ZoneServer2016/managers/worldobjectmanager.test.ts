@@ -87,6 +87,31 @@ test("NPC registration adds world spawns to the client visibility grid", () => {
   assert.equal(indexed, npc);
 });
 
+test("POI survivor posts spawn once and reuse stable spawner slots", () => {
+  const manager = new WorldObjectManager();
+  const server = {
+    _soloMode: true,
+    isPvE: false,
+    _npcs: {} as Record<string, object>,
+    navManager: {
+      findRandomNavPointAround: (position: Float32Array) => position
+    }
+  };
+  const spawned: number[] = [];
+  manager.createNpc = ((_server: unknown, ...args: unknown[]) => {
+    const spawnerId = args[3] as number;
+    const characterId = `poi-${spawnerId}`;
+    spawned.push(spawnerId);
+    manager.spawnedNpcs[spawnerId] = characterId;
+    server._npcs[characterId] = {};
+    return {};
+  }) as never;
+
+  assert.equal(manager.createPoiHumanNpcs(server as never), 18);
+  assert.equal(manager.createPoiHumanNpcs(server as never), 0);
+  assert.equal(new Set(spawned).size, 18);
+});
+
 test("WorldObjectManager", { timeout: 10000 }, async (t) => {
   await t.test("containerLootSpawners", () => {
     const manager = new LootTableManager();
