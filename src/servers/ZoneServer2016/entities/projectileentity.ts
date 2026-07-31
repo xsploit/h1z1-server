@@ -187,7 +187,10 @@ export class ProjectileEntity extends BaseLightweightCharacter {
             this.characterId,
             "Character.PlayWorldCompositeEffect",
             {
-              characterId: this.characterId,
+              // The projectile is removed immediately after this packet. Keep
+              // the effect world-space so the client never resolves an entity
+              // that may already have been removed on its render thread.
+              characterId: "",
               effectId: effectId,
               position: this.state.position
             }
@@ -199,7 +202,7 @@ export class ProjectileEntity extends BaseLightweightCharacter {
             this.characterId,
             "Character.PlayWorldCompositeEffect",
             {
-              characterId: this.characterId,
+              characterId: "",
               effectId: effectId,
               position: this.state.position
             }
@@ -272,6 +275,8 @@ export class ProjectileEntity extends BaseLightweightCharacter {
   }
 
   destroy(server: ZoneServer2016): boolean {
+    clearTimeout(this.triggerTimeout);
+    clearTimeout(this.destroyTimeout);
     clearInterval(this.gasDamageInterval);
     return server.deleteEntity(this.characterId, server._throwableProjectiles);
   }
