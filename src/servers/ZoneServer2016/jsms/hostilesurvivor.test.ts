@@ -130,6 +130,48 @@ test("human raider reuses zombie acquisition and chase behavior", () => {
   assert.equal(raider.attackRecoverySeconds, 0.9);
 });
 
+test("human patrol mode keeps roaming instead of becoming permanently idle", () => {
+  const patrolRequests: Float32Array[] = [];
+  const npc = {
+    characterId: "bandit",
+    transientId: 10,
+    faction: Factions.BANDIT,
+    state: { position: new Float32Array([10, 0, 10, 1]) },
+    navAgent: {
+      requestMoveTarget: (target: Float32Array) => patrolRequests.push(target)
+    },
+    lookAtTarget: null,
+    setSpeed: () => undefined,
+    stopMovement: () => undefined,
+    setAnimation: () => undefined,
+    playAnimation: () => undefined,
+    lookAt: () => undefined
+  };
+  const server = {
+    navManager: {
+      findRandomNavPointAround: (_origin: Float32Array, radius: number) =>
+        new Float32Array([radius, 0, radius, 1]),
+      getClosestNavPointVec3: (target: Float32Array) => target
+    },
+    aiTargetSpatialMap: new Map(),
+    sounds: [],
+    _characters: {},
+    _npcs: { bandit: npc }
+  };
+
+  const raider = createZombie(npc as never, server as never, {
+    canFeed: false,
+    persistentWander: true,
+    patrolRadius: 100
+  });
+  raider.tick(51);
+
+  assert.equal(raider.state, "wander");
+  assert.equal(raider.agitation, 50);
+  assert.deepEqual(Array.from(raider.wanderOrigin), [10, 0, 10, 1]);
+  assert.ok(patrolRequests.length >= 2);
+});
+
 test("raider melee lands once at the configured animation impact", () => {
   const playerPosition = new Float32Array([0, 0, 1, 1]);
   let damageCalls = 0;

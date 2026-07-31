@@ -118,6 +118,8 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   isEatingCorpse: boolean;
   lastAttackTime: number;
   wanderOrigin: Float32Array;
+  persistentWander: boolean;
+  patrolRadius: number;
   isCoveringEars: boolean;
   coverEarsTimer: number;
   canFeed: boolean;
@@ -150,6 +152,8 @@ export interface ZombieAiOptions {
   playAttackAnimation?: boolean;
   canAttackTarget?: (targetCharacterId: string) => boolean;
   performAttack?: (targetCharacterId: string) => void;
+  persistentWander?: boolean;
+  patrolRadius?: number;
 }
 
 const BASE_SPEED = 1.0;
@@ -161,9 +165,10 @@ const STUMBLE_CHANCE = 0.001;
 
 function pickPatrolPoint(
   server: ZoneServer2016,
-  center: Float32Array
+  center: Float32Array,
+  radius = 60
 ): Float32Array | null {
-  return server.navManager.findRandomNavPointAround(center, 60);
+  return server.navManager.findRandomNavPointAround(center, radius);
 }
 
 function moveToward(
@@ -291,8 +296,14 @@ function enterWander(zombie: ZombieInstance): void {
   zombie.agitation = AGITATION_INITIAL;
   zombie.targetCharacterId = null;
   zombie.npc.lookAtTarget = null;
-  zombie.wanderOrigin = zombie.npc.state.position.slice() as Float32Array;
-  const pt = pickPatrolPoint(zombie.server, zombie.wanderOrigin);
+  if (!zombie.persistentWander) {
+    zombie.wanderOrigin = zombie.npc.state.position.slice() as Float32Array;
+  }
+  const pt = pickPatrolPoint(
+    zombie.server,
+    zombie.wanderOrigin,
+    zombie.patrolRadius
+  );
   if (pt) {
     zombie.targetPos = pt;
     moveToward(zombie.npc, pt, zombie.server);
@@ -358,6 +369,10 @@ export function createZombie(
         decayAgitation(zombie, dt);
 
         if (zombie.agitation === 0) {
+          if (zombie.persistentWander) {
+            enterWander(zombie);
+            return;
+          }
           zombie.event(ZombieEvents.IdleTimeout);
           return;
         }
@@ -367,7 +382,11 @@ export function createZombie(
           getDistance2d(zombie.npc.state.position, zombie.targetPos) < 3;
 
         if (arrived || zombie.targetPos == null) {
-          const pt = pickPatrolPoint(zombie.server, zombie.wanderOrigin);
+          const pt = pickPatrolPoint(
+            zombie.server,
+            zombie.wanderOrigin,
+            zombie.patrolRadius
+          );
           if (pt) {
             zombie.targetPos = pt;
             moveToward(zombie.npc, pt, zombie.server);
@@ -741,7 +760,13 @@ export function createZombie(
   zombie.hunger = 0;
   zombie.agitation = AGITATION_INITIAL;
   zombie.wanderOrigin = npc.state.position.slice() as Float32Array;
-  const initialPatrol = pickPatrolPoint(server, npc.state.position);
+  zombie.persistentWander = options.persistentWander ?? false;
+  zombie.patrolRadius = options.patrolRadius ?? 60;
+  const initialPatrol = pickPatrolPoint(
+    server,
+    npc.state.position,
+    zombie.patrolRadius
+  );
   zombie.targetPos = initialPatrol;
   if (initialPatrol) {
     moveToward(npc, initialPatrol, server);
