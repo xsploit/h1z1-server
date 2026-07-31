@@ -122,6 +122,7 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   fixedPatrolOrigin: boolean;
   patrolWakeSeconds: number;
   patrolRadius: number;
+  loseTargetRange: number;
   isCoveringEars: boolean;
   coverEarsTimer: number;
   canFeed: boolean;
@@ -157,6 +158,7 @@ export interface ZombieAiOptions {
   fixedPatrolOrigin?: boolean;
   patrolWakeSeconds?: number;
   patrolRadius?: number;
+  loseTargetRange?: number;
 }
 
 const BASE_SPEED = 1.0;
@@ -205,6 +207,7 @@ function trySeePlayer(zombie: ZombieInstance): boolean {
   const pos = zombie.npc.state.position;
   const cx = Math.floor(pos[0] / sz);
   const cz = Math.floor(pos[2] / sz);
+  let nearestTarget: { id: string; distance: number } | null = null;
   for (let dx = -1; dx <= 1; dx++) {
     for (let dz = -1; dz <= 1; dz++) {
       const bucket = zombie.server.aiTargetSpatialMap.get(
@@ -214,15 +217,19 @@ function trySeePlayer(zombie: ZombieInstance): boolean {
       for (const entry of bucket) {
         if (entry.id === zombie.npc.characterId) continue;
         if (!isHostile(zombie.npc.faction, entry.faction)) continue;
-        if (getDistance2d(pos, entry.position) < zombie.detectionRange) {
-          zombie.targetCharacterId = entry.id;
-          zombie.event(ZombieEvents.SeePlayer);
-          return true;
-        }
+        const distance = getDistance2d(pos, entry.position);
+        if (
+          distance < zombie.detectionRange &&
+          (!nearestTarget || distance < nearestTarget.distance)
+        )
+          nearestTarget = { id: entry.id, distance };
       }
     }
   }
-  return false;
+  if (!nearestTarget) return false;
+  zombie.targetCharacterId = nearestTarget.id;
+  zombie.event(ZombieEvents.SeePlayer);
+  return true;
 }
 
 function trySmellCorpse(zombie: ZombieInstance): boolean {
@@ -462,7 +469,7 @@ export function createZombie(
           zombie.npc.state.position,
           chaseTarget.position
         );
-        if (chaseDist > 50) {
+        if (chaseDist > zombie.loseTargetRange) {
           zombie.event(ZombieEvents.LostPlayer);
         } else if (
           chaseDist < zombie.attackRange &&
@@ -793,6 +800,8 @@ export function createZombie(
   zombie.coverEarsTimer = 0;
   zombie.canFeed = options.canFeed ?? true;
   zombie.detectionRange = options.detectionRange ?? 10;
+  zombie.loseTargetRange =
+    options.loseTargetRange ?? Math.max(50, zombie.detectionRange + 15);
   zombie.attackRange = options.attackRange ?? 2;
   zombie.attackAnimation =
     options.attackAnimation ?? ZombieOneshotAnim.KnifeSlash;
