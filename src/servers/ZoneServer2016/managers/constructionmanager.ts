@@ -72,6 +72,14 @@ const Z1_vehicles = PluginManager.loadServerData(
   );
 
 export class ConstructionManager {
+  emitPlacementNoise(server: ZoneServer2016, position: Float32Array): void {
+    server.pushSound({
+      position: position.slice() as Float32Array,
+      radius: 100,
+      agitation: 12
+    });
+  }
+
   overridePlacementItems: Array<number> = [
     Items.IED,
     Items.LANDMINE,
@@ -747,6 +755,7 @@ export class ConstructionManager {
     server.removeInventoryItem(client.character, item);
     this.sendPlacementFinalize(server, client, true);
     this.constructionPermissionsManager(server, client);
+    this.emitPlacementNoise(server, position);
   }
 
   handleConstructionPlacement(
