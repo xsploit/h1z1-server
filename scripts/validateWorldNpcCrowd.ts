@@ -159,7 +159,7 @@ async function main() {
   const tickNpcFsms = aiInternals.tickNpcFsms.bind(server);
   const realDateNow = Date.now;
   let simulatedNow = realDateNow();
-  const rssStart = process.memoryUsage().rss;
+  const memoryStart = process.memoryUsage();
   const wasmHeapStart = Raw.Module.HEAPU8.buffer.byteLength;
   const navDiagnostics = server.navManager as unknown as {
     _loadedCols: Set<string>;
@@ -237,6 +237,9 @@ async function main() {
       activeNavMeshTiles++;
     }
   }
+  const forceGc = (globalThis as { gc?: () => void }).gc;
+  forceGc?.();
+  const memoryEnd = process.memoryUsage();
 
   console.log(
     JSON.stringify({
@@ -265,8 +268,17 @@ async function main() {
         ).reduce((maximum, layers) => Math.max(maximum, layers.length), 0)
       },
       memory: {
-        rssStartMb: Math.round(rssStart / 1024 / 1024),
-        rssEndMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        rssStartMb: Math.round(memoryStart.rss / 1024 / 1024),
+        rssEndMb: Math.round(memoryEnd.rss / 1024 / 1024),
+        heapTotalStartMb: Math.round(memoryStart.heapTotal / 1024 / 1024),
+        heapTotalEndMb: Math.round(memoryEnd.heapTotal / 1024 / 1024),
+        heapUsedStartMb: Math.round(memoryStart.heapUsed / 1024 / 1024),
+        heapUsedEndMb: Math.round(memoryEnd.heapUsed / 1024 / 1024),
+        externalStartMb: Math.round(memoryStart.external / 1024 / 1024),
+        externalEndMb: Math.round(memoryEnd.external / 1024 / 1024),
+        arrayBuffersStartMb: Math.round(memoryStart.arrayBuffers / 1024 / 1024),
+        arrayBuffersEndMb: Math.round(memoryEnd.arrayBuffers / 1024 / 1024),
+        forcedGc: Boolean(forceGc),
         wasmHeapStartMb: Math.round(wasmHeapStart / 1024 / 1024),
         wasmHeapEndMb: Math.round(
           Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024
