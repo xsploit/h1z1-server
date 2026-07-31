@@ -21,11 +21,20 @@ test("POI human profiles create stable unique slots", () => {
 
 test("POI profiles use deterministic surface posts instead of wide random areas", () => {
   assert.deepEqual(POI_HUMAN_SPAWN_PROFILES[0].positions[0], [
-    930.43,
-    14,
-    -2704.97,
+    688.5,
+    48.08,
+    -2476,
     1
   ]);
+  const militaryTeleport = [696.53, -2470.62];
+  assert.ok(
+    POI_HUMAN_SPAWN_PROFILES[0].positions
+      .slice(0, 2)
+      .every(
+        ([x, _y, z]) =>
+          Math.hypot(x - militaryTeleport[0], z - militaryTeleport[1]) < 12
+      )
+  );
   assert.deepEqual(POI_HUMAN_SPAWN_PROFILES[1].positions[0], [
     1895.92,
     93.69,

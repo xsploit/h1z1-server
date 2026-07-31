@@ -2306,6 +2306,64 @@ export const commands: Array<Command> = [
     }
   },
   {
+    name: "aistatus",
+    permissionLevel: PermissionLevels.DEFAULT,
+    execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {
+      const requestedRadius = Number(args[0] ?? 150);
+      const radius = Number.isFinite(requestedRadius)
+        ? Math.max(10, Math.min(500, requestedRadius))
+        : 150;
+      const origin = client.character.state.position;
+      const nearby = Object.values(server._npcs)
+        .map((npc) => ({
+          npc,
+          distance: Math.hypot(
+            npc.state.position[0] - origin[0],
+            npc.state.position[2] - origin[2]
+          )
+        }))
+        .filter(({ distance }) => distance <= radius)
+        .sort((a, b) => a.distance - b.distance);
+      const humans = nearby.filter(
+        ({ npc }) => npc instanceof HostileSurvivor
+      );
+      const allies = humans.filter(
+        ({ npc }) => npc.faction === Factions.SURVIVOR
+      );
+      const bandits = humans.filter(
+        ({ npc }) => npc.faction === Factions.BANDIT
+      );
+      const alive = nearby.filter(({ npc }) => npc.isAlive);
+      const withNav = alive.filter(({ npc }) => npc.navAgent);
+      const summary =
+        `[AI] ${nearby.length} within ${radius}m: ${alive.length} alive, ` +
+        `${withNav.length} nav, ${allies.length} allies, ${bandits.length} bandits`;
+      server.sendChatText(client, summary);
+      console.info(`[AI STATUS] ${summary}`);
+
+      for (const { npc, distance } of nearby.slice(0, 8)) {
+        const human = npc instanceof HostileSurvivor ? npc : undefined;
+        const state = npc.fsm?.state ?? "none";
+        const target = (
+          npc.fsm as unknown as { targetCharacterId?: string | null } | undefined
+        )?.targetCharacterId;
+        const kind = human
+          ? `${human.role}/${
+              human.faction === Factions.SURVIVOR ? "ally" : "bandit"
+            }`
+          : `npc-${npc.npcId}`;
+        const detail =
+          `[AI] ${kind} ${distance.toFixed(1)}m hp=${Math.max(
+            0,
+            npc.health
+          )} ${npc.navAgent ? "nav" : "NO-NAV"} state=${state} ` +
+          `target=${target ? "yes" : "no"}`;
+        server.sendChatText(client, detail);
+        console.info(`[AI STATUS] ${detail}`);
+      }
+    }
+  },
+  {
     name: "shottrace",
     permissionLevel: PermissionLevels.ADMIN,
     execute: (server: ZoneServer2016, client: Client, args: Array<string>) => {

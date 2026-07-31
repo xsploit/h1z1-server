@@ -41,10 +41,10 @@ export const POI_HUMAN_SPAWN_PROFILES: PoiHumanSpawnProfile[] = [
     id: "military",
     label: "Military Base",
     positions: [
+      [688.5, 48.08, -2476, 1],
+      [704.5, 48.08, -2476, 1],
       [930.43, 14, -2704.97, 1],
-      [924.5, 14, -2701.5, 1],
       [705.24, 14, -2704.81, 1],
-      [711, 14, -2701.5, 1],
       [844, 16.1, -2659, 1]
     ],
     patrolRadius: 80,
