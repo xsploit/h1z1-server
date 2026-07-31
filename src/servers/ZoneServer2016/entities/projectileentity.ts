@@ -143,6 +143,9 @@ export class ProjectileEntity extends BaseLightweightCharacter {
   }
 
   onTrigger(server: ZoneServer2016, client?: ZoneClient2016) {
+    console.log(
+      `[THROWABLE TRACE] trigger item=${this.itemDefinitionId} transient=${this.transientId} projectile=${this.projectileUniqueId}`
+    );
     clearTimeout(this.triggerTimeout);
     if (this.triggered) {
       this.destroy(server);

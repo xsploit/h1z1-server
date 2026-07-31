@@ -553,6 +553,7 @@ export class ZoneServer2016 extends EventEmitter {
   lastItemGuid: bigint = 0x3000000000000000n;
   private readonly _transientIdGenerator = generateTransientId();
   private readonly _pendingThrowableConsumptions = new Set<string>();
+  private readonly _throwablePacketTraceUntil = new Map<string, number>();
   enableWorldSaves: boolean;
   readonly gameVersion: GAME_VERSIONS = GAME_VERSIONS.H1Z1_6dec_2016;
   private _isSaving: boolean = false;
@@ -5212,6 +5213,18 @@ export class ZoneServer2016 extends EventEmitter {
     const data = this._protocol.pack(packetName, obj);
     packSpan?.end();
     if (data) {
+      const traceUntil = this._throwablePacketTraceUntil.get(
+        client.character.characterId
+      );
+      if (traceUntil) {
+        if (Date.now() <= traceUntil) {
+          console.log(
+            `[THROWABLE TRACE] outbound ${packetName} bytes=${data.length} opcode=${data.subarray(0, 4).toString("hex")}`
+          );
+        } else {
+          this._throwablePacketTraceUntil.delete(client.character.characterId);
+        }
+      }
       this._gatewayServer.sendTunnelData(client.soeClientId, data, channel);
     }
     /*this.tasksManager.register(() => {
@@ -8874,6 +8887,9 @@ export class ZoneServer2016 extends EventEmitter {
 
     setTimeout(() => {
       try {
+        console.log(
+          `[THROWABLE TRACE] consume item=${itemDefinition.ID} guid=${weaponItem.itemGuid}`
+        );
         if (!this.removeInventoryItem(client.character, weaponItem)) return;
         const similarItems =
           client.character.getInventoryAsContainer()[itemDefinition.ID];
@@ -8914,6 +8930,9 @@ export class ZoneServer2016 extends EventEmitter {
             parseInt(client.character.characterId.slice(-5), 16)
         : packet.packet.projectileUniqueId,
       client.character.characterId
+    );
+    console.log(
+      `[THROWABLE TRACE] created item=${itemDefinition.ID} transient=${transientId} projectile=${npc.projectileUniqueId} owner=${client.character.characterId}`
     );
     this._throwableProjectiles[npc.characterId] = npc;
     if (!createNpc) return;
@@ -9196,6 +9215,13 @@ export class ZoneServer2016 extends EventEmitter {
     );
 
     if (itemDefinition.ITEM_CLASS == ItemClasses.THROWABLES) {
+      this._throwablePacketTraceUntil.set(
+        client.character.characterId,
+        Date.now() + 5000
+      );
+      console.log(
+        `[THROWABLE TRACE] launch item=${itemDefinition.ID} guid=${weaponItem.itemGuid}`
+      );
       if (
         !this.scheduleThrowableConsumption(client, weaponItem, itemDefinition)
       )
