@@ -54,11 +54,15 @@ const PHASE_SEQUENCE = 3;
 const LAST_COMPLETED_PHASE = 4;
 const LAST_COMPLETED_DURATION = 5;
 const HEARTBEAT_SEQUENCE = 6;
-const SLOT_COUNT = 7;
+const PHASE_DETAIL_A = 7;
+const PHASE_DETAIL_B = 8;
+const SLOT_COUNT = 9;
 
 type PhaseToken = {
   previousPhase: bigint;
   previousStartedAt: bigint;
+  previousDetailA: bigint;
+  previousDetailB: bigint;
 };
 
 type WatchdogOptions = {
@@ -112,6 +116,8 @@ class RuntimeWatchdog {
           const lastCompletedId = Number(
             Atomics.load(state, ${LAST_COMPLETED_PHASE})
           );
+          const phaseDetailA = Number(Atomics.load(state, ${PHASE_DETAIL_A}));
+          const phaseDetailB = Number(Atomics.load(state, ${PHASE_DETAIL_B}));
           return {
             heartbeatAt,
             phaseId,
@@ -121,6 +127,8 @@ class RuntimeWatchdog {
             lastCompletedDurationMs: Number(
               Atomics.load(state, ${LAST_COMPLETED_DURATION})
             ),
+            phaseDetailA,
+            phaseDetailB,
             heartbeatSequence: Number(
               Atomics.load(state, ${HEARTBEAT_SEQUENCE})
             ),
@@ -159,6 +167,8 @@ class RuntimeWatchdog {
                   workerData.phaseNames[current.phaseId] ?? "unknown",
                 activeForMs:
                   current.activeSince > 0 ? now - current.activeSince : 0,
+                phaseDetailA: current.phaseDetailA,
+                phaseDetailB: current.phaseDetailB,
                 phaseSequence: current.phaseSequence,
                 lastCompletedPhase:
                   workerData.phaseNames[current.lastCompletedId] ?? "unknown",
@@ -198,16 +208,25 @@ class RuntimeWatchdog {
     Atomics.add(this.state, HEARTBEAT_SEQUENCE, 1n);
   }
 
-  enter(phase: RuntimePhase): PhaseToken {
+  enter(phase: RuntimePhase, detailA = 0, detailB = 0): PhaseToken {
     const phaseId = BigInt(RUNTIME_PHASES.indexOf(phase));
     const previousPhase = Atomics.load(this.state, ACTIVE_PHASE);
     const previousStartedAt = Atomics.load(this.state, ACTIVE_SINCE);
+    const previousDetailA = Atomics.load(this.state, PHASE_DETAIL_A);
+    const previousDetailB = Atomics.load(this.state, PHASE_DETAIL_B);
     Atomics.add(this.state, PHASE_SEQUENCE, 1n);
     const now = BigInt(Date.now());
     Atomics.store(this.state, ACTIVE_PHASE, phaseId);
     Atomics.store(this.state, ACTIVE_SINCE, now);
+    Atomics.store(this.state, PHASE_DETAIL_A, BigInt(detailA));
+    Atomics.store(this.state, PHASE_DETAIL_B, BigInt(detailB));
     Atomics.store(this.state, HEARTBEAT_AT, now);
-    return { previousPhase, previousStartedAt };
+    return {
+      previousPhase,
+      previousStartedAt,
+      previousDetailA,
+      previousDetailB
+    };
   }
 
   exit(phase: RuntimePhase, token: PhaseToken): void {
@@ -226,6 +245,8 @@ class RuntimeWatchdog {
     Atomics.add(this.state, PHASE_SEQUENCE, 1n);
     Atomics.store(this.state, ACTIVE_PHASE, token.previousPhase);
     Atomics.store(this.state, ACTIVE_SINCE, token.previousStartedAt);
+    Atomics.store(this.state, PHASE_DETAIL_A, token.previousDetailA);
+    Atomics.store(this.state, PHASE_DETAIL_B, token.previousDetailB);
     Atomics.store(this.state, HEARTBEAT_AT, completedAt);
     Atomics.add(this.state, HEARTBEAT_SEQUENCE, 1n);
   }
@@ -253,9 +274,14 @@ export function beatRuntimeWatchdog(): void {
   watchdog?.beat();
 }
 
-export function runRuntimePhase<T>(phase: RuntimePhase, callback: () => T): T {
+export function runRuntimePhase<T>(
+  phase: RuntimePhase,
+  callback: () => T,
+  detailA = 0,
+  detailB = 0
+): T {
   if (!watchdog) return callback();
-  const token = watchdog.enter(phase);
+  const token = watchdog.enter(phase, detailA, detailB);
   try {
     return callback();
   } finally {

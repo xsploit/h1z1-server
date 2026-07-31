@@ -442,6 +442,7 @@ test("streaming removes agents before tiles change without reallocating the crow
   let requestedTileCapacity = 0;
   navManager.streaming = true;
   Object.assign(navManager as object, {
+    _streamRuntimeMutationEnabled: true,
     _tcOrigX: 0,
     _tcOrigZ: 0,
     _tcTileWidth: 25.6,
@@ -463,6 +464,7 @@ test("streaming removes agents before tiles change without reallocating the crow
   navManager.tilecache = {
     buildNavMeshTilesAt: () => {
       events.push("build-tiles");
+      return 1 << 30;
     }
   } as never;
   navManager.crowd = {
@@ -484,6 +486,47 @@ test("streaming removes agents before tiles change without reallocating the crow
   ]);
   assert.equal(events.includes("build-tiles"), true);
   assert.equal(requestedTileCapacity, 12);
+});
+
+test("safe streaming only adds columns and never unloads the native runtime", () => {
+  const navManager = new NavManager();
+  const events: string[] = [];
+  navManager.streaming = true;
+  Object.assign(navManager as object, {
+    _streamRuntimeMutationEnabled: false,
+    _tcOrigX: 0,
+    _tcOrigZ: 0,
+    _tcTileWidth: 25.6,
+    _lastStreamMs: 0,
+    _loadedCols: new Set(["0,0"]),
+    _cacheLoadedCols: new Set(["39,39"]),
+    _streamCacheLayers: new Map([
+      ["0,0", []],
+      ["39,39", []]
+    ])
+  });
+  navManager.navmesh = {
+    getTilesAt: () => {
+      events.push("remove-tiles");
+      return { tileCount: () => 0 };
+    }
+  } as never;
+  navManager.tilecache = {
+    buildNavMeshTilesAt: () => {
+      events.push("build-tiles");
+      return 1 << 30;
+    }
+  } as never;
+  navManager.crowd = {
+    getAgents: () => [],
+    removeAgent: () => {}
+  } as never;
+
+  assert.equal(
+    navManager.streamAround([new Float32Array([1000, 0, 1000, 1])]),
+    true
+  );
+  assert.deepEqual(events, ["build-tiles"]);
 });
 
 test("crowd update faults are contained and latched", () => {

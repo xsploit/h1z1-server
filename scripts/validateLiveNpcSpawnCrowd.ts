@@ -3,13 +3,16 @@ import { resolve } from "node:path";
 process.env.DISABLE_PLUGINS = "true";
 process.env.FORCE_DISABLE_WS = "true";
 process.env.NAV_STREAMING = "1";
+process.env.H1EMU_WATCHDOG = "1";
 
 const cacheDirectory = process.argv[2];
 const postSpawnSeconds = Number(process.argv[3] ?? 15);
 const movementMode = process.argv[4] === "move";
+const routeMode = process.argv[4] === "route";
+const recycleMode = process.argv[4] === "recycle";
 if (!cacheDirectory) {
   console.error(
-    "Usage: npx tsx scripts/validateLiveNpcSpawnCrowd.ts <cache-dir> [post-spawn-seconds] [move]"
+    "Usage: npx tsx scripts/validateLiveNpcSpawnCrowd.ts <cache-dir> [post-spawn-seconds] [move|route|recycle]"
   );
   process.exit(1);
 }
@@ -80,7 +83,44 @@ async function main() {
   const postSpawnStartedAt = Date.now();
   const postSpawnDeadline = postSpawnStartedAt + postSpawnSeconds * 1000;
   while (Date.now() < postSpawnDeadline) {
-    if (movementMode) {
+    if (recycleMode) {
+      // Force cache turnover independently of combat by alternating between
+      // distant authored areas. A correct streamed runtime must survive this.
+      const elapsedSeconds = (Date.now() - postSpawnStartedAt) / 1000;
+      const atMilitary = Math.floor(elapsedSeconds / 4) % 2 === 0;
+      player.state.position[0] = atMilitary ? 696.53 : -125.55;
+      player.state.position[2] = atMilitary ? -2470.62 : -1131.71;
+    } else if (routeMode) {
+      // Match the live failure: begin in PV, jump to the military base, drive
+      // back to PV, then circle town to force repeated cache runtime recycles.
+      const elapsedSeconds = (Date.now() - postSpawnStartedAt) / 1000;
+      const routeSeconds = 70;
+      if (elapsedSeconds <= routeSeconds) {
+        const progress = Math.min(1, elapsedSeconds / routeSeconds);
+        player.state.position[0] =
+          696.53 + (-125.55 - 696.53) * progress;
+        player.state.position[2] =
+          -2470.62 + (-1131.71 + 2470.62) * progress;
+      } else {
+        const perimeterProgress = ((elapsedSeconds - routeSeconds) * 12) % 1280;
+        const leg = Math.floor(perimeterProgress / 320);
+        const offset = perimeterProgress % 320;
+        let x = -285.55;
+        let z = -1291.71;
+        if (leg === 0) x += offset;
+        else if (leg === 1) {
+          x += 320;
+          z += offset;
+        } else if (leg === 2) {
+          x += 320 - offset;
+          z += 320;
+        } else {
+          z += 320 - offset;
+        }
+        player.state.position[0] = x;
+        player.state.position[2] = z;
+      }
+    } else if (movementMode) {
       // Traverse a deterministic 320m square around PV. This crosses streamed
       // nav columns continuously and exercises the same passive-agent
       // teleports as a live player without requiring the game client.
@@ -141,6 +181,8 @@ async function main() {
       maxActiveAgents,
       samples,
       movementMode,
+      routeMode,
+      recycleMode,
       crowdHealthy: server.navManager.crowdHealthy,
       rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
       wasmHeapMb: Math.round(Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024)

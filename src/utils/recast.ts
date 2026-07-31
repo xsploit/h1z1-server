@@ -59,6 +59,10 @@ export function shouldUseStreamingNav(
   if (requestedMode === "0") return false;
   return requestedMode === "1" || cacheAvailable;
 }
+
+export function hasDetourSuccess(status: number): boolean {
+  return ((status >>> 0) & 0x40000000) !== 0;
+}
 import { NavMeshQuery } from "recast-navigation";
 import { Crowd } from "recast-navigation";
 import { createDefaultTileCacheMeshProcess } from "recast-navigation/generators";
@@ -158,11 +162,14 @@ export class NavManager {
   private _tcTileWidth = 25.6;
   private _loadedCols = new Set<string>(); // materialised tile columns "tx,tz"
   private _cacheLoadedCols = new Set<string>();
+  private _failedStreamCols = new Set<string>();
   private _streamCacheLayers = new Map<string, StreamCacheLayer[]>();
   private _streamCacheParts: StreamCachePart[] = [];
   private _streamCacheLength = 0;
   private _streamCacheLayerCount = 0;
   private _streamCacheCapacity = STREAM_RUNTIME_CACHE_LAYERS;
+  private _streamRuntimeMutationEnabled =
+    process.env.NAV_STREAMING_MUTATION === "1";
   private _streamRuntimeRecycles = 0;
   private _streamMeshConfig?: Parameters<typeof NavMeshParams.create>[0];
   private _streamCacheConfig?: Parameters<
@@ -623,6 +630,7 @@ export class NavManager {
     this.destroyStreamingRuntime();
     this._loadedCols.clear();
     this._cacheLoadedCols.clear();
+    this._failedStreamCols.clear();
     this._streamCacheLayerCount = 0;
     this.obstaclesRequestsPending = 0;
     this._activeObstacles.clear();
@@ -758,7 +766,8 @@ export class NavManager {
     console.log(
       `[NAV] streaming tilecache ready (${numTiles} layers indexed, ` +
         `${(storeLength / 1048576) | 0} MB disk-backed, ` +
-        `${this._streamCacheCapacity} layer runtime budget)`
+        `${this._streamCacheCapacity} layer runtime budget, ` +
+        `${this._streamRuntimeMutationEnabled ? "mutable" : "additive-safe"} mode)`
     );
   }
 
@@ -798,8 +807,12 @@ export class NavManager {
         }
       }
     }
-    let toRemove = [...this._loadedCols].filter((k) => !want.has(k));
-    let toAdd = [...want].filter((k) => !this._loadedCols.has(k));
+    let toRemove = this._streamRuntimeMutationEnabled
+      ? [...this._loadedCols].filter((k) => !want.has(k))
+      : [];
+    let toAdd = [...want].filter(
+      (k) => !this._loadedCols.has(k) && !this._failedStreamCols.has(k)
+    );
     if (!toRemove.length && !toAdd.length) return false;
     const incomingCacheLayers = toAdd.reduce(
       (total, key) =>
@@ -809,10 +822,12 @@ export class NavManager {
           : (this._streamCacheLayers.get(key)?.length ?? 0)),
       0
     );
-    const recycleRuntime = shouldRecycleStreamingCache(
-      this._streamCacheLayerCount,
-      incomingCacheLayers
-    );
+    const recycleRuntime =
+      this._streamRuntimeMutationEnabled &&
+      shouldRecycleStreamingCache(
+        this._streamCacheLayerCount,
+        incomingCacheLayers
+      );
     if (recycleRuntime) {
       toRemove = [];
       toAdd = [...want];
@@ -882,12 +897,29 @@ export class NavManager {
             }
             this._streamCacheLayerCount++;
           }
-          if (!columnLoaded) continue;
+          if (!columnLoaded) {
+            this._failedStreamCols.add(k);
+            continue;
+          }
           this._cacheLoadedCols.add(k);
         }
-        runRuntimePhase("nav-cache-build-column", () =>
-          this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh)
+        const buildStatus = runRuntimePhase(
+          "nav-cache-build-column",
+          () => this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh),
+          tx,
+          tz
         );
+        if (!hasDetourSuccess(buildStatus)) {
+          this._failedStreamCols.add(k);
+          const readableStatus = Raw.Detour
+            ? statusToReadableString(buildStatus)
+            : `status=${buildStatus >>> 0}`;
+          console.error(
+            `[NAV] failed to build streamed column ${k}: ` +
+              readableStatus
+          );
+          continue;
+        }
         this._loadedCols.add(k);
         added++;
       }
