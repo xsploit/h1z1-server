@@ -145,6 +145,19 @@ export function selectGroundSurface(
   }
   if (!Number.isFinite(currentY)) return surfaces[0];
 
+  // The crowd position is already constrained to connected Recast geometry.
+  // Prefer its nearby floor over terrain/structure samples so an agent can
+  // actually rise and descend on stairs. Choosing whichever surface is closest
+  // to the previous replicated Y pins agents to the lower sidewalk until they
+  // tunnel through the entire staircase.
+  const navSurface = surfaces.find((surface) => surface.source === "navmesh");
+  if (
+    navSurface &&
+    Math.abs(navSurface.height - currentY) <= MAX_GROUND_SNAP_DISTANCE
+  ) {
+    return navSurface;
+  }
+
   // H1Z1 has vertically layered walkable space: terrain, interiors, roofs,
   // bridges and stairs can share the same X/Z. The NPC's previous replicated Y
   // identifies its current layer. Selecting terrain unconditionally pulls

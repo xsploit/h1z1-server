@@ -75,6 +75,27 @@ test("ground selection stays on the current vertical layer", () => {
   );
 });
 
+test("ground selection follows a connected navmesh stair away from terrain", () => {
+  assert.deepEqual(
+    selectGroundSurface({
+      terrainY: 23.4,
+      structureY: 23.4,
+      navY: 24.2,
+      currentY: 23.65
+    }),
+    { height: 24.2, source: "navmesh" }
+  );
+  assert.deepEqual(
+    selectGroundSurface({
+      terrainY: 23.4,
+      structureY: 23.4,
+      navY: 23.8,
+      currentY: 24.35
+    }),
+    { height: 23.8, source: "navmesh" }
+  );
+});
+
 test("ground selection rejects buried and implausibly distant polygons", () => {
   assert.deepEqual(
     selectGroundSurface({
