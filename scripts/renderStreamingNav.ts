@@ -9,6 +9,7 @@ const centerX = Number(process.argv[4]);
 const centerY = Number(process.argv[5]);
 const centerZ = Number(process.argv[6]);
 const radius = Number(process.argv[7] ?? 50);
+const floorTolerance = Number(process.argv[8] ?? Number.POSITIVE_INFINITY);
 if (
   !cacheDir ||
   !output ||
@@ -16,10 +17,11 @@ if (
   !Number.isFinite(centerY) ||
   !Number.isFinite(centerZ) ||
   !Number.isFinite(radius) ||
+  Number.isNaN(floorTolerance) ||
   radius <= 0
 ) {
   console.error(
-    "Usage: npx tsx scripts/renderStreamingNav.ts <cache-dir> <output.png> <x> <y> <z> [radius]"
+    "Usage: npx tsx scripts/renderStreamingNav.ts <cache-dir> <output.png> <x> <y> <z> [radius] [floor-tolerance]"
   );
   process.exit(1);
 }
@@ -55,6 +57,7 @@ async function main() {
     const b = indices[i + 1] * 3;
     const c = indices[i + 2] * 3;
     const y = (positions[a + 1] + positions[b + 1] + positions[c + 1]) / 3;
+    if (Math.abs(y - centerY) > floorTolerance) continue;
     const shade = Math.max(0, Math.min(100, 55 + (y - centerY) * 8));
     ctx.fillStyle = `hsl(205 45% ${shade}%)`;
     ctx.strokeStyle = "rgba(10, 25, 35, 0.28)";

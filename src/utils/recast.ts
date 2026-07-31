@@ -33,10 +33,12 @@ import {
   init as initRecast,
   NavMesh,
   NavMeshParams,
+  OffMeshConnectionParams,
   Raw,
   statusSucceed,
   statusToReadableString,
   TileCache,
+  TileCacheMeshProcess,
   UnsignedCharArray,
   Vector3
 } from "recast-navigation";
@@ -65,7 +67,6 @@ export function hasDetourSuccess(status: number): boolean {
 }
 import { NavMeshQuery } from "recast-navigation";
 import { Crowd } from "recast-navigation";
-import { createDefaultTileCacheMeshProcess } from "recast-navigation/generators";
 import { runRuntimePhase } from "./runtimewatchdog";
 const debug = require("debug")("nav");
 // dedicated namespace for tile streaming (enable with DEBUG=nav:stream)
@@ -76,6 +77,85 @@ const MAX_PENDING_OBSTACLE = 50;
 const MAX_TILE_CACHE_UPDATES_PER_TICK = 5;
 const TILE_CACHE_BACKLOG_WARNING_TICKS = 25;
 const MAX_ACTIVE_AGENT_VERTICAL_SNAP = 1.5;
+
+type NavigationTransition = OffMeshConnectionParams & { name: string };
+
+const NAVIGATION_TRANSITIONS_PATH =
+  __dirname + "/../../data/2016/navigationTransitions.json";
+
+export function selectNavigationTransitionsForTile(
+  transitions: NavigationTransition[],
+  boundsMin: readonly number[],
+  boundsMax: readonly number[]
+): NavigationTransition[] {
+  return transitions.filter(
+    ({ startPosition }) =>
+      startPosition.x >= boundsMin[0] &&
+      startPosition.x < boundsMax[0] &&
+      startPosition.y >= boundsMin[1] - 1 &&
+      startPosition.y <= boundsMax[1] + 1 &&
+      startPosition.z >= boundsMin[2] &&
+      startPosition.z < boundsMax[2]
+  );
+}
+
+function loadNavigationTransitions(): NavigationTransition[] {
+  if (!existsSync(NAVIGATION_TRANSITIONS_PATH)) return [];
+  const entries = JSON.parse(
+    readFileSync(NAVIGATION_TRANSITIONS_PATH, "utf8")
+  ) as Array<{
+    name: string;
+    start: number[];
+    end: number[];
+    radius?: number;
+    bidirectional?: boolean;
+  }>;
+  return entries.flatMap((entry, index) => {
+    if (
+      entry.start.length < 3 ||
+      entry.end.length < 3 ||
+      [...entry.start.slice(0, 3), ...entry.end.slice(0, 3)].some(
+        (value) => !Number.isFinite(value)
+      )
+    ) {
+      console.warn(`[NAV] ignored invalid transition ${entry.name ?? index}`);
+      return [];
+    }
+    return [
+      {
+        name: entry.name,
+        startPosition: {
+          x: entry.start[0],
+          y: entry.start[1],
+          z: entry.start[2]
+        },
+        endPosition: { x: entry.end[0], y: entry.end[1], z: entry.end[2] },
+        radius: entry.radius ?? 0.8,
+        bidirectional: entry.bidirectional ?? true,
+        area: 0,
+        flags: 1,
+        userId: 0x48000000 + index
+      }
+    ];
+  });
+}
+
+function createNavigationTileCacheMeshProcess(): TileCacheMeshProcess {
+  const transitions = loadNavigationTransitions();
+  return new TileCacheMeshProcess((params, polyAreas, polyFlags) => {
+    for (let i = 0; i < params.polyCount(); ++i) {
+      polyAreas.set(i, 0);
+      polyFlags.set(i, 1);
+    }
+    params.setOffMeshConnections(
+      selectNavigationTransitionsForTile(
+        transitions,
+        params.boundsMin(),
+        params.boundsMax()
+      )
+    );
+  });
+}
 
 // Streaming navmesh: a whole-map FINE navmesh stored as a compressed TileCache
 // on disk (data/2016/collision/z1_cache_*.bin, format "TSET", built by the
@@ -177,9 +257,7 @@ export class NavManager {
   >[0];
   private _streamAllocator?: any;
   private _streamCompressor?: any;
-  private _streamMeshProcess?: ReturnType<
-    typeof createDefaultTileCacheMeshProcess
-  >;
+  private _streamMeshProcess?: TileCacheMeshProcess;
   private _lastStreamMs = 0;
   private _crowdMaxAgents = 2000;
   private _crowdMaxAgentRadius = 2.0;
@@ -561,7 +639,7 @@ export class NavManager {
     const navData = new Uint8Array(Buffer.concat(mesh_parts));
     const { navMesh } = importNavMesh(navData);
     const tcData = new Uint8Array(Buffer.concat(tc_parts));
-    const tileCacheMeshProcess = createDefaultTileCacheMeshProcess();
+    const tileCacheMeshProcess = createNavigationTileCacheMeshProcess();
     const { tileCache } = importTileCache(tcData, tileCacheMeshProcess);
     this.navmesh = navMesh;
     this.tilecache = tileCache;
@@ -579,7 +657,7 @@ export class NavManager {
 
     const allocator = new (Raw as any).RecastLinearAllocator(1 << 20);
     const compressor = new (Raw as any).RecastFastLZCompressor();
-    const meshProcess = createDefaultTileCacheMeshProcess();
+    const meshProcess = createNavigationTileCacheMeshProcess();
     const tilecache = new TileCache();
     if (
       !tilecache.init(

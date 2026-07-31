@@ -29,6 +29,12 @@ async function main() {
   ]);
 
   const query = nav.navMeshQuery;
+  let offMeshConnections = 0;
+  for (let i = 0; i < nav.navmesh.getMaxTiles(); i++) {
+    const tile = nav.navmesh.getTile(i);
+    const count = tile.header()?.offMeshConCount() ?? 0;
+    offMeshConnections += count;
+  }
   const halfExtents = { halfExtents: { x: 2, y: 4, z: 2 } };
   const samples = [];
   for (let i = 0; i < 80; i++) {
@@ -67,6 +73,7 @@ async function main() {
     JSON.stringify(
       {
         randomSamples: samples.length,
+        offMeshConnections,
         connectedInteriors: `${connectedInteriors}/${interiors.length}`,
         interiors: results
       },

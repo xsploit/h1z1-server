@@ -3,10 +3,33 @@ import test from "node:test";
 import type { BoxObstacle } from "recast-navigation";
 import {
   NavManager,
+  selectNavigationTransitionsForTile,
   shouldRecycleStreamingCache,
   shouldUseStreamingNav,
   sortTileCacheParts
 } from "./recast";
+
+test("navigation transitions are owned by the tile layer containing their start", () => {
+  const transition = {
+    name: "stairs",
+    startPosition: { x: 10, y: 5, z: 20 },
+    endPosition: { x: 14, y: 7, z: 20 },
+    radius: 0.8,
+    bidirectional: true
+  };
+  assert.deepEqual(
+    selectNavigationTransitionsForTile([transition], [0, 0, 0], [25, 10, 25]),
+    [transition]
+  );
+  assert.deepEqual(
+    selectNavigationTransitionsForTile([transition], [25, 0, 0], [50, 10, 25]),
+    []
+  );
+  assert.deepEqual(
+    selectNavigationTransitionsForTile([transition], [0, 8, 0], [25, 12, 25]),
+    []
+  );
+});
 
 test("tile-cache parts are sorted by their suffix", () => {
   assert.deepEqual(
