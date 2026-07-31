@@ -69,6 +69,24 @@ test("lootbag registration indexes and spawns a corpse bag", () => {
   assert.equal(spawnedEntities.has(lootbag), true);
 });
 
+test("NPC registration adds world spawns to the client visibility grid", () => {
+  const manager = new WorldObjectManager();
+  const npc = { characterId: "world-npc" };
+  let indexed: object | undefined;
+  const server = {
+    _npcs: {} as Record<string, object>,
+    pushToGridCell: (entity: object) => {
+      indexed = entity;
+    }
+  };
+
+  manager.registerNpc(server as never, npc as never, 42);
+
+  assert.equal(server._npcs["world-npc"], npc);
+  assert.equal(manager.spawnedNpcs[42], "world-npc");
+  assert.equal(indexed, npc);
+});
+
 test("WorldObjectManager", { timeout: 10000 }, async (t) => {
   await t.test("containerLootSpawners", () => {
     const manager = new LootTableManager();

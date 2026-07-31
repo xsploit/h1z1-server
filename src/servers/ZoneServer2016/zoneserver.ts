@@ -275,6 +275,12 @@ import { RandomEventsManager } from "./managers/randomeventsmanager";
 import { ExplosionManager } from "./managers/explosionmanager";
 import { AiManager } from "./managers/explosivemanager";
 import { AirdropManager } from "./managers/airdropmanager";
+import {
+  beatRuntimeWatchdog,
+  runRuntimePhase,
+  startRuntimeWatchdog,
+  stopRuntimeWatchdog
+} from "../../utils/runtimewatchdog";
 //import { TaskManager } from "./managers/tasksmanager";
 
 const spawnLocations2 = PluginManager.loadServerData(
@@ -1140,6 +1146,7 @@ export class ZoneServer2016 extends EventEmitter {
     }
     await this._gatewayServer.stop();
     await this.rconManager.stop();
+    stopRuntimeWatchdog();
   }
 
   async shutdown(timeLeft: number, message: string) {
@@ -2097,9 +2104,15 @@ export class ZoneServer2016 extends EventEmitter {
       );
       await this.initHeightmap();
       this.collisionManager.load();
-      this.aiTickRoutine = setInterval(() => this.tickAi(), this.aiTickRate);
+      this.aiTickRoutine = setInterval(
+        () => runRuntimePhase("ai-fsm", () => this.tickAi()),
+        this.aiTickRate
+      );
       this.pathfindingRoutine = setInterval(
-        () => this.updatePathfindingPositions(),
+        () =>
+          runRuntimePhase("pathfinding-sync", () =>
+            this.updatePathfindingPositions()
+          ),
         this.pathfindingUpdateRate
       );
       this.recastRoutine = setInterval(
@@ -2380,6 +2393,16 @@ export class ZoneServer2016 extends EventEmitter {
   async start(): Promise<void> {
     debug("Starting server");
     debug(`Protocol used : ${this._protocol.protocolName}`);
+    const watchdogPath = startRuntimeWatchdog({
+      enabled:
+        this._soloMode &&
+        process.env.H1EMU_WATCHDOG !== "0" &&
+        process.env.FORCE_DISABLE_WS !== "true" &&
+        !process.execArgv.includes("--test")
+    });
+    if (watchdogPath) {
+      console.log(`[WATCHDOG] live stall capture enabled: ${watchdogPath}`);
+    }
     if (!this.hookManager.checkHook("OnServerInit")) return;
     if (!(await this.hookManager.checkAsyncHook("OnServerInit"))) return;
 
@@ -9970,7 +9993,9 @@ export class ZoneServer2016 extends EventEmitter {
     try {
       for (const sessionId in this._clients) {
         const clientSpan = tx?.startSpan("clientTick");
-        this.runClientTick(this._clients[sessionId]);
+        runRuntimePhase("client-ticks", () =>
+          this.runClientTick(this._clients[sessionId])
+        );
         clientSpan?.end();
         await scheduler.yield();
       }
@@ -10022,6 +10047,7 @@ export class ZoneServer2016 extends EventEmitter {
 
   startWorldTick() {
     const tick = async () => {
+      beatRuntimeWatchdog();
       if (!this._ready) {
         this._lastTickTime = Date.now();
         this._worldTickTimer = setTimeout(tick, ZoneServer2016.WORLD_TICK_MS);
@@ -10029,7 +10055,7 @@ export class ZoneServer2016 extends EventEmitter {
       }
       const tx = apm.startTransaction("WorldTick", "custom");
       const span = tx?.startSpan("rebuildSpatialMaps");
-      this._rebuildSpatialMaps();
+      runRuntimePhase("world-tick", () => this._rebuildSpatialMaps());
       span?.end();
       tx?.end();
       this._worldTickTimer = setTimeout(tick, ZoneServer2016.WORLD_TICK_MS);

@@ -802,9 +802,21 @@ export class WorldObjectManager {
       default:
         throw new Error(`Unknown NPC modelId: ${modelId}`);
     }
-    server._npcs[characterId] = npc;
-    if (spawnerId) this.spawnedNpcs[spawnerId] = characterId;
+    this.registerNpc(server, npc, spawnerId);
     return npc;
+  }
+
+  registerNpc(
+    server: ZoneServer2016,
+    npc: Npc,
+    spawnerId: number = 0
+  ): void {
+    server._npcs[npc.characterId] = npc;
+    if (spawnerId) this.spawnedNpcs[spawnerId] = npc.characterId;
+    // World NPCs are created after the initial visibility grid is built.
+    // Without registering them here the server AI owns them, but subscribed
+    // clients never receive their spawn packets.
+    server.pushToGridCell(npc);
   }
 
   createLootEntity(

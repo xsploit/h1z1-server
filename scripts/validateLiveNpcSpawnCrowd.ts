@@ -22,6 +22,7 @@ async function main() {
     createFakeCharacter,
     createFakeZoneClient
   } = require("../out/utils/test.utils");
+  const { Npc } = require("../out/servers/ZoneServer2016/entities/npc");
   const { Raw } = require("recast-navigation");
 
   const server = new ZoneServer2016(
@@ -36,9 +37,13 @@ async function main() {
   server.sendOrderedData = () => {};
 
   const player = createFakeCharacter(server);
-  createFakeZoneClient(server, player);
+  const client = createFakeZoneClient(server, player);
   player.state.position = new Float32Array([-125.55, 23.41, -1131.71, 1]);
   player.godMode = true;
+  player.isReady = true;
+  client.isLoading = false;
+  server.firstRoutine(client);
+  await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   server.updatePathfindingPositions();
 
   const startedAt = Date.now();
@@ -84,9 +89,28 @@ async function main() {
     await new Promise((resolveWait) => setTimeout(resolveWait, 50));
   }
 
+  const indexedNpcs = new Set(
+    server._grid.flatMap((cell: { objects: unknown[] }) =>
+      cell.objects.filter((entity) => entity instanceof Npc)
+    )
+  );
+  const visibleNpcs = [...client.spawnedEntities].filter(
+    (entity) => entity instanceof Npc
+  ).length;
+  if (indexedNpcs.size !== Object.keys(server._npcs).length) {
+    throw new Error(
+      `NPC visibility grid mismatch: indexed=${indexedNpcs.size}, world=${Object.keys(server._npcs).length}`
+    );
+  }
+  if (visibleNpcs === 0) {
+    throw new Error("ready PV client received zero nearby world NPCs");
+  }
+
   console.log(
     JSON.stringify({
       worldNpcs: Object.keys(server._npcs).length,
+      indexedNpcs: indexedNpcs.size,
+      visibleNpcs,
       worldVehicles: Object.keys(server._vehicles).length,
       activeAgents: server.navManager.crowd.getActiveAgentCount(),
       maxActiveAgents,

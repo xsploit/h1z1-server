@@ -22,6 +22,7 @@ import { json } from "types/shared";
 import { SOEOutputChannels } from "./soeoutputstream";
 import dgram from "node:dgram";
 import { PacketsQueue } from "./PacketsQueue";
+import { runRuntimePhase } from "../../utils/runtimewatchdog";
 const debug = require("debug")("SOEServer");
 
 const MAX_PACKETS_PER_IP_PER_SEC = 500;
@@ -458,6 +459,10 @@ export class SOEServer extends EventEmitter {
   }
 
   onMessage(data: Buffer, remote: RemoteInfo) {
+    runRuntimePhase("soe-receive", () => this.onMessageUnwatched(data, remote));
+  }
+
+  private onMessageUnwatched(data: Buffer, remote: RemoteInfo) {
     try {
       if (!this._checkIpRateLimit(remote.address)) return;
 
@@ -627,6 +632,10 @@ export class SOEServer extends EventEmitter {
     return appPackets;
   }
   private sendingProcess(client: Client) {
+    runRuntimePhase("soe-send", () => this.sendingProcessUnwatched(client));
+  }
+
+  private sendingProcessUnwatched(client: Client) {
     if (client.isDeleted) {
       return;
     }

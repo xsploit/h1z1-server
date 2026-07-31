@@ -62,6 +62,7 @@ export function shouldUseStreamingNav(
 import { NavMeshQuery } from "recast-navigation";
 import { Crowd } from "recast-navigation";
 import { createDefaultTileCacheMeshProcess } from "recast-navigation/generators";
+import { runRuntimePhase } from "./runtimewatchdog";
 const debug = require("debug")("nav");
 // dedicated namespace for tile streaming (enable with DEBUG=nav:stream)
 const debugStream = require("debug")("nav:stream");
@@ -1129,16 +1130,22 @@ export class NavManager {
     // tilecache carving runs in both modes now: in streaming the obstacles are
     // applied to the materialised window tiles, in normal mode to the whole mesh
     if (this.obstaclesRequestsPending) {
-      this.processPendingObstacleRequests();
+      runRuntimePhase("nav-obstacle-update", () =>
+        this.processPendingObstacleRequests()
+      );
     }
-    this.syncStreamedObstacles();
+    runRuntimePhase("nav-streamed-obstacles", () =>
+      this.syncStreamedObstacles()
+    );
     debug(
       `requests: ${this.obstaclesRequestsPending}, total: ${this.tilecache.obstacles.size}`
     );
     this.lastTimeCall = now;
     if (!this._crowdHealthy) return;
     try {
-      this.crowd.update(this.updateFrequency, timeSinceLastCalled, 1);
+      runRuntimePhase("nav-crowd-update", () =>
+        this.crowd.update(this.updateFrequency, timeSinceLastCalled, 1)
+      );
       if (++this._successfulCrowdUpdates >= 25) {
         this._crowdFaultReported = false;
       }
