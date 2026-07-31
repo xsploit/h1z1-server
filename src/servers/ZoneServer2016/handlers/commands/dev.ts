@@ -755,7 +755,7 @@ const dev: any = {
         const playerPos = client.character.state.position;
         const targetNavPoint =
           server.navManager.getClosestNavPointVec3(playerPos);
-        npc.navAgent.requestMoveTarget(targetNavPoint);
+        if (targetNavPoint) npc.navAgent.requestMoveTarget(targetNavPoint);
       }
     }
   },
@@ -804,7 +804,7 @@ const dev: any = {
         const playerPos = client.character.state.position;
         const targetNavPoint =
           server.navManager.getClosestNavPointVec3(playerPos);
-        zombie.navAgent.requestMoveTarget(targetNavPoint);
+        if (targetNavPoint) zombie.navAgent.requestMoveTarget(targetNavPoint);
         const navPos = zombie.navAgent.interpolatedPosition;
         const gamePos = NavManager.navToGame(navPos);
         zombie.goTo(gamePos);

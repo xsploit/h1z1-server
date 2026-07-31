@@ -119,7 +119,8 @@ function pickPointAroundPlayer(
     playerPos[1],
     playerPos[2] + Math.sin(angle) * CIRCLE_RADIUS
   ]);
-  return NavManager.navToGame(server.navManager.getClosestNavPointVec3(target));
+  const navTarget = server.navManager.getClosestNavPointVec3(target);
+  return navTarget ? NavManager.navToGame(navTarget) : playerPos;
 }
 
 function moveToward(
@@ -129,7 +130,7 @@ function moveToward(
 ): void {
   if (!npc.navAgent) return;
   const navTarget = server.navManager.getClosestNavPointVec3(target);
-  npc.navAgent.requestMoveTarget(navTarget);
+  if (navTarget) npc.navAgent.requestMoveTarget(navTarget);
 }
 
 function tryDetectPlayer(screamer: ScreamerInstance): boolean {

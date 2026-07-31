@@ -6,9 +6,10 @@ process.env.NAV_STREAMING = "1";
 
 const cacheDirectory = process.argv[2];
 const postSpawnSeconds = Number(process.argv[3] ?? 15);
+const movementMode = process.argv[4] === "move";
 if (!cacheDirectory) {
   console.error(
-    "Usage: npx tsx scripts/validateLiveNpcSpawnCrowd.ts <cache-dir> [post-spawn-seconds]"
+    "Usage: npx tsx scripts/validateLiveNpcSpawnCrowd.ts <cache-dir> [post-spawn-seconds] [move]"
   );
   process.exit(1);
 }
@@ -76,8 +77,32 @@ async function main() {
     throw new Error("world NPC generation did not finish");
   }
 
-  const postSpawnDeadline = Date.now() + postSpawnSeconds * 1000;
+  const postSpawnStartedAt = Date.now();
+  const postSpawnDeadline = postSpawnStartedAt + postSpawnSeconds * 1000;
   while (Date.now() < postSpawnDeadline) {
+    if (movementMode) {
+      // Traverse a deterministic 320m square around PV. This crosses streamed
+      // nav columns continuously and exercises the same passive-agent
+      // teleports as a live player without requiring the game client.
+      const elapsedSeconds = (Date.now() - postSpawnStartedAt) / 1000;
+      const perimeterProgress = (elapsedSeconds * 8) % 1280;
+      const leg = Math.floor(perimeterProgress / 320);
+      const offset = perimeterProgress % 320;
+      let x = -285.55;
+      let z = -1291.71;
+      if (leg === 0) x += offset;
+      else if (leg === 1) {
+        x += 320;
+        z += offset;
+      } else if (leg === 2) {
+        x += 320 - offset;
+        z += 320;
+      } else {
+        z += 320 - offset;
+      }
+      player.state.position[0] = x;
+      player.state.position[2] = z;
+    }
     if (!server.navManager.crowdHealthy) {
       throw new Error("crowd faulted immediately after live NPC spawning");
     }
@@ -115,6 +140,7 @@ async function main() {
       activeAgents: server.navManager.crowd.getActiveAgentCount(),
       maxActiveAgents,
       samples,
+      movementMode,
       crowdHealthy: server.navManager.crowdHealthy,
       rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
       wasmHeapMb: Math.round(Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024)

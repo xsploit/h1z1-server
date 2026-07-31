@@ -85,7 +85,14 @@ const STREAM_CACHE_DIR =
   process.env.NAV_CACHE_DIR ?? __dirname + "/../../data/2016/collision";
 const STREAM_RADIUS = 300; // materialise tiles within this many meters of a player
 const STREAM_INTERVAL = 1000; // ms between window updates
+const MAX_AGENT_TARGET_DISTANCE = STREAM_RADIUS * 2;
 const STREAM_CACHE_RECYCLE_LAYERS = 3072;
+
+function hasCorruptTinyComponent(position: Vector3): boolean {
+  return [position.x, position.y, position.z].some(
+    (component) => component !== 0 && Math.abs(component) < 1e-30
+  );
+}
 // Keep compressed layers out of the WebAssembly heap until their columns are
 // actually visited. The generated whole-map cache has ~110k layers / ~600 MB;
 // preloading all of it leaves too little WASM address space for DetourCrowd and
@@ -241,17 +248,27 @@ export class NavManager {
         trace.lastMoveTarget = [position.x, position.y, position.z];
       }
       this.traceCrowdOperation("move-request", agentIndex, position);
+      const createdAt = trace?.createdAt;
+      const targetDistance =
+        createdAt === undefined
+          ? 0
+          : Math.hypot(
+              position.x - createdAt[0],
+              position.z - createdAt[2]
+            );
       if (
         !this._crowdHealthy ||
         !Number.isFinite(position.x) ||
         !Number.isFinite(position.y) ||
-        !Number.isFinite(position.z)
+        !Number.isFinite(position.z) ||
+        hasCorruptTinyComponent(position) ||
+        targetDistance > MAX_AGENT_TARGET_DISTANCE
       ) {
         this.traceCrowdOperation(
           "move-rejected",
           agentIndex,
           position,
-          "unhealthy-or-non-finite"
+          `unhealthy-invalid-or-too-far:${targetDistance}`
         );
         return false;
       }
@@ -957,7 +974,21 @@ export class NavManager {
         radius
       );
       if (!result.success) return null;
-      return NavManager.navToGame(result.randomPoint);
+      const randomPoint = result.randomPoint;
+      if (
+        !Number.isFinite(randomPoint.x) ||
+        !Number.isFinite(randomPoint.y) ||
+        !Number.isFinite(randomPoint.z) ||
+        hasCorruptTinyComponent(randomPoint) ||
+        Math.hypot(
+          randomPoint.x - center.nearestPoint.x,
+          randomPoint.z - center.nearestPoint.z
+        ) >
+          radius + 0.5
+      ) {
+        return null;
+      }
+      return NavManager.navToGame(randomPoint);
     } catch (error) {
       debugStream(
         `random-point query rejected at [${gameCenter[0]}, ${gameCenter[1]}, ${gameCenter[2]}]: ${
@@ -1131,6 +1162,7 @@ export class NavManager {
     const startPoly = origin_data.polyRef;
     const start = origin_data.point;
     const end = this.getClosestNavPointVec3(target);
+    if (!startPoly || !end) return null;
 
     const result = this.navMeshQuery.raycast(startPoly, start, end);
     return result;
@@ -1169,8 +1201,19 @@ export class NavManager {
   // Returns the nearest navmesh point on the entity's current floor. Interiors
   // such as PV PD have floors only ~3.2m apart, so a tall nearest-poly search
   // can silently select the story above or below.
-  getClosestNavPointVec3(gamePos: Float32Array): Vector3 {
+  getClosestNavPointVec3(gamePos: Float32Array): Vector3 | null {
     const n = this.findNearestPolyOnFloor(gamePos);
+    if (
+      !n.nearestRef ||
+      !Number.isFinite(n.nearestPoint.x) ||
+      !Number.isFinite(n.nearestPoint.y) ||
+      !Number.isFinite(n.nearestPoint.z) ||
+      hasCorruptTinyComponent(n.nearestPoint) ||
+      Math.abs(n.nearestPoint.x - gamePos[0]) > 10.5 ||
+      Math.abs(n.nearestPoint.z - gamePos[2]) > 10.5
+    ) {
+      return null;
+    }
     debug(
       `getClosestNavPoint gameIn=[${gamePos[0].toFixed(2)}, ${gamePos[1].toFixed(2)}, ${gamePos[2].toFixed(2)}] navOut=[${n.nearestPoint.x.toFixed(2)}, ${n.nearestPoint.y.toFixed(2)}, ${n.nearestPoint.z.toFixed(2)}] polyRef=${n.nearestRef}`
     );

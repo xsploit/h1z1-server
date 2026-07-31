@@ -55,7 +55,7 @@ function moveToward(
 ): void {
   if (!npc.navAgent) return;
   const navTarget = server.navManager.getClosestNavPointVec3(target);
-  npc.navAgent.requestMoveTarget(navTarget);
+  if (navTarget) npc.navAgent.requestMoveTarget(navTarget);
 }
 
 function listenToSounds(gasser: ZombieInstance, sounds: Sound[]): Sound | null {

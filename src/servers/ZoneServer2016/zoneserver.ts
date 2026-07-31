@@ -2397,7 +2397,8 @@ export class ZoneServer2016 extends EventEmitter {
       enabled:
         this._soloMode &&
         process.env.H1EMU_WATCHDOG !== "0" &&
-        process.env.FORCE_DISABLE_WS !== "true" &&
+        (process.env.FORCE_DISABLE_WS !== "true" ||
+          process.env.H1EMU_WATCHDOG === "1") &&
         !process.execArgv.includes("--test")
     });
     if (watchdogPath) {
@@ -10938,53 +10939,12 @@ export class ZoneServer2016 extends EventEmitter {
       }
     }
 
-    for (const k in this._characters) {
-      const character = this._characters[k];
-      if (!this.navManager.isPositionStreamed(character.state.position)) {
-        character.navAgent = undefined;
-        continue;
-      }
-      if (!character.navAgent) {
-        character.navAgent = runRuntimePhase(
-          "path-character-create",
-          () =>
-            this.navManager.createPassiveAgent(character.state.position)
-        );
-      } else if (
-        !runRuntimePhase("path-character-teleport", () =>
-          this.navManager.teleportAgent(
-            character.navAgent!,
-            character.state.position
-          )
-        )
-      ) {
-        character.navAgent = undefined;
-      }
-    }
-
-    for (const k in this._vehicles) {
-      const vehicle = this._vehicles[k];
-      if (!this.navManager.isPositionStreamed(vehicle.state.position)) {
-        vehicle.navAgent = undefined;
-        continue;
-      }
-      if (!vehicle.navAgent) {
-        vehicle.navAgent = runRuntimePhase(
-          "path-vehicle-create",
-          () =>
-            this.navManager.createPassiveAgent(vehicle.state.position, 2.0)
-        );
-      } else if (
-        !runRuntimePhase("path-vehicle-teleport", () =>
-          this.navManager.teleportAgent(
-            vehicle.navAgent!,
-            vehicle.state.position
-          )
-        )
-      ) {
-        vehicle.navAgent = undefined;
-      }
-    }
+    // Players and vehicles are authoritative game entities, not Detour crowd
+    // agents. Hard-teleporting passive agents to their replicated positions
+    // corrupts dtCrowd after ordinary player movement. NPCs keep their real
+    // crowd agents; player/vehicle collision remains owned by game collision.
+    for (const k in this._characters) this._characters[k].navAgent = undefined;
+    for (const k in this._vehicles) this._vehicles[k].navAgent = undefined;
   }
 }
 

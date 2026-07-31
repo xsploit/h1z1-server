@@ -301,6 +301,21 @@ test("streamed random-point queries snap to a loaded floor and contain WASM erro
   );
 
   navManager.navMeshQuery = {
+    findNearestPoly: () => ({
+      nearestRef: 1,
+      nearestPoint: { x: 5, y: 12, z: 5 }
+    }),
+    findRandomPointAroundCircle: () => ({
+      success: true,
+      randomPoint: { x: 2.59e-41, y: 2.59e-41, z: 2.24e-44 }
+    })
+  } as never;
+  assert.equal(
+    navManager.findRandomNavPointAround(new Float32Array([5, 12, 5, 1]), 60),
+    null
+  );
+
+  navManager.navMeshQuery = {
     findNearestPoly: () => {
       throw new WebAssembly.RuntimeError("memory access out of bounds");
     }
@@ -393,8 +408,32 @@ test("instrumented crowd agents reject non-finite move targets", () => {
     false
   );
   assert.equal(nativeMoveRequests, 0);
+  assert.equal(
+    created?.requestMoveTarget({
+      x: 2.59e-41,
+      y: 2.59e-41,
+      z: 2.24e-44
+    }),
+    false
+  );
+  assert.equal(nativeMoveRequests, 0);
   assert.equal(created?.requestMoveTarget({ x: 5, y: 20, z: 6 }), true);
   assert.equal(nativeMoveRequests, 1);
+});
+
+test("failed nearest-poly queries never expose uninitialized WASM points", () => {
+  const navManager = new NavManager();
+  navManager.navMeshQuery = {
+    findNearestPoly: () => ({
+      nearestRef: 0,
+      nearestPoint: { x: 2.59e-41, y: 2.59e-41, z: 2.24e-44 }
+    })
+  } as never;
+
+  assert.equal(
+    navManager.getClosestNavPointVec3(new Float32Array([200, 31, -1272, 1])),
+    null
+  );
 });
 
 test("streaming removes agents before tiles change without reallocating the crowd", () => {

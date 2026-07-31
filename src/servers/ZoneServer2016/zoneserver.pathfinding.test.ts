@@ -98,3 +98,27 @@ test("NPC grounding preserves the previous replicated vertical layer", () => {
   assert.ok(replicatedPosition);
   assert.deepEqual(Array.from(replicatedPosition), [11, 25.75, 12, 0]);
 });
+
+test("player and vehicle movement never enters the native NPC crowd", () => {
+  const staleAgent = {};
+  const character = { navAgent: staleAgent };
+  const vehicle = { navAgent: staleAgent };
+  const server = {
+    navManager: {
+      streaming: false,
+      crowdHealthy: true,
+      createPassiveAgent: () =>
+        assert.fail("players must not be added to dtCrowd"),
+      teleportAgent: () =>
+        assert.fail("player movement must not hard-teleport dtCrowd agents")
+    },
+    _npcs: {},
+    _characters: { character },
+    _vehicles: { vehicle }
+  };
+
+  ZoneServer2016.prototype.updatePathfindingPositions.call(server);
+
+  assert.equal(character.navAgent, undefined);
+  assert.equal(vehicle.navAgent, undefined);
+});
