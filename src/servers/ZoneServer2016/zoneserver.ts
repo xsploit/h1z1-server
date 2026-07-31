@@ -8886,6 +8886,10 @@ export class ZoneServer2016 extends EventEmitter {
     this._throwableProjectiles[npc.characterId] = npc;
     if (!createNpc) return;
     this.getClientsInRange(200, packet.packet.position).forEach((c: Client) => {
+      // The throwing client already owns a locally predicted projectile.
+      // Replicating the authoritative copy back with the same projectile id
+      // makes the 2016 client resolve a duplicate transient and crash.
+      if (c === client) return;
       this.addLightweightNpc(c, npc);
       c.spawnedEntities.add(npc);
     });
