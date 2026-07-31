@@ -93,3 +93,66 @@ test("thrower does not receive a duplicate authoritative grenade", () => {
   const projectile = Object.values(server._throwableProjectiles)[0];
   projectile.destroy(server);
 });
+
+test(
+  "grenade is consumed after its throw animation can release",
+  { timeout: 3000 },
+  async () => {
+    const removals: unknown[] = [];
+    const equips: unknown[][] = [];
+    const grenade = {
+      itemGuid: "0x100",
+      itemDefinitionId: Items.GRENADE_HE,
+      slotId: 3
+    };
+    const nextGrenade = {
+      itemGuid: "0x101",
+      itemDefinitionId: Items.GRENADE_HE,
+      slotId: 4
+    };
+    const client = {
+      character: {
+        getInventoryAsContainer: () => ({
+          [Items.GRENADE_HE]: [grenade, nextGrenade]
+        }),
+        equipContainerItem(...args: unknown[]) {
+          equips.push(args);
+        }
+      }
+    };
+    const server = {
+      _pendingThrowableConsumptions: new Set<string>(),
+      removeInventoryItem(_character: unknown, item: unknown) {
+        removals.push(item);
+        return true;
+      }
+    } as unknown as ZoneServer2016;
+
+    assert.equal(
+      ZoneServer2016.prototype.scheduleThrowableConsumption.call(
+        server,
+        client as never,
+        grenade as never,
+        { ID: Items.GRENADE_HE } as ItemDefinition
+      ),
+      true
+    );
+    assert.equal(removals.length, 0);
+    assert.equal(
+      ZoneServer2016.prototype.scheduleThrowableConsumption.call(
+        server,
+        client as never,
+        grenade as never,
+        { ID: Items.GRENADE_HE } as ItemDefinition
+      ),
+      false
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+
+    assert.deepEqual(removals, [grenade]);
+    assert.equal(equips.length, 1);
+    assert.equal(equips[0][1], nextGrenade);
+    assert.equal(equips[0][2], 3);
+  }
+);

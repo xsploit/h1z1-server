@@ -346,6 +346,8 @@ const spawnLocations2 = PluginManager.loadServerData(
     "2016/sampleData/equipmentModelTexturesMapping.json"
   );
 
+const THROWABLE_CONSUME_DELAY_MS = 1500;
+
 export class ZoneServer2016 extends EventEmitter {
   /** Networking layer - allows sending game data to the game client,
    * lays on top of the H1Z1 protocol (on top of the actual H1Z1 packets)
@@ -550,6 +552,7 @@ export class ZoneServer2016 extends EventEmitter {
     containerDefinitions;
   lastItemGuid: bigint = 0x3000000000000000n;
   private readonly _transientIdGenerator = generateTransientId();
+  private readonly _pendingThrowableConsumptions = new Set<string>();
   enableWorldSaves: boolean;
   readonly gameVersion: GAME_VERSIONS = GAME_VERSIONS.H1Z1_6dec_2016;
   private _isSaving: boolean = false;
@@ -8860,6 +8863,35 @@ export class ZoneServer2016 extends EventEmitter {
     this.updateItem(client, repairItem);
   }
 
+  scheduleThrowableConsumption(
+    client: Client,
+    weaponItem: LoadoutItem,
+    itemDefinition: ItemDefinition
+  ): boolean {
+    if (this._pendingThrowableConsumptions.has(weaponItem.itemGuid)) return false;
+    this._pendingThrowableConsumptions.add(weaponItem.itemGuid);
+    const currentSlotId = weaponItem.slotId;
+
+    setTimeout(() => {
+      try {
+        if (!this.removeInventoryItem(client.character, weaponItem)) return;
+        const similarItems =
+          client.character.getInventoryAsContainer()[itemDefinition.ID];
+        const nextGrenade = similarItems?.find((item) => item !== weaponItem);
+        if (nextGrenade) {
+          client.character.equipContainerItem(
+            this,
+            nextGrenade,
+            currentSlotId
+          );
+        }
+      } finally {
+        this._pendingThrowableConsumptions.delete(weaponItem.itemGuid);
+      }
+    }, THROWABLE_CONSUME_DELAY_MS);
+    return true;
+  }
+
   createThrowableProjectile(
     client: Client,
     packet: any,
@@ -9164,23 +9196,11 @@ export class ZoneServer2016 extends EventEmitter {
     );
 
     if (itemDefinition.ITEM_CLASS == ItemClasses.THROWABLES) {
+      if (
+        !this.scheduleThrowableConsumption(client, weaponItem, itemDefinition)
+      )
+        return;
       this.createThrowableProjectile(client, packet, itemDefinition, true);
-      const inv = client.character.getInventoryAsContainer();
-      const similarItems = inv[itemDefinition.ID];
-      const currentSlotId = weaponItem.slotId;
-
-      // remove the equipped grenade
-      this.removeInventoryItem(client.character, weaponItem);
-
-      // auto-equip the next similar grenade from inventory if available
-      if (similarItems && similarItems.length) {
-        const nextNade = similarItems.find((v) => {
-          return v !== weaponItem;
-        });
-        if (nextNade) {
-          client.character.equipContainerItem(this, nextNade, currentSlotId);
-        }
-      }
       return;
     } else if (itemDefinition.ID == Items.WEAPON_BOW_RECURVE) {
       this.createThrowableProjectile(
