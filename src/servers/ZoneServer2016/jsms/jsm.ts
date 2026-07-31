@@ -34,6 +34,9 @@ export class JSM<EventTypes extends string | number> {
       currentCallback(dt);
     }
   }
+  hasEvent(eventId: EventTypes): boolean {
+    return this.transitionsHashMap[eventId] !== undefined;
+  }
   event(eventId: EventTypes) {
     const transition = this.transitionsHashMap[eventId];
     if (!transition) {

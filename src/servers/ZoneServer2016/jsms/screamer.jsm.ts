@@ -209,7 +209,9 @@ function screamAtNearbyZombies(screamer: ScreamerInstance): void {
         (
           npc.fsm as unknown as { lastNoisePos: Float32Array | null }
         ).lastNoisePos = screamer.npc.state.position.slice() as Float32Array;
-        npc.fsm.event("coverEars");
+        if (npc.fsm.hasEvent("coverEars")) {
+          npc.fsm.event("coverEars");
+        }
       }
     }
   }

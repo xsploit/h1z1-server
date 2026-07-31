@@ -914,9 +914,13 @@ export class NavManager {
           const readableStatus = Raw.Detour
             ? statusToReadableString(buildStatus)
             : `status=${buildStatus >>> 0}`;
+          const worldX = this._tcOrigX + (tx + 0.5) * this._tcTileWidth;
+          const worldZ = this._tcOrigZ + (tz + 0.5) * this._tcTileWidth;
+          const layerCount = this._streamCacheLayers.get(k)?.length ?? 0;
           console.error(
             `[NAV] failed to build streamed column ${k}: ` +
-              readableStatus
+              `${readableStatus} (world=${worldX.toFixed(1)},${worldZ.toFixed(1)}, ` +
+              `layers=${layerCount})`
           );
           continue;
         }
