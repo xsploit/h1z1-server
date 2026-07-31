@@ -130,7 +130,7 @@ test("human raider reuses zombie acquisition and chase behavior", () => {
   assert.equal(raider.attackRecoverySeconds, 0.9);
 });
 
-test("human patrol mode keeps roaming instead of becoming permanently idle", () => {
+test("human patrol mode rests briefly and then resumes roaming", () => {
   const patrolRequests: Float32Array[] = [];
   const npc = {
     characterId: "bandit",
@@ -161,11 +161,14 @@ test("human patrol mode keeps roaming instead of becoming permanently idle", () 
 
   const raider = createZombie(npc as never, server as never, {
     canFeed: false,
-    persistentWander: true,
+    fixedPatrolOrigin: true,
+    patrolWakeSeconds: 12,
     patrolRadius: 100
   });
   raider.tick(51);
 
+  assert.equal(raider.state, "idle");
+  raider.tick(12.1);
   assert.equal(raider.state, "wander");
   assert.equal(raider.agitation, 50);
   assert.deepEqual(Array.from(raider.wanderOrigin), [10, 0, 10, 1]);

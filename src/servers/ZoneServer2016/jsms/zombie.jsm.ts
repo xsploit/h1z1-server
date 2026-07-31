@@ -98,6 +98,7 @@ export const enum ZombieEvents {
   PlayerKilled = "playerKilled",
   DoneFeeding = "doneFeeding",
   IdleTimeout = "idleTimeout",
+  PatrolWake = "patrolWake",
   StartAttacking = "startAttacking",
   DoneAttacking = "doneAttacking",
   StartStumble = "startStumble",
@@ -118,7 +119,8 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   isEatingCorpse: boolean;
   lastAttackTime: number;
   wanderOrigin: Float32Array;
-  persistentWander: boolean;
+  fixedPatrolOrigin: boolean;
+  patrolWakeSeconds: number;
   patrolRadius: number;
   isCoveringEars: boolean;
   coverEarsTimer: number;
@@ -152,7 +154,8 @@ export interface ZombieAiOptions {
   playAttackAnimation?: boolean;
   canAttackTarget?: (targetCharacterId: string) => boolean;
   performAttack?: (targetCharacterId: string) => void;
-  persistentWander?: boolean;
+  fixedPatrolOrigin?: boolean;
+  patrolWakeSeconds?: number;
   patrolRadius?: number;
 }
 
@@ -296,7 +299,7 @@ function enterWander(zombie: ZombieInstance): void {
   zombie.agitation = AGITATION_INITIAL;
   zombie.targetCharacterId = null;
   zombie.npc.lookAtTarget = null;
-  if (!zombie.persistentWander) {
+  if (!zombie.fixedPatrolOrigin) {
     zombie.wanderOrigin = zombie.npc.state.position.slice() as Float32Array;
   }
   const pt = pickPatrolPoint(
@@ -369,10 +372,6 @@ export function createZombie(
         decayAgitation(zombie, dt);
 
         if (zombie.agitation === 0) {
-          if (zombie.persistentWander) {
-            enterWander(zombie);
-            return;
-          }
           zombie.event(ZombieEvents.IdleTimeout);
           return;
         }
@@ -407,6 +406,12 @@ export function createZombie(
         }
 
         trySmellCorpse(zombie);
+        if (
+          zombie.patrolWakeSeconds > 0 &&
+          zombie.stateTimer >= zombie.patrolWakeSeconds
+        ) {
+          zombie.event(ZombieEvents.PatrolWake);
+        }
       },
 
       [ZombieTransitions.Investigate]: (dt: number) => {
@@ -733,6 +738,12 @@ export function createZombie(
         }
       },
       {
+        eventId: ZombieEvents.PatrolWake,
+        from: [ZombieTransitions.Idle],
+        to: ZombieTransitions.Wander,
+        EnterTransition: () => enterWander(zombie)
+      },
+      {
         eventId: ZombieEvents.CoverEars,
         from: null,
         to: ZombieTransitions.Wander,
@@ -760,7 +771,8 @@ export function createZombie(
   zombie.hunger = 0;
   zombie.agitation = AGITATION_INITIAL;
   zombie.wanderOrigin = npc.state.position.slice() as Float32Array;
-  zombie.persistentWander = options.persistentWander ?? false;
+  zombie.fixedPatrolOrigin = options.fixedPatrolOrigin ?? false;
+  zombie.patrolWakeSeconds = options.patrolWakeSeconds ?? 0;
   zombie.patrolRadius = options.patrolRadius ?? 60;
   const initialPatrol = pickPatrolPoint(
     server,

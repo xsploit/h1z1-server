@@ -151,7 +151,8 @@ export class HostileSurvivor extends Npc {
     if (!process.env.DISABLE_AI && server.aiEnabled) {
       this.fsm = createZombie(this, server, {
         canFeed: false,
-        persistentWander: true,
+        fixedPatrolOrigin: true,
+        patrolWakeSeconds: 12,
         patrolRadius: 100,
         detectionRange: 55,
         attackRange: this.weaponKit.attackRange,
