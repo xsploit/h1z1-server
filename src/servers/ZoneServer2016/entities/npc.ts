@@ -26,7 +26,6 @@ import { DB_COLLECTIONS, KILL_TYPE } from "../../../utils/enums";
 import {
   Effects,
   Items,
-  Effects,
   MeleeTypes,
   NpcIds,
   PositionUpdateType,

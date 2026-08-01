@@ -2101,13 +2101,16 @@ export class ZoneServer2016 extends EventEmitter {
   }
 
   private async setupServer() {
-    if (!process.env.DISABLE_AI && this.aiEnabled) {
+    const aiEnabled = !process.env.DISABLE_AI && this.aiEnabled;
+    if (aiEnabled || this.airdropManager.useNavmesh) {
       await this.navManager.loadNav();
       this.navManager.setAgentInvalidationHandler(() =>
         this.clearPathfindingAgentReferences()
       );
       await this.initHeightmap();
       this.collisionManager.load();
+    }
+    if (aiEnabled) {
       this.aiTickRoutine = setInterval(
         () => runRuntimePhase("ai-fsm", () => this.tickAi()),
         this.aiTickRate
@@ -10781,6 +10784,42 @@ export class ZoneServer2016 extends EventEmitter {
     });
 
     return isInPoi;
+  }
+
+  /** A drop must clear POIs, bases and vehicles. */
+  private isValidAirdropPosition(position: Float32Array): boolean {
+    if (this.isPosInPoi(position)) return false;
+    for (const foundation of Object.values(this._constructionFoundations)) {
+      if (isPosInRadius(50, foundation.state.position, position)) return false;
+    }
+    for (const vehicle of Object.values(this._vehicles)) {
+      if (isPosInRadius(10, vehicle.state.position, position)) return false;
+    }
+    return true;
+  }
+
+  /** Pick a walkable landing point in the caller's world-grid cell. */
+  getAirdropDropPosition(callerPos: Float32Array): Float32Array {
+    if (!this.airdropManager.useNavmesh) return callerPos;
+    const boundary = 3720;
+    const cellSize = (boundary * 2) / 10;
+    const cellMin = (coordinate: number) =>
+      -boundary +
+      Math.min(
+        9,
+        Math.max(0, Math.floor((coordinate + boundary) / cellSize))
+      ) *
+        cellSize;
+    const minX = cellMin(callerPos[0]);
+    const minZ = cellMin(callerPos[2]);
+
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const x = minX + Math.random() * cellSize;
+      const z = minZ + Math.random() * cellSize;
+      const position = this.navManager.getNavGroundPoint(x, z);
+      if (position && this.isValidAirdropPosition(position)) return position;
+    }
+    return callerPos;
   }
 
   private tickNpcFsms(dt: number): void {

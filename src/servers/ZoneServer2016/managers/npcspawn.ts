@@ -25,6 +25,8 @@ export function getAuthorizedNpcModels(actorDefinition: string): number[] {
       return [ModelIds.ZOMBIE_FEMALE_WALKER, ModelIds.ZOMBIE_MALE_WALKER];
     case "NPCSpawner_Deer001.adr":
       return [9002, 9253];
+    case "NPCSpawner_Rabbit001.adr":
+      return [ModelIds.RABBIT];
     case "NPCSpawner_Wolf001.adr":
       return [9003];
     case "Bear_Brown.adr":

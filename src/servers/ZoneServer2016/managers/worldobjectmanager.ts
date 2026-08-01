@@ -208,8 +208,10 @@ export class WorldObjectManager {
   vehicleSpawnRadius!: number;
   npcSpawnRadius!: number;
   chanceNpc!: number;
+  chanceRabbit!: number;
   chanceScreamer!: number;
   chanceGasser!: number;
+  chanceGasserPropagation!: number;
   chanceExploder!: number;
   chanceWornLetter!: number;
   waterSourceReplenishTimer!: number;
@@ -494,6 +496,7 @@ export class WorldObjectManager {
         existingNpcPositions,
         this.npcSpawnRadius,
         this.chanceNpc,
+        this.chanceRabbit,
         this.chanceScreamer,
         this.chanceGasser,
         this.chanceExploder,
@@ -504,6 +507,7 @@ export class WorldObjectManager {
       const created = {
         zombies: 0,
         bandits: 0,
+        rabbits: 0,
         deer: 0,
         wolves: 0,
         bears: 0
@@ -515,6 +519,8 @@ export class WorldObjectManager {
         );
         if (modelId === 9002 || modelId === 9253) {
           created.deer++;
+        } else if (modelId === ModelIds.RABBIT) {
+          created.rabbits++;
         } else if (modelId === 9003) {
           created.wolves++;
         } else if (modelId === 9187) {
@@ -536,7 +542,7 @@ export class WorldObjectManager {
       }
       console.info(
         `[WOM] NPCs created: ${created.zombies} zombies, ${created.bandits} bandits, ` +
-          `${created.deer} deer, ${created.wolves} wolves, ${created.bears} bears`
+          `${created.rabbits} rabbits, ${created.deer} deer, ${created.wolves} wolves, ${created.bears} bears`
       );
     } catch (error) {
       console.warn(

@@ -1347,6 +1347,19 @@ export class NavManager {
     return res.success && Number.isFinite(res.height) ? res.height : null;
   }
 
+  // Nearest navmesh point at (x, z), searched from above with height ignored.
+  // Airdrops need a world-space landing point; actors use getFloorY instead so
+  // their authored floor remains part of the query.
+  getNavGroundPoint(x: number, z: number): Float32Array | null {
+    if (!this.navMeshQuery) return null;
+    const n = this.navMeshQuery.findNearestPoly(
+      { x, y: 1000, z },
+      { halfExtents: { x: 10, y: 2000, z: 10 } }
+    );
+    if (!n.success || !n.nearestRef) return null;
+    return NavManager.navToGame(n.nearestPoint);
+  }
+
   createAgent(gamePos: Float32Array): CrowdAgent | undefined {
     // In streaming mode the navmesh only exists around players; if no tile is
     // loaded under this spawn point yet, defer (caller retries when it loads)

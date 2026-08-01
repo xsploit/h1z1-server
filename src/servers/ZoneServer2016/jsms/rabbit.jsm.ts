@@ -87,6 +87,7 @@ function moveToward(
 ): void {
   if (!npc.navAgent) return;
   const navTarget = server.navManager.getClosestNavPointVec3(target);
+  if (!navTarget) return;
   npc.navAgent.requestMoveTarget(navTarget);
 }
 

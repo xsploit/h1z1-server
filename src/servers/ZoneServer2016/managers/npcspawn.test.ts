@@ -8,6 +8,9 @@ test("screamer rolls only affect zombie spawners", () => {
     getNpcModelsForRoll("NPCSpawner_Deer001.adr", 1000, 1),
     [9002, 9253]
   );
+  assert.deepEqual(getNpcModelsForRoll("NPCSpawner_Rabbit001.adr", 1000, 1), [
+    ModelIds.RABBIT
+  ]);
   assert.deepEqual(
     getNpcModelsForRoll("NPCSpawner_ZombieWalker.adr", 1000, 1),
     [
@@ -35,6 +38,10 @@ test("capped spawn candidates preserve every NPC category", () => {
       instances: [instance(2, 10)]
     },
     {
+      actorDefinition: "NPCSpawner_Rabbit001.adr",
+      instances: [instance(5, 4)]
+    },
+    {
       actorDefinition: "NPCSpawner_Wolf001.adr",
       instances: [instance(3, 5)]
     },
@@ -47,9 +54,10 @@ test("capped spawn candidates preserve every NPC category", () => {
     candidates.slice(0, 10).map((candidate) => candidate.actorDefinition)
   );
 
-  assert.equal(candidates.length, 117);
+  assert.equal(candidates.length, 121);
   assert.equal(firstTen.has("NPCSpawner_ZombieWalker.adr"), true);
   assert.equal(firstTen.has("NPCSpawner_Deer001.adr"), true);
+  assert.equal(firstTen.has("NPCSpawner_Rabbit001.adr"), true);
   assert.equal(firstTen.has("NPCSpawner_Wolf001.adr"), true);
   assert.equal(firstTen.has("Bear_Brown.adr"), true);
 });
