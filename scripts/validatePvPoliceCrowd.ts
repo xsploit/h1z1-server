@@ -21,6 +21,23 @@ const interior = new Float32Array([
   Number(process.argv[5] ?? -1149.3),
   1
 ]);
+const maxAllowedVerticalStep = Number(
+  process.env.MAX_VERTICAL_STEP ?? Number.POSITIVE_INFINITY
+);
+
+type PositionSample = {
+  step: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+function samplePosition(
+  step: number,
+  position: { x: number; y: number; z: number }
+): PositionSample {
+  return { step, x: position.x, y: position.y, z: position.z };
+}
 
 async function main() {
   const { NavManager } = await import("../src/utils/recast");
@@ -41,9 +58,32 @@ async function main() {
   }
 
   const points = [];
+  const verticalTransitions = [];
+  const recentPositions: PositionSample[] = [];
+  let previous = agent.position();
+  let maxVerticalStep = 0;
   for (let step = 0; step < 1_200; step++) {
     nav.crowd.update(0.05);
-    if (step % 100 === 0) points.push(agent.position());
+    const position = agent.position();
+    const verticalStep = Math.abs(position.y - previous.y);
+    maxVerticalStep = Math.max(maxVerticalStep, verticalStep);
+    if (verticalStep > 0.2) {
+      verticalTransitions.push({
+        step,
+        from: samplePosition(step - 1, previous),
+        to: samplePosition(step, position),
+        verticalStep,
+        horizontalStep: Math.hypot(
+          position.x - previous.x,
+          position.z - previous.z
+        ),
+        contextBefore: [...recentPositions]
+      });
+    }
+    recentPositions.push(samplePosition(step, position));
+    if (recentPositions.length > 12) recentPositions.shift();
+    previous = position;
+    if (step % 100 === 0) points.push(position);
   }
   const final = agent.position();
   const distance = Math.hypot(
@@ -62,6 +102,9 @@ async function main() {
         velocity: agent.velocity(),
         desiredVelocity: agent.desiredVelocity(),
         corners: agent.corners(),
+        maxVerticalStep,
+        maxAllowedVerticalStep,
+        verticalTransitions,
         points
       },
       null,
@@ -69,6 +112,7 @@ async function main() {
     )
   );
   if (distance > 1) process.exit(1);
+  if (maxVerticalStep > maxAllowedVerticalStep) process.exit(2);
 }
 
 main().catch((error) => {
