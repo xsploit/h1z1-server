@@ -15,7 +15,6 @@ import { JSM } from "./jsm";
 import type { Npc } from "../entities/npc";
 import type { ZoneServer2016 } from "../zoneserver";
 import type { Sound } from "../../../types/zoneserver";
-import { NavManager } from "../../../utils/recast";
 const debug = require("debug")("ai");
 import { getDistance2d, getDistance } from "../../../utils/utils";
 import { isHostile } from "./factions";
@@ -123,6 +122,12 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   patrolWakeSeconds: number;
   patrolRadius: number;
   loseTargetRange: number;
+  stalledTargetTimeoutSeconds: number;
+  targetReacquireDelaySeconds: number;
+  targetStallTimer: number;
+  targetProgressOrigin: Float32Array;
+  ignoredTargetCharacterId: string | null;
+  ignoredTargetTimer: number;
   isCoveringEars: boolean;
   coverEarsTimer: number;
   canFeed: boolean;
@@ -159,6 +164,8 @@ export interface ZombieAiOptions {
   patrolWakeSeconds?: number;
   patrolRadius?: number;
   loseTargetRange?: number;
+  stalledTargetTimeoutSeconds?: number;
+  targetReacquireDelaySeconds?: number;
 }
 
 const BASE_SPEED = 1.0;
@@ -216,6 +223,11 @@ function trySeePlayer(zombie: ZombieInstance): boolean {
       if (!bucket) continue;
       for (const entry of bucket) {
         if (entry.id === zombie.npc.characterId) continue;
+        if (
+          entry.id === zombie.ignoredTargetCharacterId &&
+          zombie.ignoredTargetTimer > 0
+        )
+          continue;
         if (!isHostile(zombie.npc.faction, entry.faction)) continue;
         const distance = getDistance2d(pos, entry.position);
         if (
@@ -228,6 +240,9 @@ function trySeePlayer(zombie: ZombieInstance): boolean {
   }
   if (!nearestTarget) return false;
   zombie.targetCharacterId = nearestTarget.id;
+  zombie.targetStallTimer = 0;
+  zombie.targetProgressOrigin =
+    zombie.npc.state.position.slice() as Float32Array;
   zombie.event(ZombieEvents.SeePlayer);
   return true;
 }
@@ -299,6 +314,39 @@ function tickTimers(zombie: ZombieInstance, dt: number): void {
   zombie.hunger = Math.min(100, zombie.hunger + dt * 2);
   zombie.stateTimer += dt;
   zombie.lastAttackTime += dt;
+  zombie.ignoredTargetTimer = Math.max(0, zombie.ignoredTargetTimer - dt);
+  if (zombie.ignoredTargetTimer === 0) {
+    zombie.ignoredTargetCharacterId = null;
+  }
+}
+
+function resetTargetProgress(zombie: ZombieInstance): void {
+  zombie.targetStallTimer = 0;
+  zombie.targetProgressOrigin =
+    zombie.npc.state.position.slice() as Float32Array;
+}
+
+function abandonStalledTarget(zombie: ZombieInstance, dt: number): boolean {
+  if (zombie.stalledTargetTimeoutSeconds <= 0) return false;
+
+  const distanceFromProgressOrigin = getDistance2d(
+    zombie.npc.state.position,
+    zombie.targetProgressOrigin
+  );
+  if (distanceFromProgressOrigin >= 1.5) {
+    resetTargetProgress(zombie);
+    return false;
+  }
+
+  zombie.targetStallTimer += dt;
+  if (zombie.targetStallTimer < zombie.stalledTargetTimeoutSeconds) {
+    return false;
+  }
+
+  zombie.ignoredTargetCharacterId = zombie.targetCharacterId;
+  zombie.ignoredTargetTimer = zombie.targetReacquireDelaySeconds;
+  zombie.event(ZombieEvents.LostPlayer);
+  return true;
 }
 
 function enterWander(zombie: ZombieInstance): void {
@@ -469,6 +517,7 @@ export function createZombie(
           zombie.npc.state.position,
           chaseTarget.position
         );
+        if (abandonStalledTarget(zombie, dt)) return;
         if (chaseDist > zombie.loseTargetRange) {
           zombie.event(ZombieEvents.LostPlayer);
         } else if (
@@ -674,6 +723,7 @@ export function createZombie(
         to: ZombieTransitions.Chase,
         EnterTransition: () => {
           zombie.stateTimer = 0;
+          resetTargetProgress(zombie);
           const chaseTarget = getChaseTarget(zombie);
           if (chaseTarget) {
             moveToward(zombie.npc, chaseTarget.position, zombie.server);
@@ -720,6 +770,7 @@ export function createZombie(
         to: ZombieTransitions.Chase,
         EnterTransition: () => {
           zombie.npc.lookAtTarget = null;
+          resetTargetProgress(zombie);
         }
       },
       {
@@ -802,6 +853,14 @@ export function createZombie(
   zombie.detectionRange = options.detectionRange ?? 10;
   zombie.loseTargetRange =
     options.loseTargetRange ?? Math.max(50, zombie.detectionRange + 15);
+  zombie.stalledTargetTimeoutSeconds =
+    options.stalledTargetTimeoutSeconds ?? 0;
+  zombie.targetReacquireDelaySeconds =
+    options.targetReacquireDelaySeconds ?? 0;
+  zombie.targetStallTimer = 0;
+  zombie.targetProgressOrigin = npc.state.position.slice() as Float32Array;
+  zombie.ignoredTargetCharacterId = null;
+  zombie.ignoredTargetTimer = 0;
   zombie.attackRange = options.attackRange ?? 2;
   zombie.attackAnimation =
     options.attackAnimation ?? ZombieOneshotAnim.KnifeSlash;

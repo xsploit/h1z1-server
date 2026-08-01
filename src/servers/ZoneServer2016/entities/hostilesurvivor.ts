@@ -244,6 +244,8 @@ export class HostileSurvivor extends Npc {
         patrolWakeSeconds: 1,
         patrolRadius: roleConfig.patrolRadius,
         detectionRange: roleConfig.detectionRange,
+        stalledTargetTimeoutSeconds: 8,
+        targetReacquireDelaySeconds: 12,
         attackRange: this.weaponKit.attackRange,
         attackImpactSeconds: 0.12,
         attackRecoverySeconds: 0.3,
