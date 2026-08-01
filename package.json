@@ -1,6 +1,6 @@
 {
   "name": "h1z1-server",
-  "version": "0.49.1",
+  "version": "0.49.2-0",
   "description": "Library for emulating h1z1 servers",
   "author": "Quentin Gruber <quentingruber@gmail.com> (http://github.com/quentingruber)",
   "license": "GPL-3.0-only",
@@ -13,7 +13,6 @@
     "h1z1-server-demo-2016": "scripts/h1z1-server-demo-2016.js"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.0",
     "@types/js-yaml": "4.0.9",
     "@types/node": "25.9.1",
     "@types/ws": "8.18.1",
@@ -25,8 +24,6 @@
     "mongodb": "6.20.0",
     "recast-navigation": "0.43.1",
     "threads": "1.7.0",
-    "three": "^0.184.0",
-    "three-mesh-bvh": "^0.9.10",
     "typescript": "6.0.3",
     "ws": "8.21.0"
   },
@@ -34,9 +31,7 @@
     "src": "./src"
   },
   "devDependencies": {
-    "@types/three": "^0.184.1",
     "cross-env": "^10.1.0",
-    "globals": "^17.6.0",
     "oxlint": "^1.67.0",
     "prettier": "^3.8.3",
     "tsx": "^4.22.3",
@@ -69,8 +64,8 @@
     "build-tests": "tsc -p tsconfigs/tsconfig-tests.json",
     "build-benchs": "tsc -p ./benchmarks/tsconfig.json",
     "build-docker-images": "tsx ./docker/buildDocker.ts",
-    "test-mongo": "npm run build && npm run build-tests && DISABLE_AI='true' MONGO_TESTS='true' DISABLE_PLUGINS='true' node --no-warnings --experimental-require-module --no-experimental-strip-types --test",
-    "test": "npm run build && npm run build-tests && cross-env DISABLE_AI=true DISABLE_PLUGINS=true node --no-warnings --experimental-require-module --no-experimental-strip-types --test",
+    "test-mongo": "npm run build && npm run build-tests && DISABLE_AI='true' MONGO_TESTS='true' DISABLE_PLUGINS='true' FAKE_NAVMESH=1 node --no-warnings --experimental-require-module --no-experimental-strip-types --test",
+    "test": "npm run build && npm run build-tests && cross-env DISABLE_AI='true'  DISABLE_PLUGINS='true' FAKE_NAVMESH=1 node --no-warnings --experimental-require-module --no-experimental-strip-types --test",
     "test-dev": "npm run lint -- --quiet && npm run check_prettier && npm t",
     "postinstall": "npm run build",
     "publish_release": "git push --tags && git push origin dev && git push origin master && git checkout dev && npm run publish_release-next",

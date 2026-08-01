@@ -152,6 +152,11 @@ export function detonateExploder(server: ZoneServer2016, npc: Npc): void {
   );
   npc.playAnimation(ZombieOneshotAnim.ExplodeExpand);
   server.explosionDamage(npc);
+
+  // schedule body removal after ragdoll animation completes (~0.3 seconds)
+  setTimeout(() => {
+    server.deleteEntity(npc.characterId, server._npcs);
+  }, 300);
 }
 
 function explodeAndDie(exploder: ZombieInstance): void {
@@ -161,6 +166,11 @@ function explodeAndDie(exploder: ZombieInstance): void {
     entity: npc.characterId,
     damage: npc.health + 1
   });
+
+  // schedule body removal after ragdoll animation completes (~0.3 seconds)
+  setTimeout(() => {
+    server.deleteEntity(npc.characterId, server._npcs);
+  }, 300);
 }
 
 function tickTimers(exploder: ZombieInstance, dt: number): void {

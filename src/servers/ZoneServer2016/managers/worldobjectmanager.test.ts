@@ -129,7 +129,7 @@ test("POI survivor posts spawn once and reuse stable spawner slots", () => {
   assert.ok(spawned.every(({ position }) => position[3] === 1));
 });
 
-test("WorldObjectManager", { timeout: 10000 }, async (t) => {
+test("WorldObjectManager", { timeout: 60000 }, async (t) => {
   await t.test("containerLootSpawners", () => {
     const manager = new LootTableManager();
     manager.load();

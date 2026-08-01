@@ -221,7 +221,8 @@ function pushScreamSound(screamer: ScreamerInstance): void {
   screamer.server.pushSound({
     position: screamer.npc.state.position.slice() as Float32Array,
     radius: ATTRACT_RADIUS,
-    agitation: ATTRACT_AGITATION
+    agitation: ATTRACT_AGITATION,
+    priority: 5
   });
 }
 
@@ -240,10 +241,6 @@ function screamAtNearbyPlayers(screamer: ScreamerInstance): void {
         client.character.state.position
       ) <= SCREAM_RADIUS
     ) {
-      screamer.server.addScreenEffect(
-        client,
-        screamer.server._screenEffects["SCREAM"]
-      );
       screamer.server.applyMovementModifier(client, MovementModifiers.SCREAM);
     }
   }

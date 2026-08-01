@@ -100,10 +100,12 @@ export const enum ZombieEvents {
   IdleTimeout = "idleTimeout",
   PatrolWake = "patrolWake",
   StartAttacking = "startAttacking",
+  Spit = "spit",
   DoneAttacking = "doneAttacking",
   StartStumble = "startStumble",
   StumbleTimeout = "stumbleTimeout",
-  CoverEars = "coverEars"
+  CoverEars = "coverEars",
+  ReleaseGas = "releaseGas"
 }
 
 export interface ZombieInstance extends JSM<ZombieEvents> {
@@ -124,6 +126,7 @@ export interface ZombieInstance extends JSM<ZombieEvents> {
   patrolRadius: number;
   loseTargetRange: number;
   isCoveringEars: boolean;
+  ChargeGas: number;
   coverEarsTimer: number;
   canFeed: boolean;
   detectionRange: number;
@@ -167,6 +170,7 @@ const AGITATION_DECAY_RATE = 1;
 const AGITATION_INITIAL = 50;
 const INVESTIGATE_TIMEOUT = 120;
 const STUMBLE_CHANCE = 0.001;
+const OVERRIDE_ACTION_SOUND_PRIORITY = 10;
 
 function pickPatrolPoint(
   server: ZoneServer2016,
@@ -189,17 +193,28 @@ function moveToward(
 function listenToSounds(zombie: ZombieInstance, sounds: Sound[]): Sound | null {
   let nearest: Sound | null = null;
   let nearestDist = Infinity;
+  let bestPriority = Number.NEGATIVE_INFINITY;
   for (const sound of sounds) {
     const dist = getDistance2d(zombie.npc.state.position, sound.position);
     if (dist < sound.radius) {
       zombie.agitation = Math.min(100, zombie.agitation + sound.agitation);
-      if (dist < nearestDist) {
+      const priority = sound.priority ?? 0;
+      if (
+        priority > bestPriority ||
+        (priority === bestPriority && dist < nearestDist)
+      ) {
         nearest = sound;
+        bestPriority = priority;
         nearestDist = dist;
       }
     }
   }
   return nearest;
+}
+
+function shouldOverrideAction(sound: Sound | null): boolean {
+  if (!sound) return false;
+  return (sound.priority ?? 0) >= OVERRIDE_ACTION_SOUND_PRIORITY;
 }
 
 function trySeePlayer(zombie: ZombieInstance): boolean {
@@ -444,6 +459,10 @@ export function createZombie(
         const nearestSound = listenToSounds(zombie, zombie.server.sounds);
         if (nearestSound) {
           zombie.lastNoisePos = nearestSound.position;
+          if (shouldOverrideAction(nearestSound)) {
+            zombie.event(ZombieEvents.HearNoise);
+            return;
+          }
           zombie.stateTimer = 0;
           moveToward(zombie.npc, nearestSound.position, zombie.server);
         }
@@ -451,7 +470,12 @@ export function createZombie(
 
       [ZombieTransitions.Chase]: (dt: number) => {
         tickTimers(zombie, dt);
-        listenToSounds(zombie, zombie.server.sounds);
+        const nearestSound = listenToSounds(zombie, zombie.server.sounds);
+        if (nearestSound && shouldOverrideAction(nearestSound)) {
+          zombie.lastNoisePos = nearestSound.position;
+          zombie.event(ZombieEvents.HearNoise);
+          return;
+        }
         applyAgitation(zombie);
 
         const chaseTarget = getChaseTarget(zombie);
@@ -487,6 +511,12 @@ export function createZombie(
       },
 
       [ZombieTransitions.Stumble]: (dt: number) => {
+        const nearestSound = listenToSounds(zombie, zombie.server.sounds);
+        if (nearestSound && shouldOverrideAction(nearestSound)) {
+          zombie.lastNoisePos = nearestSound.position;
+          zombie.event(ZombieEvents.HearNoise);
+          return;
+        }
         zombie.stateTimer += dt;
         if (zombie.stateTimer >= 5) {
           zombie.event(ZombieEvents.StumbleTimeout);
@@ -495,7 +525,12 @@ export function createZombie(
 
       [ZombieTransitions.Attack]: (dt: number) => {
         tickTimers(zombie, dt);
-        listenToSounds(zombie, zombie.server.sounds);
+        const nearestSound = listenToSounds(zombie, zombie.server.sounds);
+        if (nearestSound && shouldOverrideAction(nearestSound)) {
+          zombie.lastNoisePos = nearestSound.position;
+          zombie.event(ZombieEvents.HearNoise);
+          return;
+        }
         applyAgitation(zombie);
 
         const attackTarget = getChaseTarget(zombie);
@@ -531,7 +566,12 @@ export function createZombie(
         zombie.hunger = Math.min(100, zombie.hunger + dt * 2);
         zombie.stateTimer += dt;
         zombie.lastAttackTime += dt;
-        listenToSounds(zombie, zombie.server.sounds);
+        const nearestSound = listenToSounds(zombie, zombie.server.sounds);
+        if (nearestSound && shouldOverrideAction(nearestSound)) {
+          zombie.lastNoisePos = nearestSound.position;
+          zombie.event(ZombieEvents.HearNoise);
+          return;
+        }
 
         const attackTarget = getChaseTarget(zombie);
         if (attackTarget) {
@@ -555,7 +595,12 @@ export function createZombie(
       [ZombieTransitions.Feed]: (dt: number) => {
         zombie.stateTimer += dt;
         zombie.lastAttackTime += dt;
-        listenToSounds(zombie, zombie.server.sounds);
+        const nearestSound = listenToSounds(zombie, zombie.server.sounds);
+        if (nearestSound && shouldOverrideAction(nearestSound)) {
+          zombie.lastNoisePos = nearestSound.position;
+          zombie.event(ZombieEvents.HearNoise);
+          return;
+        }
         applyAgitation(zombie);
 
         if (zombie.corpseTargetId) {
@@ -603,10 +648,23 @@ export function createZombie(
     [
       {
         eventId: ZombieEvents.HearNoise,
-        from: [ZombieTransitions.Wander, ZombieTransitions.Idle],
+        from: [
+          ZombieTransitions.Wander,
+          ZombieTransitions.Idle,
+          ZombieTransitions.Investigate,
+          ZombieTransitions.Chase,
+          ZombieTransitions.Stumble,
+          ZombieTransitions.Attack,
+          ZombieTransitions.Attacking,
+          ZombieTransitions.Feed
+        ],
         to: ZombieTransitions.Investigate,
         EnterTransition: () => {
           zombie.stateTimer = 0;
+          zombie.targetCharacterId = null;
+          zombie.corpseTargetId = null;
+          zombie.isEatingCorpse = false;
+          zombie.npc.lookAtTarget = null;
           zombie.targetPos = zombie.lastNoisePos;
           if (zombie.targetPos)
             moveToward(zombie.npc, zombie.targetPos, zombie.server);

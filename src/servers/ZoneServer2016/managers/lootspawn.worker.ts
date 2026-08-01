@@ -1,7 +1,6 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { PluginManager } from "./pluginmanager";
 import { ModelIds, NpcIds } from "../models/enums";
-import { buildNpcSpawnCandidates, getNpcModelsForRoll } from "./npcspawn";
 import type {
   GroundLootTableJson,
   ContainerLootTableJson,
@@ -58,6 +57,7 @@ interface NpcPlanRequest {
     existingNpcPositions: number[][];
     npcSpawnRadius: number;
     chanceNpc: number;
+    chanceRabbit: number;
     chanceScreamer: number;
     chanceGasser: number;
     chanceExploder: number;
@@ -148,6 +148,24 @@ interface WorkerResponse {
 }
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
+
+function getAuthorizedNpcModels(actorDefinition: string): number[] {
+  switch (actorDefinition) {
+    case "NPCSpawner_ZombieLazy.adr":
+    case "NPCSpawner_ZombieWalker.adr":
+      return [ModelIds.ZOMBIE_FEMALE_WALKER, ModelIds.ZOMBIE_MALE_WALKER];
+    case "NPCSpawner_Deer001.adr":
+      return [9002, 9253];
+    case "NPCSpawner_Rabbit001.adr":
+      return [ModelIds.RABBIT];
+    case "NPCSpawner_Wolf001.adr":
+      return [9003];
+    case "Bear_Brown.adr":
+      return [9187];
+    default:
+      return [];
+  }
+}
 
 function isPosInRadius(
   radius: number,
@@ -470,6 +488,7 @@ function createNpcPlan(
   existingNpcPositions: number[][],
   npcSpawnRadius: number,
   chanceNpc: number,
+  chanceRabbit: number,
   chanceScreamer: number,
   chanceGasser: number,
   chanceExploder: number,
@@ -481,63 +500,68 @@ function createNpcPlan(
   const remaining = npcSpawnCap - existingNpcPositions.length;
   if (remaining <= 0) return plan;
 
-  for (const candidate of buildNpcSpawnCandidates(Z1_npcs)) {
-    const { actorDefinition, instance: npcInstance, index: i } = candidate;
-    if (plan.length >= remaining) return plan;
+  for (const spawnerType of Z1_npcs) {
+    const baseModels = getAuthorizedNpcModels(spawnerType.actorDefinition);
+    if (!baseModels.length) continue;
 
-    let pos: number[] = npcInstance.position;
-    if (i > 0) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 4 + Math.random() * 4;
-      pos = [
-        npcInstance.position[0] + Math.cos(angle) * dist,
-        npcInstance.position[1],
-        npcInstance.position[2] + Math.sin(angle) * dist,
-        1
-      ];
-    }
+    for (const npcInstance of spawnerType.instances) {
+      const spawnCount: number = npcInstance.count ?? 1;
+      for (let i = 0; i < spawnCount; i++) {
+        if (plan.length >= remaining) return plan;
 
-    let blocked = false;
-    for (const npcPos of plannedPositions) {
-      if (isPosInRadius(npcSpawnRadius, pos, npcPos)) {
-        blocked = true;
-        break;
+        let pos: number[] = npcInstance.position;
+        if (i > 0) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 4 + Math.random() * 4;
+          pos = [
+            npcInstance.position[0] + Math.cos(angle) * dist,
+            npcInstance.position[1],
+            npcInstance.position[2] + Math.sin(angle) * dist,
+            1
+          ];
+        }
+
+        let blocked = false;
+        for (const npcPos of plannedPositions) {
+          if (isPosInRadius(npcSpawnRadius, pos, npcPos)) {
+            blocked = true;
+            break;
+          }
+        }
+        if (blocked) continue;
+
+        const spawnChanceRoll = Math.floor(Math.random() * 100) + 1;
+        if (spawnChanceRoll > chanceNpc) continue;
+
+        const models = [...baseModels];
+        const screamerChanceRoll = Math.floor(Math.random() * 1000) + 1;
+        if (screamerChanceRoll <= chanceScreamer)
+          models.push(ModelIds.ZOMBIE_SCREAMER);
+
+        const modelId = models[Math.floor(Math.random() * models.length)];
+
+        let npcId: number | undefined;
+        if (
+          modelId === ModelIds.ZOMBIE_FEMALE_WALKER ||
+          modelId === ModelIds.ZOMBIE_MALE_WALKER
+        ) {
+          if (Math.floor(Math.random() * 1000) + 1 <= chanceExploder) {
+            npcId = NpcIds.EXPLODER;
+          } else if (Math.floor(Math.random() * 1000) + 1 <= chanceGasser) {
+            npcId = NpcIds.GASSER;
+          }
+        }
+
+        plan.push({
+          spawnerId: i === 0 ? npcInstance.id : 0,
+          modelId,
+          position: pos,
+          rotation: npcInstance.rotation,
+          npcId
+        });
+        plannedPositions.push([pos[0], pos[1], pos[2]]);
       }
     }
-    if (blocked) continue;
-
-    const spawnChanceRoll = Math.floor(Math.random() * 100) + 1;
-    if (spawnChanceRoll > chanceNpc) continue;
-
-    const screamerChanceRoll = Math.floor(Math.random() * 1000) + 1;
-    const models = getNpcModelsForRoll(
-      actorDefinition,
-      chanceScreamer,
-      screamerChanceRoll
-    );
-
-    const modelId = models[Math.floor(Math.random() * models.length)];
-
-    let npcId: number | undefined;
-    if (
-      modelId === ModelIds.ZOMBIE_FEMALE_WALKER ||
-      modelId === ModelIds.ZOMBIE_MALE_WALKER
-    ) {
-      if (Math.floor(Math.random() * 1000) + 1 <= chanceExploder) {
-        npcId = NpcIds.EXPLODER;
-      } else if (Math.floor(Math.random() * 1000) + 1 <= chanceGasser) {
-        npcId = NpcIds.GASSER;
-      }
-    }
-
-    plan.push({
-      spawnerId: i === 0 ? npcInstance.id : 0,
-      modelId,
-      position: pos,
-      rotation: npcInstance.rotation,
-      npcId
-    });
-    plannedPositions.push([pos[0], pos[1], pos[2]]);
   }
 
   return plan;
@@ -602,6 +626,7 @@ parentPort?.on("message", (request: WorkerRequest) => {
         request.payload.existingNpcPositions,
         request.payload.npcSpawnRadius,
         request.payload.chanceNpc,
+        request.payload.chanceRabbit,
         request.payload.chanceScreamer,
         request.payload.chanceGasser,
         request.payload.chanceExploder,
