@@ -72,6 +72,11 @@ import {
   NAVIGATION_ARTIFACT_MANIFEST,
   verifyNavigationArtifact
 } from "./navigationartifacts";
+import {
+  NavigationArea,
+  NavigationPolyFlag,
+  runtimeNavigationArea
+} from "./navigationareas";
 const debug = require("debug")("nav");
 // dedicated namespace for tile streaming (enable with DEBUG=nav:stream)
 const debugStream = require("debug")("nav:stream");
@@ -136,8 +141,11 @@ function loadNavigationTransitions(): NavigationTransition[] {
         endPosition: { x: entry.end[0], y: entry.end[1], z: entry.end[2] },
         radius: entry.radius ?? 0.8,
         bidirectional: entry.bidirectional ?? true,
-        area: 0,
-        flags: 1,
+        area: NavigationArea.Threshold,
+        flags:
+          NavigationPolyFlag.Walk |
+          NavigationPolyFlag.Transition |
+          NavigationPolyFlag.Door,
         userId: 0x48000000 + index
       }
     ];
@@ -148,8 +156,9 @@ function createNavigationTileCacheMeshProcess(): TileCacheMeshProcess {
   const transitions = loadNavigationTransitions();
   return new TileCacheMeshProcess((params, polyAreas, polyFlags) => {
     for (let i = 0; i < params.polyCount(); ++i) {
-      polyAreas.set(i, 0);
-      polyFlags.set(i, 1);
+      const runtime = runtimeNavigationArea(polyAreas.get(i));
+      polyAreas.set(i, runtime.area);
+      polyFlags.set(i, runtime.flags);
     }
     params.setOffMeshConnections(
       selectNavigationTransitionsForTile(
