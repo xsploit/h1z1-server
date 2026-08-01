@@ -281,6 +281,10 @@ import {
   startRuntimeWatchdog,
   stopRuntimeWatchdog
 } from "../../utils/runtimewatchdog";
+import {
+  getThrowableTracePath,
+  traceThrowable
+} from "../../utils/throwablediagnostics";
 //import { TaskManager } from "./managers/tasksmanager";
 
 const spawnLocations2 = PluginManager.loadServerData(
@@ -5221,6 +5225,13 @@ export class ZoneServer2016 extends EventEmitter {
       );
       if (traceUntil) {
         if (Date.now() <= traceUntil) {
+          traceThrowable("outbound-packet", {
+            characterId: client.character.characterId,
+            packetName,
+            bytes: data.length,
+            opcode: data.subarray(0, 4).toString("hex"),
+            channel
+          });
           console.log(
             `[THROWABLE TRACE] outbound ${packetName} bytes=${data.length} opcode=${data.subarray(0, 4).toString("hex")}`
           );
@@ -8963,6 +8974,16 @@ export class ZoneServer2016 extends EventEmitter {
     console.log(
       `[THROWABLE TRACE] created item=${itemDefinition.ID} transient=${transientId} projectile=${npc.projectileUniqueId} owner=${client.character.characterId}`
     );
+    traceThrowable("created", {
+      itemDefinitionId: itemDefinition.ID,
+      characterId: npc.characterId,
+      transientId,
+      projectileUniqueId: npc.projectileUniqueId,
+      ownerCharacterId: client.character.characterId,
+      x: packet.packet.position[0],
+      y: packet.packet.position[1],
+      z: packet.packet.position[2]
+    });
     this._throwableProjectiles[npc.characterId] = npc;
     if (!createNpc) return;
     this.getClientsInRange(packet.packet.position, 200).forEach((c: Client) => {
@@ -9251,6 +9272,14 @@ export class ZoneServer2016 extends EventEmitter {
       console.log(
         `[THROWABLE TRACE] launch item=${itemDefinition.ID} guid=${weaponItem.itemGuid}`
       );
+      traceThrowable("launch", {
+        itemDefinitionId: itemDefinition.ID,
+        itemGuid: weaponItem.itemGuid,
+        ownerCharacterId: client.character.characterId,
+        sessionProjectileCount: packet.packet.sessionProjectileCount,
+        projectileUniqueId: packet.packet.projectileUniqueId,
+        tracePath: getThrowableTracePath()
+      });
       if (
         !this.scheduleThrowableConsumption(client, weaponItem, itemDefinition)
       )

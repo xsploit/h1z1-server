@@ -21,6 +21,7 @@ import {
 import { Items, PositionUpdateType } from "../models/enums";
 import { DamageInfo } from "../../../types/zoneserver";
 import { getDistance } from "../../../utils/utils";
+import { traceThrowable } from "../../../utils/throwablediagnostics";
 
 export class ProjectileEntity extends BaseLightweightCharacter {
   projectileUniqueId: number;
@@ -143,6 +144,15 @@ export class ProjectileEntity extends BaseLightweightCharacter {
   }
 
   onTrigger(server: ZoneServer2016, client?: ZoneClient2016) {
+    traceThrowable("trigger", {
+      itemDefinitionId: this.itemDefinitionId,
+      characterId: this.characterId,
+      transientId: this.transientId,
+      projectileUniqueId: this.projectileUniqueId,
+      x: this.state.position[0],
+      y: this.state.position[1],
+      z: this.state.position[2]
+    });
     console.log(
       `[THROWABLE TRACE] trigger item=${this.itemDefinitionId} transient=${this.transientId} projectile=${this.projectileUniqueId}`
     );
@@ -278,6 +288,12 @@ export class ProjectileEntity extends BaseLightweightCharacter {
   }
 
   destroy(server: ZoneServer2016): boolean {
+    traceThrowable("destroy", {
+      itemDefinitionId: this.itemDefinitionId,
+      characterId: this.characterId,
+      transientId: this.transientId,
+      projectileUniqueId: this.projectileUniqueId
+    });
     clearTimeout(this.triggerTimeout);
     clearTimeout(this.destroyTimeout);
     clearInterval(this.gasDamageInterval);
