@@ -22,17 +22,47 @@ data/2016/collision/z1_cache_*.bin
 data/2016/navigation_metadata.json
 ```
 
+The runtime bundle also contains the independently extracted H1COL2 collision
+mesh and heightmap used for collision and grounding. Those files are not inputs
+to the C++ Recast bake, but they must describe the same world revision.
+
+## Artifact contract
+
+Every streamed runtime must contain
+`data/2016/navigation-artifact-manifest.json`. The manifest binds the ordered
+cache parts, H1COL2 collision mesh, heightmap, navigation metadata, and reviewed
+transitions by size and SHA-256. Its deterministic `artifactId` identifies the
+complete runtime bundle.
+
+Generate and verify a staged bundle with:
+
+```powershell
+npm run navmesh-artifact-create -- --bundle-root data/2016 `
+  --source-world C:\path\to\world.obj `
+  --classifier-config C:\path\to\config.yml `
+  --extractor-commit <sha> `
+  --recast-commit <sha> `
+  --recast-navigation-commit <sha>
+npm run navmesh-artifact-check -- --bundle-root data/2016
+```
+
+New builds must use `provenance.status=complete`. A pre-contract rollback can
+be recorded honestly as `runtime-only`; it still receives full runtime hashes
+but does not pretend that its original `world.obj` or tool commits are known.
+When `NAV_STREAMING=1`, a missing, altered, mixed, or incomplete cache bundle
+is a startup error. The server does not silently fall back to another navmesh.
+
 Validate the sidecar before starting the server:
 
 ```powershell
 npm run navmesh-metadata-check
 ```
 
-When the validated sidecar says the baked door geometry was excluded, static
-world doors automatically become dynamic tile-cache obstacles. Opening or
-destroying a door removes its obstacle; closing it restores the obstacle. Set
-`H1EMU_DYNAMIC_DOOR_OBSTACLES=0` for an emergency rollback. For a deliberate
-test without a sidecar, set it to `1`.
+When the validated sidecar says the baked door geometry was excluded, set
+`H1EMU_DYNAMIC_DOOR_OBSTACLES=1` to make static world doors dynamic tile-cache
+obstacles. Opening or destroying a door removes its obstacle; closing it
+restores the obstacle. If the sidecar is absent or does not declare excluded
+door geometry, the opt-in remains disabled.
 
 ## Transitions
 

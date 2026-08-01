@@ -68,6 +68,10 @@ export function hasDetourSuccess(status: number): boolean {
 import { NavMeshQuery } from "recast-navigation";
 import { Crowd } from "recast-navigation";
 import { runRuntimePhase } from "./runtimewatchdog";
+import {
+  NAVIGATION_ARTIFACT_MANIFEST,
+  verifyNavigationArtifact
+} from "./navigationartifacts";
 const debug = require("debug")("nav");
 // dedicated namespace for tile streaming (enable with DEBUG=nav:stream)
 const debugStream = require("debug")("nav:stream");
@@ -167,6 +171,9 @@ function createNavigationTileCacheMeshProcess(): TileCacheMeshProcess {
 // TSET header. Construction obstacles carve natively via the tilecache.
 const STREAM_CACHE_DIR =
   process.env.NAV_CACHE_DIR ?? __dirname + "/../../data/2016/collision";
+const STREAM_ARTIFACT_MANIFEST =
+  process.env.NAV_ARTIFACT_MANIFEST ??
+  join(STREAM_CACHE_DIR, "..", NAVIGATION_ARTIFACT_MANIFEST);
 const STREAM_RADIUS = 300; // materialise tiles within this many meters of a player
 const STREAM_INTERVAL = 1000; // ms between window updates
 const MAX_AGENT_TARGET_DISTANCE = STREAM_RADIUS * 2;
@@ -362,10 +369,7 @@ export class NavManager {
       const targetDistance =
         createdAt === undefined
           ? 0
-          : Math.hypot(
-              position.x - createdAt[0],
-              position.z - createdAt[2]
-            );
+          : Math.hypot(position.x - createdAt[0], position.z - createdAt[2]);
       if (
         !this._crowdHealthy ||
         !Number.isFinite(position.x) ||
@@ -631,12 +635,24 @@ export class NavManager {
     const storePath = STREAM_CACHE_DIR + "/z1_cache_0.bin";
     const cacheAvailable = existsSync(storePath);
     if (shouldUseStreamingNav(requestedMode, cacheAvailable)) {
-      if (cacheAvailable) return this.loadNavStreaming();
-    }
-    if (requestedMode === "1") {
-      console.warn(
-        "[NAV] NAV_STREAMING=1 but data/2016/collision/z1_cache_*.bin is missing - falling back to the standard navmesh"
+      if (!cacheAvailable) {
+        throw new Error(
+          `[NAV] streaming was requested but the cache is missing: ${storePath}`
+        );
+      }
+      const verified = await verifyNavigationArtifact({
+        manifestPath: STREAM_ARTIFACT_MANIFEST,
+        cacheDirectory: STREAM_CACHE_DIR,
+        requireRuntimeDependencies: true
+      });
+      console.log(
+        `[NAV] artifact verified: ${verified.manifest.artifactId} ` +
+          `(${verified.filesVerified} files, ${(
+            verified.bytesVerified /
+            (1024 * 1024)
+          ).toFixed(1)} MB, provenance=${verified.manifest.provenance.status})`
       );
+      return this.loadNavStreaming();
     }
     console.time("[NAV] Navmesh loaded");
     const mesh_parts: Buffer[] = [];
@@ -977,20 +993,20 @@ export class NavManager {
       // unload columns outside the window
       for (const k of toRemove) {
         const [tx, tz] = k.split(",").map(Number);
-          const authoredLayerCount = this._streamCacheLayers.get(k)?.length ?? 0;
-          const res = this.navmesh.getTilesAt(
-            tx,
-            tz,
-            Math.max(8, authoredLayerCount)
-          );
-          for (let i = 0; i < res.tileCount(); i++) {
-            const ref = this.navmesh.getTileRef(res.tiles(i));
-            if (ref) {
-              runRuntimePhase("nav-mesh-remove-tile", () =>
-                this.navmesh.removeTile(ref)
-              );
-            }
+        const authoredLayerCount = this._streamCacheLayers.get(k)?.length ?? 0;
+        const res = this.navmesh.getTilesAt(
+          tx,
+          tz,
+          Math.max(8, authoredLayerCount)
+        );
+        for (let i = 0; i < res.tileCount(); i++) {
+          const ref = this.navmesh.getTileRef(res.tiles(i));
+          if (ref) {
+            runRuntimePhase("nav-mesh-remove-tile", () =>
+              this.navmesh.removeTile(ref)
+            );
           }
+        }
         this._loadedCols.delete(k);
         removed++;
       }
@@ -1103,9 +1119,7 @@ export class NavManager {
     if (!this._crowdHealthy) return;
     try {
       this.traceCrowdOperation("agent-removed", agent.agentIndex);
-      runRuntimePhase("nav-agent-remove", () =>
-        this.crowd.removeAgent(agent)
-      );
+      runRuntimePhase("nav-agent-remove", () => this.crowd.removeAgent(agent));
       this._crowdAgentTraces.delete(agent.agentIndex);
     } catch (error) {
       debugStream(
@@ -1563,9 +1577,7 @@ export class NavManager {
         agent.agentIndex,
         nearestPoint
       );
-      runRuntimePhase("nav-agent-teleport", () =>
-        agent.teleport(nearestPoint)
-      );
+      runRuntimePhase("nav-agent-teleport", () => agent.teleport(nearestPoint));
       return true;
     } catch (error) {
       this.markCrowdFault(error, "agent teleport");
