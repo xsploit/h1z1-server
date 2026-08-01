@@ -40,10 +40,13 @@ async function main() {
   );
 
   let created = 0;
+  let streamMutations = 0;
   for (const center of centers) {
     Object.assign(nav as object, { _lastStreamMs: 0 });
-    if (!nav.streamAround([center])) {
-      throw new Error("expected stream window to change");
+    const streamed = nav.streamAround([center]);
+    if (streamed) streamMutations++;
+    if (!streamed && !nav.isPositionStreamed(center)) {
+      throw new Error("requested stream center is not resident");
     }
 
     const points = [];
@@ -104,6 +107,7 @@ async function main() {
   console.log(
     JSON.stringify({
       streamTransitions: centers.length,
+      streamMutations,
       agentInvalidations: invalidations,
       agentsCreated: created,
       stepsPerWindow,

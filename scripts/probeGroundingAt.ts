@@ -14,6 +14,12 @@ const y = Number(process.argv[4]);
 const z = Number(process.argv[5]);
 const radius = Number(process.argv[6] ?? 0);
 const step = Number(process.argv[7] ?? 1);
+const heightmapPath = resolve(
+  process.env.HEIGHTMAP_PATH ?? "data/2016/zoneData/heightmap.png"
+);
+const collisionPath = resolve(
+  process.env.COLLISION_PATH ?? "data/2016/collision/z1_collision.bin"
+);
 
 if (
   !cacheDirectory ||
@@ -33,7 +39,7 @@ process.env.NAV_CACHE_DIR = resolve(cacheDirectory);
 async function main() {
   const [{ NavManager }, image] = await Promise.all([
     import("../src/utils/recast"),
-    loadImage(readFileSync(resolve("data/2016/zoneData/heightmap.png")))
+    loadImage(readFileSync(heightmapPath))
   ]);
   const nav = new NavManager();
   await nav.loadNav();
@@ -44,7 +50,7 @@ async function main() {
   context.drawImage(image, 0, 0);
   const heightmap = context.getImageData(0, 0, image.width, image.height).data;
   const collision = new CollisionManager();
-  collision.load(resolve("data/2016/collision/z1_collision.bin"));
+  collision.load(collisionPath);
 
   const samples = [];
   for (let sx = x - radius; sx <= x + radius + 1e-6; sx += step) {
