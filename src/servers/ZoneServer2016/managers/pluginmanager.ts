@@ -539,12 +539,14 @@ export class PluginManager {
     this.plugins = [];
     await this.loadPlugins();
 
-    for (const plugin of this.plugins) {
-      // Keep startup responsive by not serially awaiting plugin init.
-      setImmediate(() => {
-        void this.initializePluginWithTimeout(plugin, server);
-      });
-    }
+    // Plugins define gameplay policy and hooks used as soon as the server is
+    // announced ready. Initialize them concurrently, but do not let readiness
+    // race ahead of their bounded initialization promises.
+    await Promise.all(
+      this.plugins.map((plugin) =>
+        this.initializePluginWithTimeout(plugin, server)
+      )
+    );
 
     if (this.plugins.length == 0) {
       console.log(`[PluginManager] No plugins loaded.`);

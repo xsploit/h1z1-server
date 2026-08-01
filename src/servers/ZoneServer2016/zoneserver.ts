@@ -245,6 +245,7 @@ import { SpeedTreeManager } from "./managers/speedtreemanager";
 import { ConstructionManager } from "./managers/constructionmanager";
 import { FairPlayManager } from "./managers/fairplaymanager";
 import { PluginManager } from "./managers/pluginmanager";
+import { HumanEncounterManager } from "./managers/humanencountermanager";
 import { Destroyable } from "./entities/destroyable";
 import { FileHashTypeList, ReceivedPacket } from "types/shared";
 import { SOEOutputChannels } from "../../servers/SoeServer/soeoutputstream";
@@ -518,6 +519,7 @@ export class ZoneServer2016 extends EventEmitter {
   constructionManager: ConstructionManager;
   fairPlayManager: FairPlayManager;
   pluginManager: PluginManager;
+  humanEncounterManager: HumanEncounterManager;
   configManager: ConfigManager;
   playTimeManager: PlayTimeManager;
   explosiveManager: AiManager;
@@ -657,6 +659,7 @@ export class ZoneServer2016 extends EventEmitter {
     this.constructionManager = new ConstructionManager();
     this.fairPlayManager = new FairPlayManager();
     this.pluginManager = new PluginManager();
+    this.humanEncounterManager = new HumanEncounterManager(this);
     this.commandHandler = new CommandHandler();
     this.playTimeManager = new PlayTimeManager();
     this.explosiveManager = new AiManager(this);

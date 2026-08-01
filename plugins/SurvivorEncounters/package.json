@@ -1,0 +1,14 @@
+{
+  "name": "h1emu-survivor-encounters",
+  "version": "0.1.0",
+  "description": "Open survivor, bandit, POI, and lightweight mission gameplay for h1z1-server",
+  "main": "plugin.js",
+  "scripts": {
+    "install": "npm run build",
+    "build": "tsc -p tsconfig.json"
+  },
+  "license": "GPL-3.0-only",
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,72 @@
+enabled: true
+pveOrSoloOnly: true
+respawnCheckSeconds: 60
+ambientBanditChancePercent: 20
+
+profiles:
+  - id: military
+    label: Military Base
+    disposition: survivor
+    role: military
+    spawnerBaseId: 2000000
+    positions:
+      - [688.5, 48.08, -2476, 1]
+      - [704.5, 48.08, -2476, 1]
+      - [930.43, 14, -2704.97, 1]
+      - [705.24, 14, -2704.81, 1]
+      - [844, 16.1, -2659, 1]
+
+  - id: hospital
+    label: Hospital
+    disposition: survivor
+    role: medic
+    spawnerBaseId: 2000100
+    positions:
+      - [1895.92, 93.69, -2747.17, 1]
+      - [1852.99, 93.69, -2780.15, 1]
+      - [1861.14, 93.69, -2910.28, 1]
+
+  - id: police-pleasant-valley
+    label: Pleasant Valley Police Station
+    disposition: survivor
+    role: police
+    spawnerBaseId: 2000200
+    positions:
+      - [-222.04, 23.41, -1133.48, 1]
+      - [-240.86, 23.41, -1134.44, 1]
+
+  - id: police-2
+    label: Police Station 2
+    disposition: survivor
+    role: police
+    spawnerBaseId: 2000300
+    positions:
+      - [-592.8, 47.5, 1204.1, 1]
+      - [-598.8, 47.5, 1204.1, 1]
+
+  - id: police-3
+    label: Police Station 3
+    disposition: survivor
+    role: police
+    spawnerBaseId: 2000400
+    positions:
+      - [337.1, 31.6, -1156.6, 1]
+      - [343.1, 31.6, -1156.6, 1]
+
+  - id: police-4
+    label: Police Station 4
+    disposition: survivor
+    role: police
+    spawnerBaseId: 2000500
+    positions:
+      - [-1383.3, 74.6, 1803.3, 1]
+      - [-1389.3, 74.6, 1803.3, 1]
+
+  - id: police-5
+    label: Police Station 5
+    disposition: survivor
+    role: police
+    spawnerBaseId: 2000600
+    positions:
+      - [2166, 47.5, -991.7, 1]
+      - [2172, 47.5, -991.7, 1]

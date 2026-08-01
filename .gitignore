@@ -12,3 +12,4 @@ config.yaml
 __pycache__/
 /data/2016/collision/
 /data/2016/zoneData/heightmap.png
+/plugins/*-config.yaml
