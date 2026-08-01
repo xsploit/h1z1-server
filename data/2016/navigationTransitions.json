@@ -7,5 +7,14 @@
     "end": [-225.99, 25.45, -1159.13],
     "radius": 0.8,
     "bidirectional": true
+  },
+  {
+    "name": "Pleasant Valley police interior stairs lower landing",
+    "kind": "stairs",
+    "source": "regional-nav-analysis",
+    "start": [-228.6, 25.62, -1161.14],
+    "end": [-229.1, 26.65, -1162.7],
+    "radius": 0.3,
+    "bidirectional": true
   }
 ]
