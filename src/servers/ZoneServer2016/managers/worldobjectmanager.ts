@@ -82,6 +82,10 @@ import { Bear } from "../entities/bear";
 import { scheduler } from "node:timers/promises";
 import { runRuntimePhase } from "../../../utils/runtimewatchdog";
 import {
+  loadNavigationMetadata,
+  shouldEnableDynamicDoorObstacles
+} from "../../../utils/navigationmetadata";
+import {
   ContainerPropSnapshot,
   ItemDespawnSnapshot,
   LootSpawnWorker,
@@ -1412,7 +1416,7 @@ export class WorldObjectManager {
     spawnerId: number
   ) {
     const characterId = generateRandomGuid();
-    server._doors[characterId] = new DoorEntity(
+    const door = new DoorEntity(
       characterId,
       server.getTransientId(characterId),
       modelID,
@@ -1422,9 +1426,15 @@ export class WorldObjectManager {
       scale,
       spawnerId
     );
+    server._doors[characterId] = door;
+    return door;
   }
 
   createDoors(server: ZoneServer2016) {
+    const navigationMetadata = loadNavigationMetadata();
+    const dynamicDoorObstacles =
+      shouldEnableDynamicDoorObstacles(navigationMetadata);
+    let dynamicObstacleCount = 0;
     Z1_doors.forEach((doorType: any) => {
       const modelId: number = _.find(models, (model: any) => {
         return (
@@ -1433,7 +1443,7 @@ export class WorldObjectManager {
         );
       })?.ID;
       doorType.instances.forEach((doorInstance: any) => {
-        this.createDoor(
+        const door = this.createDoor(
           server,
           modelId ? modelId : 9183,
           new Float32Array(doorInstance.position),
@@ -1442,8 +1452,17 @@ export class WorldObjectManager {
           // doorInstance.id doesn't exist
           0
         );
+        if (dynamicDoorObstacles) {
+          door.enableNavObstacle(server);
+          dynamicObstacleCount++;
+        }
       });
     });
+    if (dynamicDoorObstacles) {
+      console.log(
+        `[NAV] dynamic door obstacles enabled for ${dynamicObstacleCount} world doors`
+      );
+    }
     debug("All doors objects created");
   }
 

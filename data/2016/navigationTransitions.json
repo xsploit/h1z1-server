@@ -1,6 +1,8 @@
 [
   {
     "name": "Pleasant Valley police front steps",
+    "kind": "stairs",
+    "source": "manual-validated",
     "start": [-222.0, 23.65, -1157.0],
     "end": [-225.99, 25.45, -1159.13],
     "radius": 0.8,

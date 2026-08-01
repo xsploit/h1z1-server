@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "coordinateSpace": "h1z1-world-y-up-meters",
+  "bakedDoorGeometryExcluded": true,
+  "instances": [
+    {
+      "actorDefinition": "Common_Props_Doors_ResidentialFront01",
+      "kind": "door",
+      "instanceId": 42,
+      "position": [1, 2, 3, 1],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1, 1]
+    },
+    {
+      "actorDefinition": "Common_Props_Modular_Stair",
+      "kind": "stairs",
+      "instanceId": 43,
+      "position": [4, 5, 6, 1],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1, 1]
+    }
+  ]
+}

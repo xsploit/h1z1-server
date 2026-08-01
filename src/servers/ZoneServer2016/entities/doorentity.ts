@@ -23,6 +23,19 @@ import {
   PositionUpdateType,
   StringIds
 } from "../models/enums";
+import type { BoxObstacle, Vector3 } from "recast-navigation";
+
+export function getDoorNavHalfExtents(
+  actorModelId: number,
+  scale: Float32Array
+): Vector3 {
+  const isDoubleDoor = actorModelId === ModelIds.BUISNESS_DOORS_GLASS;
+  return {
+    x: (isDoubleDoor ? 1.35 : 0.7) * Math.abs(scale[0] || 1),
+    y: 1.4 * Math.abs(scale[1] || 1),
+    z: 0.12 * Math.abs(scale[2] || 1)
+  };
+}
 
 function getDestroyedModels(actorModel: number): number[] {
   switch (actorModel) {
@@ -136,6 +149,8 @@ export class DoorEntity extends BaseLightweightCharacter {
   destroyed: boolean = false;
   destroyedModel: number;
   destroyedModels: number[];
+  private navObstacleEnabled = false;
+  private navObstacle: BoxObstacle | null = null;
   constructor(
     characterId: string,
     transientId: number,
@@ -168,6 +183,30 @@ export class DoorEntity extends BaseLightweightCharacter {
     this.health = 2000;
   }
 
+  enableNavObstacle(server: ZoneServer2016) {
+    this.navObstacleEnabled = true;
+    this.syncNavObstacle(server);
+  }
+
+  private clearNavObstacle(server: ZoneServer2016) {
+    if (!this.navObstacle) return;
+    server.navManager.removeObstacle(this.navObstacle);
+    this.navObstacle = null;
+  }
+
+  private syncNavObstacle(server: ZoneServer2016) {
+    if (!this.navObstacleEnabled || this.isOpen || this.destroyed) {
+      this.clearNavObstacle(server);
+      return;
+    }
+    if (this.navObstacle) return;
+    this.navObstacle = server.navManager.addObstacle(
+      this.state.position,
+      getDoorNavHalfExtents(this.actorModelId, this.scale),
+      this.closedAngle
+    );
+  }
+
   pGetLightweight(): AddLightweightNpc {
     return {
       characterId: this.characterId,
@@ -198,6 +237,7 @@ export class DoorEntity extends BaseLightweightCharacter {
     this.health -= damageInfo.damage;
     if (this.health > 0) return;
     this.destroyed = true;
+    this.syncNavObstacle(server);
     server.sendDataToAllWithSpawnedEntity(
       server._doors,
       this.characterId,
@@ -255,6 +295,7 @@ export class DoorEntity extends BaseLightweightCharacter {
       }
     );
     this.isOpen = !this.isOpen;
+    this.syncNavObstacle(server);
   }
 
   OnInteractionString(server: ZoneServer2016, client: ZoneClient2016) {
@@ -265,6 +306,7 @@ export class DoorEntity extends BaseLightweightCharacter {
   }
 
   destroy(server: ZoneServer2016): boolean {
+    this.clearNavObstacle(server);
     return server.deleteEntity(this.characterId, server._doors);
   }
 }

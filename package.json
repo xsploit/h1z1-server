@@ -80,6 +80,7 @@
     "prettier_sources": "prettier --write ./src && prettier --write ./tests && prettier --write ./benchmarks",
     "tests": "npm run gen-packets-types && npm run gen-packets-interfaces && npm run prettier_sources",
     "navmesh-dump": "tsx scripts/debugNavmesh.ts",
+    "navmesh-metadata-check": "tsx scripts/validateNavigationMetadata.ts",
     "crash-capture": "node tools/crash-capture/soe-crash-server.mjs",
     "test-crash-capture": "node --test tools/crash-capture/soe-crash-server.test.mjs"
   },
