@@ -76,7 +76,7 @@ async function main() {
     }
     if (!nav.crowdHealthy) throw new Error("crowd faulted after stream change");
     for (const agent of agents) {
-      const position = agent.interpolatedPosition;
+      const position = agent.position();
       if (
         !Number.isFinite(position.x) ||
         !Number.isFinite(position.y) ||

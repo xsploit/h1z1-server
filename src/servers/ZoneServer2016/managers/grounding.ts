@@ -2,6 +2,11 @@ export const EXPECTED_HEIGHTMAP_SIZE = 8192;
 const MAX_BILINEAR_SPREAD = 4;
 const STRUCTURE_TERRAIN_TOLERANCE = 0.5;
 const MAX_GROUND_SNAP_DISTANCE = 1.5;
+// Recast contains small walkable islands on some parked props and vehicle
+// shells.  They sit roughly 0.5-0.9m above the real terrain but have no
+// matching walkable surface in the collision data.  Treating those islands as
+// floors visibly elevators NPCs and strands their crowd agents.
+const NAV_SURFACE_SUPPORT_TOLERANCE = 0.45;
 
 export type TerrainSamplingMode = "bilinear" | "reference" | "nearest";
 export type GroundSource = "structure" | "terrain" | "navmesh" | "current";
@@ -151,9 +156,24 @@ export function selectGroundSurface(
   // to the previous replicated Y pins agents to the lower sidewalk until they
   // tunnel through the entire staircase.
   const navSurface = surfaces.find((surface) => surface.source === "navmesh");
+  const navHasTerrainSupport =
+    !terrainIsValid ||
+    (navSurface !== undefined &&
+      navSurface.height <= terrainY + NAV_SURFACE_SUPPORT_TOLERANCE);
+  const navHasStructureSupport =
+    navSurface !== undefined &&
+    structureY !== null &&
+    Number.isFinite(structureY) &&
+    Math.abs(navSurface.height - structureY) <= NAV_SURFACE_SUPPORT_TOLERANCE;
+  // An actor already authored on an interior/roof layer must remain there even
+  // when the collision extractor has no sample for that exact X/Z.  This does
+  // not bless a ground-level actor's first jump onto a raised prop island.
+  const currentIsOnRaisedLayer =
+    terrainIsValid && currentY > terrainY + NAV_SURFACE_SUPPORT_TOLERANCE;
   if (
     navSurface &&
-    Math.abs(navSurface.height - currentY) <= MAX_GROUND_SNAP_DISTANCE
+    Math.abs(navSurface.height - currentY) <= MAX_GROUND_SNAP_DISTANCE &&
+    (navHasTerrainSupport || navHasStructureSupport || currentIsOnRaisedLayer)
   ) {
     return navSurface;
   }

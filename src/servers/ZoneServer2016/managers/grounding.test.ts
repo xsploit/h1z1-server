@@ -79,7 +79,7 @@ test("ground selection follows a connected navmesh stair away from terrain", () 
   assert.deepEqual(
     selectGroundSurface({
       terrainY: 23.4,
-      structureY: 23.4,
+      structureY: 24.15,
       navY: 24.2,
       currentY: 23.65
     }),
@@ -88,11 +88,32 @@ test("ground selection follows a connected navmesh stair away from terrain", () 
   assert.deepEqual(
     selectGroundSurface({
       terrainY: 23.4,
-      structureY: 23.4,
+      structureY: 23.85,
       navY: 23.8,
       currentY: 24.35
     }),
     { height: 23.8, source: "navmesh" }
+  );
+});
+
+test("ground selection rejects raised prop islands without collision support", () => {
+  assert.deepEqual(
+    selectGroundSurface({
+      terrainY: 23.40625,
+      structureY: null,
+      navY: 24.11394,
+      currentY: 23.4
+    }),
+    { height: 23.40625, source: "terrain" }
+  );
+  assert.deepEqual(
+    selectGroundSurface({
+      terrainY: 22.71875,
+      structureY: 23.59905,
+      navY: 23.65,
+      currentY: 23.4
+    }),
+    { height: 23.65, source: "navmesh" }
   );
 });
 

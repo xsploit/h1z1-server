@@ -63,7 +63,8 @@ test("NPC grounding preserves the previous replicated vertical layer", () => {
       position: new Float32Array([10, 25, 10, 1])
     },
     navAgent: {
-      interpolatedPosition: { x: 11, y: 25.75, z: 12 }
+      interpolatedPosition: { x: 10.01, y: 25, z: 10.01 },
+      position: () => ({ x: 11, y: 25.75, z: 12 })
     },
     goTo(position: Float32Array) {
       replicatedPosition = position;

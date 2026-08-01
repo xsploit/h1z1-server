@@ -46,7 +46,7 @@ async function main() {
     npc.navAgent ??=
       server.navManager.createAgent(npc.state.position) ?? undefined;
     if (!npc.navAgent) continue;
-    const navPosition = npc.navAgent.interpolatedPosition;
+    const navPosition = npc.navAgent.position();
     const position = new Float32Array([
       navPosition.x,
       navPosition.y,

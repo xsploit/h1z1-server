@@ -11041,9 +11041,14 @@ export class ZoneServer2016 extends EventEmitter {
         );
       }
       if (npc.navAgent) {
-        const navPos = runRuntimePhase(
-          "path-npc-read",
-          () => npc.navAgent!.interpolatedPosition
+        // The Recast wrapper's interpolatedPosition is only meaningful when
+        // crowd.update() is sampled between fixed simulation steps.  Our crowd
+        // and replication timers run at the same 60 Hz cadence, so the
+        // interpolation remainder repeatedly lands near zero and makes the
+        // client see an NPC running in place while the native agent has already
+        // moved.  Replicate Detour's authoritative simulated position.
+        const navPos = runRuntimePhase("path-npc-read", () =>
+          npc.navAgent!.position()
         );
         const gamePos = NavManager.navToGame(navPos);
         // The crowd agent already carries the Recast floor Y. Use it as the

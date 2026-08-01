@@ -805,7 +805,7 @@ const dev: any = {
         const targetNavPoint =
           server.navManager.getClosestNavPointVec3(playerPos);
         if (targetNavPoint) zombie.navAgent.requestMoveTarget(targetNavPoint);
-        const navPos = zombie.navAgent.interpolatedPosition;
+        const navPos = zombie.navAgent.position();
         const gamePos = NavManager.navToGame(navPos);
         zombie.goTo(gamePos);
       }
