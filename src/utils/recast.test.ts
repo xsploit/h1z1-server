@@ -4,10 +4,24 @@ import type { BoxObstacle } from "recast-navigation";
 import {
   NavManager,
   selectNavigationTransitionsForTile,
+  selectStreamingReferenceCapacity,
   shouldRecycleStreamingCache,
   shouldUseStreamingNav,
   sortTileCacheParts
 } from "./recast";
+
+test("streaming trades one tile bit for dense POI polygon capacity", () => {
+  assert.deepEqual(selectStreamingReferenceCapacity(32768), {
+    meshMaxTiles: 16384,
+    meshMaxPolys: 256,
+    cacheMaxTiles: 16384
+  });
+  assert.deepEqual(selectStreamingReferenceCapacity(8192), {
+    meshMaxTiles: 16384,
+    meshMaxPolys: 256,
+    cacheMaxTiles: 8192
+  });
+});
 
 test("navigation transitions are owned by the tile layer containing their start", () => {
   const transition = {

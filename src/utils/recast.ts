@@ -183,6 +183,31 @@ function hasCorruptTinyComponent(position: Vector3): boolean {
 // eventually corrupts the native heap. This budget covers many distinct player
 // windows while keeping the cache bounded to a fraction of the old footprint.
 const STREAM_RUNTIME_CACHE_LAYERS = 32768;
+// Detour's 32-bit polygon reference reserves at least 10 salt bits, leaving
+// 22 bits to divide between tile slots and polygons per tile.  The generated
+// TSET header used 15/7 (32768 tiles x 128 polygons), which rejects dense POI
+// layers with DT_INVALID_PARAM.  Streaming only materialises a bounded subset,
+// so spend one tile bit on the per-layer polygon budget instead.
+const STREAM_RUNTIME_NAV_TILES = 1 << 14;
+const STREAM_RUNTIME_NAV_POLYS = 1 << 8;
+
+export function selectStreamingReferenceCapacity(
+  generatedCacheMaxTiles: number
+): {
+  meshMaxTiles: number;
+  meshMaxPolys: number;
+  cacheMaxTiles: number;
+} {
+  return {
+    meshMaxTiles: STREAM_RUNTIME_NAV_TILES,
+    meshMaxPolys: STREAM_RUNTIME_NAV_POLYS,
+    cacheMaxTiles: Math.min(
+      generatedCacheMaxTiles,
+      STREAM_RUNTIME_CACHE_LAYERS,
+      STREAM_RUNTIME_NAV_TILES
+    )
+  };
+}
 
 export function shouldRecycleStreamingCache(
   currentLayers: number,
@@ -780,25 +805,44 @@ export class NavManager {
     }
     const numTiles = rI();
     if (numTiles <= 0) throw new Error("[NAV] tilecache contains no layers");
+    const meshOrig = { x: rF(), y: rF(), z: rF() };
+    const meshTileWidth = rF();
+    const meshTileHeight = rF();
+    const generatedMeshMaxTiles = rI();
+    const generatedMeshMaxPolys = rI();
+    const generatedCacheOrig = [rF(), rF(), rF()];
+    const generatedCacheCs = rF();
+    const generatedCacheCh = rF();
+    const generatedCacheWidth = rI();
+    const generatedCacheHeight = rI();
+    const generatedCacheWalkableHeight = rF();
+    const generatedCacheWalkableRadius = rF();
+    const generatedCacheWalkableClimb = rF();
+    const generatedCacheMaxSimplificationError = rF();
+    const generatedCacheMaxTiles = rI();
+    const generatedCacheMaxObstacles = rI();
+    const runtimeCapacity = selectStreamingReferenceCapacity(
+      generatedCacheMaxTiles
+    );
     const mesh = {
-      orig: { x: rF(), y: rF(), z: rF() },
-      tileWidth: rF(),
-      tileHeight: rF(),
-      maxTiles: rI(),
-      maxPolys: rI()
+      orig: meshOrig,
+      tileWidth: meshTileWidth,
+      tileHeight: meshTileHeight,
+      maxTiles: runtimeCapacity.meshMaxTiles,
+      maxPolys: runtimeCapacity.meshMaxPolys
     };
     const cache = {
-      orig: [rF(), rF(), rF()],
-      cs: rF(),
-      ch: rF(),
-      width: rI(),
-      height: rI(),
-      walkableHeight: rF(),
-      walkableRadius: rF(),
-      walkableClimb: rF(),
-      maxSimplificationError: rF(),
-      maxTiles: Math.min(rI(), STREAM_RUNTIME_CACHE_LAYERS),
-      maxObstacles: rI()
+      orig: generatedCacheOrig,
+      cs: generatedCacheCs,
+      ch: generatedCacheCh,
+      width: generatedCacheWidth,
+      height: generatedCacheHeight,
+      walkableHeight: generatedCacheWalkableHeight,
+      walkableRadius: generatedCacheWalkableRadius,
+      walkableClimb: generatedCacheWalkableClimb,
+      maxSimplificationError: generatedCacheMaxSimplificationError,
+      maxTiles: runtimeCapacity.cacheMaxTiles,
+      maxObstacles: generatedCacheMaxObstacles
     };
     this._tcOrigX = mesh.orig.x;
     this._tcOrigZ = mesh.orig.z;
@@ -806,6 +850,16 @@ export class NavManager {
     this._streamCacheCapacity = cache.maxTiles;
     this._streamMeshConfig = mesh;
     this._streamCacheConfig = cache;
+    if (
+      generatedMeshMaxTiles !== mesh.maxTiles ||
+      generatedMeshMaxPolys !== mesh.maxPolys
+    ) {
+      console.log(
+        `[NAV] streaming reference capacity adjusted: ` +
+          `${generatedMeshMaxTiles}x${generatedMeshMaxPolys} -> ` +
+          `${mesh.maxTiles}x${mesh.maxPolys} (tiles x polygons)`
+      );
+    }
 
     // Build a compact JS index over the split TSET files. Only the 28-byte
     // entry/layer headers are inspected; compressed layer payloads remain on
