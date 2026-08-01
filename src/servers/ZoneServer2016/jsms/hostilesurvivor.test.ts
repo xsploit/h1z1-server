@@ -225,6 +225,121 @@ test("human raiders choose the nearest hostile and retain long-range targets", (
   assert.equal(raider.state, "chase");
 });
 
+test("human raiders abandon a target when navigation makes no progress", () => {
+  const zombiePosition = new Float32Array([0, 0, 10, 1]);
+  const npc = {
+    characterId: "survivor",
+    transientId: 10,
+    faction: Factions.SURVIVOR,
+    state: { position: new Float32Array([0, 0, 0, 1]) },
+    navAgent: { requestMoveTarget: () => undefined },
+    lookAtTarget: null,
+    setSpeed: () => undefined,
+    stopMovement: () => undefined,
+    setAnimation: () => undefined,
+    playAnimation: () => undefined,
+    lookAt: () => undefined
+  };
+  const target = {
+    characterId: "zombie",
+    faction: Factions.ZOMBIE,
+    state: { position: zombiePosition },
+    isAlive: true
+  };
+  const server = {
+    navManager: {
+      findRandomNavPointAround: () => new Float32Array([1, 0, 0, 1]),
+      getClosestNavPointVec3: (position: Float32Array) => position
+    },
+    aiTargetSpatialMap: new Map([
+      [
+        "0,0",
+        [{ id: "zombie", position: zombiePosition, faction: Factions.ZOMBIE }]
+      ]
+    ]),
+    sounds: [],
+    _characters: {},
+    _npcs: { survivor: npc, zombie: target }
+  };
+
+  const raider = createZombie(npc as never, server as never, {
+    canFeed: false,
+    detectionRange: 30,
+    attackRange: 20,
+    canAttackTarget: () => false,
+    stalledTargetTimeoutSeconds: 2,
+    targetReacquireDelaySeconds: 3
+  });
+
+  raider.tick(0.1);
+  assert.equal(raider.state, "chase");
+  raider.tick(1.1);
+  raider.tick(1.1);
+
+  assert.equal(raider.state, "wander");
+  assert.equal(raider.targetCharacterId, null);
+  assert.equal(raider.ignoredTargetCharacterId, "zombie");
+  raider.tick(0.1);
+  assert.equal(raider.state, "wander");
+  assert.equal(raider.targetCharacterId, null);
+});
+
+test("human raiders keep chasing while their navigation agent makes progress", () => {
+  const zombiePosition = new Float32Array([0, 0, 20, 1]);
+  const npcPosition = new Float32Array([0, 0, 0, 1]);
+  const npc = {
+    characterId: "survivor",
+    transientId: 10,
+    faction: Factions.SURVIVOR,
+    state: { position: npcPosition },
+    navAgent: { requestMoveTarget: () => undefined },
+    lookAtTarget: null,
+    setSpeed: () => undefined,
+    stopMovement: () => undefined,
+    setAnimation: () => undefined,
+    playAnimation: () => undefined,
+    lookAt: () => undefined
+  };
+  const target = {
+    characterId: "zombie",
+    faction: Factions.ZOMBIE,
+    state: { position: zombiePosition },
+    isAlive: true
+  };
+  const server = {
+    navManager: {
+      findRandomNavPointAround: () => new Float32Array([0, 0, 0, 1]),
+      getClosestNavPointVec3: (position: Float32Array) => position
+    },
+    aiTargetSpatialMap: new Map([
+      [
+        "0,0",
+        [{ id: "zombie", position: zombiePosition, faction: Factions.ZOMBIE }]
+      ]
+    ]),
+    sounds: [],
+    _characters: {},
+    _npcs: { survivor: npc, zombie: target }
+  };
+
+  const raider = createZombie(npc as never, server as never, {
+    canFeed: false,
+    detectionRange: 30,
+    attackRange: 5,
+    stalledTargetTimeoutSeconds: 2,
+    targetReacquireDelaySeconds: 3
+  });
+
+  raider.tick(0.1);
+  raider.tick(1.1);
+  npc.state.position[0] = 2;
+  raider.tick(1.1);
+  raider.tick(1.1);
+
+  assert.equal(raider.state, "chase");
+  assert.equal(raider.targetCharacterId, "zombie");
+});
+
 test("human patrol mode rests briefly and then resumes roaming", () => {
   const patrolRequests: Float32Array[] = [];
   const npc = {
