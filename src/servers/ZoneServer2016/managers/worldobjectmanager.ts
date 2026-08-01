@@ -77,6 +77,7 @@ import { ZombieScreamer } from "../entities/zombiescreamer";
 import { PrototypeZombie } from "../entities/prototypezombie";
 import { Exploder } from "../entities/exploder";
 import { Deer } from "../entities/deer";
+import { Rabbit } from "../entities/rabbit";
 import { Wolf } from "../entities/wolf";
 import { Bear } from "../entities/bear";
 import { scheduler } from "node:timers/promises";
@@ -711,8 +712,9 @@ export class WorldObjectManager {
     spawnerId: number = 0,
     npcId?: NpcIds,
     humanDisposition: HumanNpcDisposition = "bandit",
-    humanRole: HumanNpcRole =
-      humanDisposition === "survivor" ? "survivor" : "bandit"
+    humanRole: HumanNpcRole = humanDisposition === "survivor"
+      ? "survivor"
+      : "bandit"
   ) {
     return runRuntimePhase("npc-spawn", () =>
       this.createNpcUnwatched(
@@ -736,8 +738,9 @@ export class WorldObjectManager {
     spawnerId: number = 0,
     npcId?: NpcIds,
     humanDisposition: HumanNpcDisposition = "bandit",
-    humanRole: HumanNpcRole =
-      humanDisposition === "survivor" ? "survivor" : "bandit"
+    humanRole: HumanNpcRole = humanDisposition === "survivor"
+      ? "survivor"
+      : "bandit"
   ) {
     const characterId = generateRandomGuid();
     const transientId = server.getTransientId(characterId);
@@ -805,6 +808,17 @@ export class WorldObjectManager {
           spawnerId
         );
         break;
+      case ModelIds.RABBIT:
+        npc = new Rabbit(
+          characterId,
+          transientId,
+          modelId,
+          position,
+          rotation,
+          server,
+          spawnerId
+        );
+        break;
       case ModelIds.WOLF:
         npc = new Wolf(
           characterId,
@@ -846,11 +860,7 @@ export class WorldObjectManager {
     return npc;
   }
 
-  registerNpc(
-    server: ZoneServer2016,
-    npc: Npc,
-    spawnerId: number = 0
-  ): void {
+  registerNpc(server: ZoneServer2016, npc: Npc, spawnerId: number = 0): void {
     server._npcs[npc.characterId] = npc;
     if (spawnerId) this.spawnedNpcs[spawnerId] = npc.characterId;
     // World NPCs are created after the initial visibility grid is built.

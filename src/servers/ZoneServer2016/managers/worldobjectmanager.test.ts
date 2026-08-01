@@ -19,6 +19,8 @@ import {
   HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND,
   WorldObjectManager
 } from "./worldobjectmanager";
+import { Rabbit } from "../entities/rabbit";
+import { ModelIds } from "../models/enums";
 
 test("solo mode favors bandits without changing multiplayer defaults", () => {
   const previousChance = process.env.HOSTILE_SURVIVOR_CHANCE_PER_THOUSAND;
@@ -85,6 +87,32 @@ test("NPC registration adds world spawns to the client visibility grid", () => {
   assert.equal(server._npcs["world-npc"], npc);
   assert.equal(manager.spawnedNpcs[42], "world-npc");
   assert.equal(indexed, npc);
+});
+
+test("rabbit world spawns use the upstream Rabbit entity", () => {
+  const manager = new WorldObjectManager();
+  const server = {
+    _npcs: {} as Record<string, object>,
+    _modelsData: {} as Record<number, object>,
+    aiEnabled: false,
+    charactersRenderDistance: 350,
+    interactionDistance: 3,
+    explosiveManager: { addEntity: () => undefined },
+    getTransientId: () => 1,
+    pushToGridCell: () => undefined
+  };
+
+  const npc = manager.createNpc(
+    server as never,
+    ModelIds.RABBIT,
+    new Float32Array([0, 0, 0, 1]),
+    new Float32Array([0, 0, 0, 1]),
+    42
+  );
+
+  assert.equal(npc instanceof Rabbit, true);
+  assert.equal(server._npcs[npc.characterId], npc);
+  assert.equal(manager.spawnedNpcs[42], npc.characterId);
 });
 
 test("WorldObjectManager", { timeout: 60000 }, async (t) => {

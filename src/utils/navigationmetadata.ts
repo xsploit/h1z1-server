@@ -119,6 +119,6 @@ export function shouldEnableDynamicDoorObstacles(
   override = process.env.H1EMU_DYNAMIC_DOOR_OBSTACLES
 ): boolean {
   if (override === "0") return false;
-  if (override === "1") return true;
+  if (override !== "1") return false;
   return metadata?.bakedDoorGeometryExcluded === true;
 }

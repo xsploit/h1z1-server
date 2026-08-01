@@ -38,10 +38,11 @@ test("rejects duplicate navigation metadata instances", () => {
   );
 });
 
-test("dynamic doors follow the sidecar marker and explicit override", () => {
+test("dynamic doors require both a compatible sidecar and explicit opt-in", () => {
   const parsed = parseNavigationMetadata(validMetadata);
-  assert.equal(shouldEnableDynamicDoorObstacles(parsed, undefined), true);
+  assert.equal(shouldEnableDynamicDoorObstacles(parsed, undefined), false);
   assert.equal(shouldEnableDynamicDoorObstacles(parsed, "0"), false);
-  assert.equal(shouldEnableDynamicDoorObstacles(null, "1"), true);
+  assert.equal(shouldEnableDynamicDoorObstacles(parsed, "1"), true);
+  assert.equal(shouldEnableDynamicDoorObstacles(null, "1"), false);
   assert.equal(shouldEnableDynamicDoorObstacles(null, undefined), false);
 });
