@@ -83,6 +83,8 @@
     "navmesh-metadata-check": "tsx scripts/validateNavigationMetadata.ts",
     "navmesh-artifact-create": "tsx scripts/createNavigationArtifactManifest.ts",
     "navmesh-artifact-check": "tsx scripts/verifyNavigationArtifact.ts",
+    "navmesh-cache-identity": "tsx scripts/compareStreamingCaches.ts",
+    "test-navmesh-cache-identity": "tsx --test src/utils/tilecacheidentity.test.ts",
     "navmesh-regions-check": "tsx scripts/validateNavigationRegions.ts",
     "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
     "navmesh-islands-audit": "tsx scripts/auditNavigationIslands.ts",
