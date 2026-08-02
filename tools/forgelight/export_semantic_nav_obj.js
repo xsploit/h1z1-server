@@ -22,6 +22,10 @@ const { loadHeightmap, readBin } = require("./gen_navmesh");
 const SEMANTIC_SCHEMA = "h1emu-nav-semantics-v1";
 const SOURCE_SCHEMA = "h1emu-collision-semantic-obj-v1";
 const COLLISION_METADATA_SCHEMA = "h1emu-h1col2-metadata-v1";
+const COLLISION_METADATA_SCHEMAS = new Set([
+  COLLISION_METADATA_SCHEMA,
+  "h1emu-h1col2-metadata-v2"
+]);
 const KIND_NAMES = ["walkable", "solid", "thin", "door"];
 const DEFAULT_KIND_MATERIALS = [
   "nav_floor_exterior",
@@ -119,7 +123,7 @@ function loadCollisionMetadata(path, collisionHash, collision) {
   if (!path) return null;
   const value = JSON.parse(readFileSync(path, "utf8"));
   if (
-    value.schema !== COLLISION_METADATA_SCHEMA ||
+    !COLLISION_METADATA_SCHEMAS.has(value.schema) ||
     value.formatVersion !== 2 ||
     value.coordinateSpace !== "h1z1-world-y-up-meters" ||
     value.collisionSha256 !== collisionHash ||
@@ -129,6 +133,16 @@ function loadCollisionMetadata(path, collisionHash, collision) {
     value.meshes.length !== collision.meshes.length
   )
     throw new Error("H1COL2 metadata does not match the collision artifact");
+
+  const collisionFirst = value.schema === "h1emu-h1col2-metadata-v2";
+  if (
+    collisionFirst &&
+    (value.geometrySource !== "adr_collision_cdta" ||
+      value.renderFallbackCount !== 0)
+  )
+    throw new Error(
+      "H1COL2 metadata v2 is not a zero-fallback ADR collision export"
+    );
 
   const byMesh = Array.from({ length: collision.meshes.length });
   for (const entry of value.meshes) {
@@ -141,6 +155,13 @@ function loadCollisionMetadata(path, collisionHash, collision) {
       entry.kind !== collision.meshes[index].kind ||
       typeof entry.actorFile !== "string" ||
       !entry.actorFile ||
+      (collisionFirst &&
+        (typeof entry.collisionAsset !== "string" ||
+          !entry.collisionAsset.toLowerCase().endsWith(".cdt") ||
+          !Number.isInteger(entry.triangleCount) ||
+          entry.triangleCount !== collision.meshes[index].idx.length / 3 ||
+          entry.semanticSource !==
+            "actor_default_pending_per_triangle_table")) ||
       !allowedMaterial(entry.kind, entry.semanticMaterial)
     )
       throw new Error(`invalid H1COL2 metadata mesh entry ${index}`);

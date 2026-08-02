@@ -48,7 +48,7 @@ function writeCollision(path) {
   writeFileSync(path, Buffer.concat(parts));
 }
 
-function writeMetadata(path, collisionPath) {
+function writeMetadata(path, collisionPath, schema = "h1emu-h1col2-metadata-v1") {
   const collisionHash = createHash("sha256")
     .update(readFileSync(collisionPath))
     .digest("hex");
@@ -61,9 +61,12 @@ function writeMetadata(path, collisionPath) {
   writeFileSync(
     path,
     `${JSON.stringify({
-      schema: "h1emu-h1col2-metadata-v1",
+      schema,
       formatVersion: 2,
       coordinateSpace: "h1z1-world-y-up-meters",
+      ...(schema === "h1emu-h1col2-metadata-v2"
+        ? { geometrySource: "adr_collision_cdta", renderFallbackCount: 0 }
+        : {}),
       collisionFile: "collision.bin",
       collisionSha256: collisionHash,
       meshCount: 4,
@@ -75,6 +78,13 @@ function writeMetadata(path, collisionPath) {
             ? "Common_Props_Modular_Stair01.adr"
             : `Mesh${meshIndex}.adr`,
         kind: meshIndex,
+        ...(schema === "h1emu-h1col2-metadata-v2"
+          ? {
+              collisionAsset: `Mesh${meshIndex}.cdt`,
+              triangleCount: 1,
+              semanticSource: "actor_default_pending_per_triangle_table"
+            }
+          : {}),
         semanticMaterial,
         instanceCount: 1
       }))
@@ -162,6 +172,28 @@ test("rejects a sidecar that promotes thin collision to walkable", () => {
   assert.throws(
     () => loadCollisionMetadata(metadataPath, collisionHash, collision),
     /invalid H1COL2 metadata mesh entry 2/
+  );
+});
+
+test("accepts collision-first metadata v2 and rejects render fallback", () => {
+  const root = mkdtempSync(join(tmpdir(), "h1emu-semantic-metadata-v2-"));
+  const collisionPath = join(root, "collision.bin");
+  const metadataPath = join(root, "collision.metadata.json");
+  writeCollision(collisionPath);
+  writeMetadata(metadataPath, collisionPath, "h1emu-h1col2-metadata-v2");
+  const collision = readBin(collisionPath);
+  const collisionHash = createHash("sha256")
+    .update(readFileSync(collisionPath))
+    .digest("hex");
+  const loaded = loadCollisionMetadata(metadataPath, collisionHash, collision);
+  assert.equal(loaded.value.geometrySource, "adr_collision_cdta");
+
+  const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+  metadata.renderFallbackCount = 1;
+  writeFileSync(metadataPath, JSON.stringify(metadata));
+  assert.throws(
+    () => loadCollisionMetadata(metadataPath, collisionHash, collision),
+    /not a zero-fallback ADR collision export/
   );
 });
 

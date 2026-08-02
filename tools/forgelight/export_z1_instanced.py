@@ -1,9 +1,9 @@
 """
-Export H1Z1 Z1 structures as an INSTANCED collision dataset for the server.
+Export H1Z1 Z1 static collision as an INSTANCED dataset for the server.
 
 Produces `z1_collision.bin` (format "H1COL2", consumed by the server's
 CollisionManager):
-  - deduplicated unique actor meshes (positions + indices, LOD0)
+  - deduplicated ADR CollisionData meshes (positions + indices)
   - per-instance meshIndex + transform (T/R/S) + precomputed world AABB
 The Node server builds one BVH per unique mesh + an XZ broadphase over the
 world AABBs, then groundRaycast(x,z) transforms a downward ray per candidate
@@ -25,6 +25,7 @@ import hashlib
 import json
 import logging
 import warnings
+import xml.etree.ElementTree as ET
 from io import BytesIO
 from pathlib import Path
 
@@ -32,6 +33,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from collision_classification import classify, semantic_material
+from cdta import UnsupportedCDTA, merge_meshes, parse_cdta
 
 logging.disable(logging.WARNING)  # silence dme_loader layout spam
 warnings.filterwarnings(
@@ -46,6 +48,18 @@ from zone_loader import Zone  # noqa: E402
 MAGIC = b"H1COL2\x00\x00"
 BIN = Path(os.environ.get("COLLISION_OUT", "z1_collision.bin"))
 METADATA_OUT = os.environ.get("COLLISION_METADATA_OUT")
+FAILURES_OUT = os.environ.get("COLLISION_FAILURES_OUT")
+
+# This is the only non-CDTA CollisionData reference among the 980 actor types
+# in Z1's previous runtime collision inventory.  It is a destroyed decorative
+# garbage can backed by a PhysX/APEX asset, not an authored navigation surface.
+# Record the omission in metadata instead of substituting its render Base.
+REVIEWED_COLLISION_SKIPS = {
+    "common_props_garbagecan01_destroyed.adr": (
+        "Common_Props_GarbageCan01_COL.apx",
+        "decorative destroyed prop; APX has no explicit CDTA triangle contract",
+    )
+}
 
 
 def load_zone(mgr):
@@ -60,27 +74,69 @@ def load_zone(mgr):
     return Zone.load(BytesIO(asset.get_data()))
 
 
-def load_actor_mesh(mgr, actor_file):
-    """Return (positions Nx3 f32, indices M u32) merged across the DME's meshes, or None."""
-    dme = exp._safe_dme_from_adr(mgr, actor_file)
-    if dme is None:
+def _load_asset_bytes(mgr, name):
+    asset = mgr.get_raw(name)
+    if asset is None:
+        raise FileNotFoundError(f"asset not found: {name}")
+    return asset.get_data()
+
+
+def collision_asset_from_adr(mgr, actor_file):
+    """Return the exact ADR CollisionData filename, or None for a non-collider."""
+
+    raw = _load_asset_bytes(mgr, actor_file)
+    try:
+        root = ET.fromstring(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ET.ParseError) as error:
+        raise ValueError(f"invalid ADR XML {actor_file}: {error}") from error
+    if root.tag != "ActorRuntime":
+        raise ValueError(f"invalid ADR root for {actor_file}: {root.tag}")
+    collision = root.find("CollisionData")
+    if collision is None:
         return None
-    pos_chunks, idx_chunks, base = [], [], 0
-    for mesh in dme.meshes:
-        if (
-            0 not in mesh.vertices
-            or len(mesh.vertices[0]) == 0
-            or len(mesh.indices) == 0
-        ):
-            continue
-        p = np.asarray(mesh.vertices[0], dtype=np.float32).reshape(-1, 3)
-        idx = np.asarray(mesh.indices, dtype=np.uint32) + base
-        pos_chunks.append(p)
-        idx_chunks.append(idx)
-        base += len(p)
-    if not pos_chunks:
+    collision_name = collision.get("fileName")
+    if not collision_name:
+        raise ValueError(f"CollisionData has no fileName in {actor_file}")
+    return collision_name
+
+
+def load_actor_collision_mesh(mgr, actor_file):
+    """Load authoritative ADR collision without ever falling back to render DME.
+
+    Returns a geometry/provenance mapping.  A real ADR without
+    ``CollisionData`` returns ``None`` because it intentionally has no static
+    collider.  Unsupported/malformed collision assets raise and are collected
+    into the deterministic failure inventory by :func:`main`.
+    """
+
+    collision_name = collision_asset_from_adr(mgr, actor_file)
+    if collision_name is None:
         return None
-    return np.concatenate(pos_chunks), np.concatenate(idx_chunks)
+    reviewed_skip = REVIEWED_COLLISION_SKIPS.get(actor_file.lower())
+    if reviewed_skip and reviewed_skip[0].lower() == collision_name.lower():
+        return {
+            "skip": True,
+            "collisionAsset": collision_name,
+            "reason": reviewed_skip[1],
+        }
+    if not collision_name.lower().endswith(".cdt"):
+        raise UnsupportedCDTA(
+            f"{actor_file}: unsupported CollisionData asset {collision_name!r}"
+        )
+    collision_bytes = _load_asset_bytes(mgr, collision_name)
+    parsed = parse_cdta(collision_bytes, collision_name)
+    positions, indices = merge_meshes(parsed)
+    return {
+        "skip": False,
+        "positions": positions,
+        "indices": indices,
+        "collisionAsset": collision_name,
+        "collisionSha256": hashlib.sha256(collision_bytes).hexdigest(),
+        "cdtaVersion": parsed.version,
+        "cdtaAssetHash": parsed.asset_hash,
+        "shapeCount": parsed.shape_count,
+        "triangleCount": int(len(indices) // 3),
+    }
 
 
 def main():
@@ -95,18 +151,46 @@ def main():
     mesh_index = {}  # actor_file -> int index or None
     meshes = []  # list of (pos, idx)
     mesh_actors = []  # actor file per unique mesh, in binary order
-    mesh_kind = []  # 0 walkable / 1 obstacle, per unique mesh
+    mesh_sources = []  # CollisionData provenance per unique mesh
+    mesh_kind = []  # 0 walkable / 1 solid / 2 thin / 3 door, per unique mesh
     local_corners = []  # 8x3 local AABB corners per mesh (for world AABB calc)
+    failures = []
+    reviewed_skips = []
+    no_collision = []
     for o in zone.objects:
         if o.actor_file in mesh_index:
             continue
-        m = load_actor_mesh(mgr, o.actor_file)
-        if m is None:
+        try:
+            loaded = load_actor_collision_mesh(mgr, o.actor_file)
+        except Exception as error:
             mesh_index[o.actor_file] = None
+            failures.append(
+                {
+                    "actorFile": o.actor_file,
+                    "errorType": type(error).__name__,
+                    "error": str(error),
+                }
+            )
             continue
+        if loaded is None:
+            mesh_index[o.actor_file] = None
+            no_collision.append(o.actor_file)
+            continue
+        if loaded["skip"]:
+            mesh_index[o.actor_file] = None
+            reviewed_skips.append(
+                {
+                    "actorFile": o.actor_file,
+                    "collisionAsset": loaded["collisionAsset"],
+                    "reason": loaded["reason"],
+                }
+            )
+            continue
+        m = (loaded["positions"], loaded["indices"])
         mesh_index[o.actor_file] = len(meshes)
         meshes.append(m)
         mesh_actors.append(o.actor_file)
+        mesh_sources.append(loaded)
         mesh_kind.append(classify(o.actor_file))
         mn, mx = m[0].min(0), m[0].max(0)
         local_corners.append(
@@ -120,10 +204,39 @@ def main():
                 dtype=np.float64,
             )
         )
-    print(
-        f"[inst] unique meshes loaded OK: {len(meshes)}  "
-        f"(skipped types: {sum(1 for v in mesh_index.values() if v is None)})"
+    inventory = {
+        "schema": "h1emu-collision-extraction-inventory-v1",
+        "geometrySource": "adr_collision_cdta",
+        "actorTypes": len(mesh_index),
+        "decodedActorTypes": len(meshes),
+        "noCollisionActorTypes": len(no_collision),
+        "reviewedSkipActorTypes": len(reviewed_skips),
+        "failureCount": len(failures),
+        "noCollisionActors": sorted(no_collision, key=str.lower),
+        "reviewedSkips": sorted(reviewed_skips, key=lambda row: row["actorFile"].lower()),
+        "failures": sorted(failures, key=lambda row: row["actorFile"].lower()),
+    }
+    failure_path = Path(FAILURES_OUT) if FAILURES_OUT else BIN.with_suffix(
+        ".extraction.json"
     )
+    failure_path.parent.mkdir(parents=True, exist_ok=True)
+    failure_path.write_text(
+        json.dumps(inventory, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"[inst] collision actors: {len(meshes)} decoded, "
+        f"{len(no_collision)} without CollisionData, "
+        f"{len(reviewed_skips)} reviewed skips, {len(failures)} failures"
+    )
+    print(f"[inst] wrote extraction inventory {failure_path}")
+    if failures:
+        preview = "; ".join(
+            f"{row['actorFile']}: {row['error']}" for row in inventory["failures"][:8]
+        )
+        raise RuntimeError(
+            f"collision extraction failed closed for {len(failures)} actor types: {preview}"
+        )
     print(
         f"[inst] mesh kinds: {mesh_kind.count(0)} walkable, "
         f"{mesh_kind.count(1)} solid, {mesh_kind.count(2)} thin, "
@@ -214,21 +327,32 @@ def main():
                 collision_file, "sha256"
             ).hexdigest()
         metadata = {
-            "schema": "h1emu-h1col2-metadata-v1",
+            "schema": "h1emu-h1col2-metadata-v2",
             "formatVersion": 2,
             "coordinateSpace": "h1z1-world-y-up-meters",
+            "geometrySource": "adr_collision_cdta",
+            "renderFallbackCount": 0,
             "collisionFile": BIN.name,
             "collisionSha256": collision_sha256,
             "meshCount": len(meshes),
             "instanceCount": len(inst_mesh),
+            "noCollisionActorCount": len(no_collision),
+            "reviewedSkips": inventory["reviewedSkips"],
             "meshes": [
                 {
                     "meshIndex": index,
                     "actorFile": actor_file,
+                    "collisionAsset": mesh_sources[index]["collisionAsset"],
+                    "collisionAssetSha256": mesh_sources[index]["collisionSha256"],
+                    "cdtaVersion": mesh_sources[index]["cdtaVersion"],
+                    "cdtaAssetHash": mesh_sources[index]["cdtaAssetHash"],
+                    "shapeCount": mesh_sources[index]["shapeCount"],
+                    "triangleCount": mesh_sources[index]["triangleCount"],
                     "kind": mesh_kind[index],
                     "semanticMaterial": semantic_material(
                         actor_file, mesh_kind[index]
                     ),
+                    "semanticSource": "actor_default_pending_per_triangle_table",
                     "instanceCount": int(instance_counts[index]),
                 }
                 for index, actor_file in enumerate(mesh_actors)
