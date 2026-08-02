@@ -8,12 +8,22 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  NAVIGATION_SEMANTIC_SCHEMA_VERSION,
+  NavigationSemantic,
+  NavigationSemanticName
+} from "./navigationareas";
 
-export type NavigationMetadataKind = "door" | "stairs";
+export type NavigationMetadataKind = "door" | "stairs" | "ramp" | "threshold";
 
 export interface NavigationMetadataInstance {
   actorDefinition: string;
   kind: NavigationMetadataKind;
+  objectName?: string;
+  semantic?: NavigationSemanticName;
+  classificationSource?: string;
+  geometrySource?: string;
+  geometryAsset?: string | null;
   instanceId: number;
   position: [number, number, number, number];
   rotation: [number, number, number, number];
@@ -21,11 +31,24 @@ export interface NavigationMetadataInstance {
 }
 
 export interface NavigationMetadata {
-  version: 1;
+  version: 1 | 2;
+  semanticSchemaVersion?: number;
+  semanticMode?: "strict" | "legacy";
+  canonicalMaterials?: NavigationSemanticName[];
   coordinateSpace: "h1z1-world-y-up-meters";
   bakedDoorGeometryExcluded: boolean;
   instances: NavigationMetadataInstance[];
 }
+
+const NAVIGATION_METADATA_KINDS = new Set<NavigationMetadataKind>([
+  "door",
+  "stairs",
+  "ramp",
+  "threshold"
+]);
+const CANONICAL_NAVIGATION_MATERIALS = new Set<NavigationSemanticName>(
+  Object.values(NavigationSemantic)
+);
 
 function isFiniteTuple(
   value: unknown
@@ -42,7 +65,7 @@ export function parseNavigationMetadata(value: unknown): NavigationMetadata {
     throw new Error("navigation metadata must be an object");
   }
   const metadata = value as Record<string, unknown>;
-  if (metadata.version !== 1) {
+  if (metadata.version !== 1 && metadata.version !== 2) {
     throw new Error(
       `unsupported navigation metadata version: ${metadata.version}`
     );
@@ -58,6 +81,27 @@ export function parseNavigationMetadata(value: unknown): NavigationMetadata {
   if (!Array.isArray(metadata.instances)) {
     throw new Error("navigation metadata instances must be an array");
   }
+  if (metadata.version === 2) {
+    if (
+      metadata.semanticSchemaVersion !== NAVIGATION_SEMANTIC_SCHEMA_VERSION ||
+      (metadata.semanticMode !== "strict" &&
+        metadata.semanticMode !== "legacy") ||
+      !Array.isArray(metadata.canonicalMaterials) ||
+      metadata.canonicalMaterials.length !==
+        CANONICAL_NAVIGATION_MATERIALS.size ||
+      new Set(metadata.canonicalMaterials).size !==
+        CANONICAL_NAVIGATION_MATERIALS.size ||
+      metadata.canonicalMaterials.some(
+        (material) =>
+          typeof material !== "string" ||
+          !CANONICAL_NAVIGATION_MATERIALS.has(
+            material as NavigationSemanticName
+          )
+      )
+    ) {
+      throw new Error("navigation metadata semantic contract is invalid");
+    }
+  }
 
   const seen = new Set<string>();
   const instances = metadata.instances.map((raw, index) => {
@@ -72,7 +116,9 @@ export function parseNavigationMetadata(value: unknown): NavigationMetadata {
         `navigation metadata instance ${index} has no actorDefinition`
       );
     }
-    if (instance.kind !== "door" && instance.kind !== "stairs") {
+    if (
+      !NAVIGATION_METADATA_KINDS.has(instance.kind as NavigationMetadataKind)
+    ) {
       throw new Error(`navigation metadata instance ${index} has invalid kind`);
     }
     if (!Number.isInteger(instance.instanceId)) {
@@ -89,6 +135,25 @@ export function parseNavigationMetadata(value: unknown): NavigationMetadata {
         `navigation metadata instance ${index} has invalid transform`
       );
     }
+    if (
+      metadata.version === 2 &&
+      (typeof instance.objectName !== "string" ||
+        !instance.objectName ||
+        typeof instance.semantic !== "string" ||
+        !CANONICAL_NAVIGATION_MATERIALS.has(
+          instance.semantic as NavigationSemanticName
+        ) ||
+        typeof instance.classificationSource !== "string" ||
+        !instance.classificationSource ||
+        typeof instance.geometrySource !== "string" ||
+        !instance.geometrySource ||
+        (instance.geometryAsset !== null &&
+          typeof instance.geometryAsset !== "string"))
+    ) {
+      throw new Error(
+        `navigation metadata instance ${index} has invalid semantic provenance`
+      );
+    }
 
     const key = `${instance.kind}:${instance.actorDefinition}:${instance.instanceId}`;
     if (seen.has(key)) {
@@ -100,7 +165,19 @@ export function parseNavigationMetadata(value: unknown): NavigationMetadata {
   });
 
   return {
-    version: 1,
+    version: metadata.version,
+    semanticSchemaVersion:
+      metadata.version === 2
+        ? (metadata.semanticSchemaVersion as number)
+        : undefined,
+    semanticMode:
+      metadata.version === 2
+        ? (metadata.semanticMode as "strict" | "legacy")
+        : undefined,
+    canonicalMaterials:
+      metadata.version === 2
+        ? (metadata.canonicalMaterials as NavigationSemanticName[])
+        : undefined,
     coordinateSpace: "h1z1-world-y-up-meters",
     bakedDoorGeometryExcluded: metadata.bakedDoorGeometryExcluded,
     instances
