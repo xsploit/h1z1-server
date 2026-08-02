@@ -46,9 +46,11 @@ zc = exp.zone_converter
 from zone_loader import Zone  # noqa: E402
 
 MAGIC = b"H1COL2\x00\x00"
+INSTANCE_IDS_MAGIC = b"H1CID1\x00\x00"
 BIN = Path(os.environ.get("COLLISION_OUT", "z1_collision.bin"))
 METADATA_OUT = os.environ.get("COLLISION_METADATA_OUT")
 FAILURES_OUT = os.environ.get("COLLISION_FAILURES_OUT")
+INSTANCE_IDS_OUT = os.environ.get("COLLISION_INSTANCE_IDS_OUT")
 
 # This is the only non-CDTA CollisionData reference among the 980 actor types
 # in Z1's previous runtime collision inventory.  It is a destroyed decorative
@@ -137,6 +139,18 @@ def load_actor_collision_mesh(mgr, actor_file):
         "shapeCount": parsed.shape_count,
         "triangleCount": int(len(indices) // 3),
     }
+
+
+def zone_instance_id(instance):
+    """Read the stable Z1 instance ID across pydmod's zone-version layouts."""
+
+    if instance.unk_int is not None:
+        return int(instance.unk_int)
+    # pydmod currently stores the v4/v5 ID together with the opaque tail.  The
+    # authoritative Rust schema confirms the first four bytes are the ID.
+    if instance.unk_data is not None and len(instance.unk_data) >= 4:
+        return struct.unpack_from("<I", instance.unk_data, 0)[0]
+    raise ValueError("zone instance has no decodable stable ID")
 
 
 def main():
@@ -245,6 +259,7 @@ def main():
 
     # 2) bake instances (transform via the proven-georeferenced converter math)
     inst_mesh = []
+    inst_ids = []
     inst_data = []  # 16 floats: tx ty tz, qx qy qz qw, sx sy sz, minXYZ, maxXYZ
     flat_check = []  # (translationY, aabbYspan) for nominally flat surfaces
     for o in zone.objects:
@@ -265,6 +280,7 @@ def main():
             world = t + Rotation.from_quat(q).apply(s * corners)
             wmin, wmax = world.min(0), world.max(0)
             inst_mesh.append(mi)
+            inst_ids.append(zone_instance_id(ins))
             inst_data.append(
                 [
                     t[0],
@@ -289,7 +305,10 @@ def main():
                 flat_check.append((t[1], wmax[1] - wmin[1]))
 
     inst_mesh = np.asarray(inst_mesh, dtype=np.uint32)
+    inst_ids = np.asarray(inst_ids, dtype=np.uint32)
     inst_data = np.asarray(inst_data, dtype=np.float32)
+    if len(np.unique(inst_ids)) != len(inst_ids):
+        raise RuntimeError("decoded collision instances contain duplicate zone IDs")
     print(f"[inst] baked instances: {len(inst_mesh)}")
 
     instance_kinds = [
@@ -314,6 +333,25 @@ def main():
         f.write(inst_data.tobytes())
     print(f"[inst] wrote {BIN}  ({BIN.stat().st_size / 1e6:.1f} MB)")
 
+    instance_ids_path = (
+        Path(INSTANCE_IDS_OUT)
+        if INSTANCE_IDS_OUT
+        else BIN.with_name(f"{BIN.stem}.instance_ids.bin")
+    )
+    instance_ids_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(instance_ids_path, "wb") as f:
+        f.write(INSTANCE_IDS_MAGIC)
+        f.write(struct.pack("<II", 1, len(inst_ids)))
+        f.write(inst_ids.tobytes())
+    with open(instance_ids_path, "rb") as instance_ids_file:
+        instance_ids_sha256 = hashlib.file_digest(
+            instance_ids_file, "sha256"
+        ).hexdigest()
+    print(
+        f"[inst] wrote stable instance IDs {instance_ids_path} "
+        f"({len(inst_ids)} IDs)"
+    )
+
     # Optional deterministic build-time sidecar.  The H1COL2 runtime format is
     # intentionally compact and does not store actor names, so without this
     # file a later semantic OBJ export can only distinguish the four numeric
@@ -327,7 +365,7 @@ def main():
                 collision_file, "sha256"
             ).hexdigest()
         metadata = {
-            "schema": "h1emu-h1col2-metadata-v2",
+            "schema": "h1emu-h1col2-metadata-v3",
             "formatVersion": 2,
             "coordinateSpace": "h1z1-world-y-up-meters",
             "geometrySource": "adr_collision_cdta",
@@ -336,6 +374,12 @@ def main():
             "collisionSha256": collision_sha256,
             "meshCount": len(meshes),
             "instanceCount": len(inst_mesh),
+            "instanceIds": {
+                "file": instance_ids_path.name,
+                "sha256": instance_ids_sha256,
+                "format": "H1CID1-u32le-v1",
+                "count": len(inst_ids),
+            },
             "noCollisionActorCount": len(no_collision),
             "reviewedSkips": inventory["reviewedSkips"],
             "meshes": [

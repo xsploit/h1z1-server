@@ -24,7 +24,8 @@ const SOURCE_SCHEMA = "h1emu-collision-semantic-obj-v1";
 const COLLISION_METADATA_SCHEMA = "h1emu-h1col2-metadata-v1";
 const COLLISION_METADATA_SCHEMAS = new Set([
   COLLISION_METADATA_SCHEMA,
-  "h1emu-h1col2-metadata-v2"
+  "h1emu-h1col2-metadata-v2",
+  "h1emu-h1col2-metadata-v3"
 ]);
 const KIND_NAMES = ["walkable", "solid", "thin", "door"];
 const DEFAULT_KIND_MATERIALS = [
@@ -134,7 +135,9 @@ function loadCollisionMetadata(path, collisionHash, collision) {
   )
     throw new Error("H1COL2 metadata does not match the collision artifact");
 
-  const collisionFirst = value.schema === "h1emu-h1col2-metadata-v2";
+  const collisionFirst =
+    value.schema === "h1emu-h1col2-metadata-v2" ||
+    value.schema === "h1emu-h1col2-metadata-v3";
   if (
     collisionFirst &&
     (value.geometrySource !== "adr_collision_cdta" ||
@@ -169,7 +172,37 @@ function loadCollisionMetadata(path, collisionHash, collision) {
   }
   if (byMesh.some((entry) => !entry))
     throw new Error("H1COL2 metadata mesh indices are incomplete");
+  if (
+    value.schema === "h1emu-h1col2-metadata-v3" &&
+    (value.instanceIds?.format !== "H1CID1-u32le-v1" ||
+      value.instanceIds?.count !== collision.instCount ||
+      typeof value.instanceIds?.file !== "string" ||
+      !value.instanceIds.file ||
+      !/^[a-f0-9]{64}$/i.test(value.instanceIds?.sha256 ?? ""))
+  )
+    throw new Error("invalid H1COL2 metadata v3 instance-ID contract");
   return { value, byMesh };
+}
+
+function loadInstanceIds(path, expected, collision) {
+  const data = readFileSync(path);
+  if (
+    data.length < 16 ||
+    data.subarray(0, 8).toString("latin1") !== "H1CID1\0\0" ||
+    data.readUInt32LE(8) !== 1
+  )
+    throw new Error("invalid H1CID1 instance-ID sidecar header");
+  const count = data.readUInt32LE(12);
+  if (
+    count !== collision.instCount ||
+    count !== expected.count ||
+    data.length !== 16 + count * 4 ||
+    sha256File(path) !== expected.sha256
+  )
+    throw new Error("H1CID1 sidecar does not match H1COL2 metadata");
+  return new Uint32Array(
+    data.buffer.slice(data.byteOffset + 16, data.byteOffset + data.length)
+  );
 }
 
 function axis(min, max, step) {
@@ -261,6 +294,18 @@ async function exportSemanticRegion(options, dependencies = {}) {
     collisionHash,
     collision
   );
+  let instanceIdsPath = null;
+  let instanceIds = null;
+  if (metadata?.value.schema === "h1emu-h1col2-metadata-v3") {
+    instanceIdsPath = options.instanceIdsPath
+      ? resolve(options.instanceIdsPath)
+      : resolve(dirname(metadataPath), metadata.value.instanceIds.file);
+    instanceIds = loadInstanceIds(
+      instanceIdsPath,
+      metadata.value.instanceIds,
+      collision
+    );
+  }
   const getHeight = await (dependencies.loadHeightmap ?? loadHeightmap)(
     heightmapPath
   );
@@ -345,7 +390,9 @@ async function exportSemanticRegion(options, dependencies = {}) {
       const actorName = meshMetadata
         ? safeObjectName(meshMetadata.actorFile)
         : `h1col2_mesh_${meshIndex}`;
-      writer.line(`o ${actorName}__instance_${instanceIndex}`);
+      writer.line(
+        `o ${actorName}__instance_${instanceIds?.[instanceIndex] ?? instanceIndex}`
+      );
       writer.line(`usemtl ${material}`);
       const worldPositions = [];
       for (let position = 0; position < mesh.pos.length; position += 3) {
@@ -444,6 +491,13 @@ async function exportSemanticRegion(options, dependencies = {}) {
             sha256: sha256File(metadataPath),
             matched: true
           }
+        : null,
+      collisionInstanceIds: instanceIdsPath
+        ? {
+            file: basename(instanceIdsPath),
+            sha256: sha256File(instanceIdsPath),
+            matched: true
+          }
         : null
     },
     counts: {
@@ -485,6 +539,8 @@ function parseArgs(argv) {
     else if (name === "--collision") result.collisionPath = argv[++index];
     else if (name === "--collision-metadata")
       result.metadataPath = argv[++index];
+    else if (name === "--collision-instance-ids")
+      result.instanceIdsPath = argv[++index];
     else if (name === "--output") result.outputPath = argv[++index];
     else if (name === "--report") result.reportPath = argv[++index];
     else if (name === "--terrain-step")
@@ -516,6 +572,7 @@ module.exports = {
   COLLISION_METADATA_SCHEMA,
   SOURCE_SCHEMA,
   exportSemanticRegion,
+  loadInstanceIds,
   loadCollisionMetadata,
   parseArgs,
   validateH1Col2

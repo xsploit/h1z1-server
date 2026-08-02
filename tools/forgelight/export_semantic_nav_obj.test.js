@@ -8,6 +8,7 @@ const { join } = require("node:path");
 const test = require("node:test");
 const {
   exportSemanticRegion,
+  loadInstanceIds,
   loadCollisionMetadata
 } = require("./export_semantic_nav_obj");
 const { readBin } = require("./gen_navmesh");
@@ -48,7 +49,20 @@ function writeCollision(path) {
   writeFileSync(path, Buffer.concat(parts));
 }
 
-function writeMetadata(path, collisionPath, schema = "h1emu-h1col2-metadata-v1") {
+function writeInstanceIds(path, ids = [101, 102, 103, 104]) {
+  const header = Buffer.alloc(16);
+  header.write("H1CID1\0\0", 0, "latin1");
+  header.writeUInt32LE(1, 8);
+  header.writeUInt32LE(ids.length, 12);
+  writeFileSync(path, Buffer.concat([header, u32(ids)]));
+}
+
+function writeMetadata(
+  path,
+  collisionPath,
+  schema = "h1emu-h1col2-metadata-v1",
+  instanceIdsPath = null
+) {
   const collisionHash = createHash("sha256")
     .update(readFileSync(collisionPath))
     .digest("hex");
@@ -64,13 +78,25 @@ function writeMetadata(path, collisionPath, schema = "h1emu-h1col2-metadata-v1")
       schema,
       formatVersion: 2,
       coordinateSpace: "h1z1-world-y-up-meters",
-      ...(schema === "h1emu-h1col2-metadata-v2"
+      ...(schema !== "h1emu-h1col2-metadata-v1"
         ? { geometrySource: "adr_collision_cdta", renderFallbackCount: 0 }
         : {}),
       collisionFile: "collision.bin",
       collisionSha256: collisionHash,
       meshCount: 4,
       instanceCount: 4,
+      ...(schema === "h1emu-h1col2-metadata-v3"
+        ? {
+            instanceIds: {
+              file: "collision.instance_ids.bin",
+              sha256: createHash("sha256")
+                .update(readFileSync(instanceIdsPath))
+                .digest("hex"),
+              format: "H1CID1-u32le-v1",
+              count: 4
+            }
+          }
+        : {}),
       meshes: materials.map((semanticMaterial, meshIndex) => ({
         meshIndex,
         actorFile:
@@ -78,7 +104,7 @@ function writeMetadata(path, collisionPath, schema = "h1emu-h1col2-metadata-v1")
             ? "Common_Props_Modular_Stair01.adr"
             : `Mesh${meshIndex}.adr`,
         kind: meshIndex,
-        ...(schema === "h1emu-h1col2-metadata-v2"
+        ...(schema !== "h1emu-h1col2-metadata-v1"
           ? {
               collisionAsset: `Mesh${meshIndex}.cdt`,
               triangleCount: 1,
@@ -195,6 +221,46 @@ test("accepts collision-first metadata v2 and rejects render fallback", () => {
     () => loadCollisionMetadata(metadataPath, collisionHash, collision),
     /not a zero-fallback ADR collision export/
   );
+});
+
+test("binds v3 stable zone instance IDs into exact object names", async () => {
+  const root = mkdtempSync(join(tmpdir(), "h1emu-semantic-metadata-v3-"));
+  const collisionPath = join(root, "collision.bin");
+  const instanceIdsPath = join(root, "collision.instance_ids.bin");
+  const metadataPath = join(root, "collision.metadata.json");
+  const heightmapPath = join(root, "heightmap.png");
+  const outputPath = join(root, "v3.obj");
+  writeCollision(collisionPath);
+  writeInstanceIds(instanceIdsPath);
+  writeMetadata(
+    metadataPath,
+    collisionPath,
+    "h1emu-h1col2-metadata-v3",
+    instanceIdsPath
+  );
+  writeFileSync(heightmapPath, "synthetic heightmap identity");
+  const report = await exportSemanticRegion(
+    {
+      bounds: [0, 0, 4, 2],
+      terrainStep: 1,
+      collisionPath,
+      metadataPath,
+      heightmapPath,
+      outputPath
+    },
+    { readBin, loadHeightmap: async () => () => 0 }
+  );
+  const obj = readFileSync(outputPath, "utf8");
+  assert.match(obj, /Common_Props_Modular_Stair01__instance_101/);
+  assert.match(obj, /Mesh3__instance_104/);
+  assert.equal(report.inputs.collisionInstanceIds.matched, true);
+
+  const ids = loadInstanceIds(
+    instanceIdsPath,
+    JSON.parse(readFileSync(metadataPath, "utf8")).instanceIds,
+    readBin(collisionPath)
+  );
+  assert.deepEqual([...ids], [101, 102, 103, 104]);
 });
 
 test("refuses an unbounded or accidentally huge regional export", async () => {
