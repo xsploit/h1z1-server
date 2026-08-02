@@ -415,6 +415,161 @@ class CompatibilityAndClassificationTests(unittest.TestCase):
         self.assertEqual(result, bytes((SemanticId.UNKNOWN, SemanticId.UNKNOWN)))
 
 
+def explicit_rule(selections, *, triangle_count=6, kind=0):
+    return {
+        "actorFile": "Composite_Test.adr",
+        "collisionAssetSha256": HASH_A,
+        "kind": kind,
+        "triangleCount": triangle_count,
+        "strategy": "explicit_triangles",
+        "selections": selections,
+    }
+
+
+def decode_rules(rules):
+    return decode_semantic_policy(canonical_policy_bytes(policy_value(rules)))
+
+
+class ExplicitTrianglePolicyTests(unittest.TestCase):
+    # Six triangles of throwaway geometry: the strategy must never read it.
+    POSITIONS = tuple(float(i) for i in range(18 * 3))
+    INDICES = tuple(range(18))
+
+    def classify(self, policy):
+        return classify_mesh_triangles(
+            policy,
+            actor_file="Composite_Test.adr",
+            collision_asset_sha256=HASH_A,
+            kind=0,
+            positions=self.POSITIONS,
+            indices=self.INDICES,
+        )
+
+    def test_unspecified_triangles_default_to_unknown(self):
+        policy = decode_rules(
+            [
+                explicit_rule(
+                    [
+                        {
+                            "semantic": "nav_floor_interior",
+                            "triangleRanges": [[0, 1], [4, 4]],
+                        },
+                        {"semantic": "nav_stair", "triangleRanges": [[2, 2]]},
+                    ]
+                )
+            ]
+        )
+        result = self.classify(policy)
+        self.assertEqual(
+            result,
+            bytes(
+                (
+                    SemanticId.FLOOR_INTERIOR,
+                    SemanticId.FLOOR_INTERIOR,
+                    SemanticId.STAIR,
+                    SemanticId.UNKNOWN,
+                    SemanticId.FLOOR_INTERIOR,
+                    SemanticId.UNKNOWN,
+                )
+            ),
+        )
+
+    def test_rejects_overlap_out_of_range_and_unknown_selection(self):
+        with self.assertRaisesRegex(SemanticPolicyError, "overlaps triangle"):
+            decode_rules(
+                [
+                    explicit_rule(
+                        [
+                            {
+                                "semantic": "nav_floor_interior",
+                                "triangleRanges": [[0, 2]],
+                            },
+                            {
+                                "semantic": "nav_stair",
+                                "triangleRanges": [[2, 3]],
+                            },
+                        ]
+                    )
+                ]
+            )
+        with self.assertRaisesRegex(SemanticPolicyError, "out of range"):
+            decode_rules(
+                [
+                    explicit_rule(
+                        [
+                            {
+                                "semantic": "nav_stair",
+                                "triangleRanges": [[5, 6]],
+                            }
+                        ]
+                    )
+                ]
+            )
+        with self.assertRaisesRegex(SemanticPolicyError, "nav_unknown"):
+            decode_rules(
+                [
+                    explicit_rule(
+                        [
+                            {
+                                "semantic": "nav_unknown",
+                                "triangleRanges": [[0, 0]],
+                            }
+                        ]
+                    )
+                ]
+            )
+        with self.assertRaisesRegex(SemanticPolicyError, "not sorted"):
+            decode_rules(
+                [
+                    explicit_rule(
+                        [
+                            {
+                                "semantic": "nav_stair",
+                                "triangleRanges": [[3, 3], [1, 1]],
+                            }
+                        ]
+                    )
+                ]
+            )
+        with self.assertRaisesRegex(SemanticPolicyError, "unsafe for kind"):
+            decode_rules(
+                [
+                    explicit_rule(
+                        [
+                            {
+                                "semantic": "nav_door_panel_dynamic",
+                                "triangleRanges": [[0, 0]],
+                            }
+                        ]
+                    )
+                ]
+            )
+
+    def test_partial_coverage_fails_strict_production(self):
+        policy = decode_rules(
+            [
+                explicit_rule(
+                    [
+                        {
+                            "semantic": "nav_floor_interior",
+                            "triangleRanges": [[0, 4]],
+                        }
+                    ]
+                )
+            ]
+        )
+        with self.assertRaisesRegex(SemanticPolicyError, "unknown"):
+            classify_mesh_triangles(
+                policy,
+                actor_file="Composite_Test.adr",
+                collision_asset_sha256=HASH_A,
+                kind=0,
+                positions=self.POSITIONS,
+                indices=self.INDICES,
+                strict_production=True,
+            )
+
+
 class CorrectedBundlePolicyTests(unittest.TestCase):
     def test_all_checked_in_rules_match_corrected_bundle_and_geometry(self):
         work_dir = Path(__file__).resolve().parents[4]
@@ -433,12 +588,18 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         meshes = read_selected_h1col2(collision_path, selected_indices)
         uniform_count = 0
         surface_count = 0
+        explicit_count = 0
         for rule in policy.rules:
             entry = by_actor[rule.actor_file.casefold()]
             self.assertEqual(entry["collisionAssetSha256"], rule.collision_asset_sha256)
             self.assertEqual(entry["kind"], rule.kind)
             self.assertEqual(entry["triangleCount"], rule.triangle_count)
             kind, positions, indices = meshes[entry["meshIndex"]]
+            # Explicit per-triangle rules may intentionally leave reviewed
+            # ambiguity as nav_unknown, which strict production correctly
+            # rejects; classify those diagnostically and verify selection
+            # coverage instead.
+            strict = rule.strategy != "explicit_triangles"
             result = classify_mesh_triangles(
                 policy,
                 actor_file=entry["actorFile"],
@@ -446,19 +607,37 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
                 kind=kind,
                 positions=positions,
                 indices=indices,
-                strict_production=True,
+                strict_production=strict,
             )
             self.assertEqual(len(result), entry["triangleCount"])
             if rule.strategy == "uniform":
                 uniform_count += 1
                 self.assertEqual(set(result), {rule.semantic})
+            elif rule.strategy == "explicit_triangles":
+                explicit_count += 1
+                selected = {semantic for semantic, _ in rule.selections}
+                self.assertTrue(
+                    set(result).issubset(selected | {SemanticId.UNKNOWN})
+                )
+                expected_selected = sum(
+                    end - start + 1
+                    for _, ranges in rule.selections
+                    for start, end in ranges
+                )
+                actual_selected = sum(
+                    1 for value in result if value != SemanticId.UNKNOWN
+                )
+                self.assertEqual(actual_selected, expected_selected)
             else:
                 surface_count += 1
                 self.assertIn(rule.surface_semantic, result)
                 self.assertTrue(
                     set(result).issubset({rule.surface_semantic, SemanticId.EXCLUDE})
                 )
-        self.assertEqual((uniform_count, surface_count), (55, 34))
+        self.assertEqual(
+            (uniform_count, surface_count), (55, 34)
+        )
+        self.assertEqual(explicit_count, len(policy.rules) - 89)
 
 
 if __name__ == "__main__":

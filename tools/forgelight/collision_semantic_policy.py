@@ -104,6 +104,10 @@ class SemanticRule:
     surface_semantic: SemanticId | None = None
     slope_limit_degrees: int | None = None
     precondition: str | None = None
+    # explicit_triangles only: ((semantic, ((start, end), ...)), ...) with
+    # inclusive index ranges. Every triangle not covered by a selection
+    # defaults to SemanticId.UNKNOWN at classification time.
+    selections: tuple[tuple[SemanticId, tuple[tuple[int, int], ...]], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -194,6 +198,8 @@ def _required_rule_keys(strategy: str, kind: int, semantic: SemanticId | None) -
         if kind == 0 and semantic in _WALKABLE_SURFACE_IDS:
             keys.add("precondition")
         return keys
+    if strategy == "explicit_triangles":
+        return base | {"selections"}
     raise SemanticPolicyError(f"unsupported semantic strategy {strategy!r}")
 
 
@@ -231,6 +237,85 @@ def _parse_rule(value: Any, index: int) -> SemanticRule:
     surface_semantic = None
     slope_limit_degrees = None
     precondition = None
+    selections = None
+    if strategy == "explicit_triangles":
+        raw_selections = value.get("selections")
+        if not isinstance(raw_selections, list) or not raw_selections:
+            raise SemanticPolicyError(
+                f"{label}.selections must be a non-empty list"
+            )
+        parsed: list[tuple[SemanticId, tuple[tuple[int, int], ...]]] = []
+        covered: set[int] = set()
+        previous_material = None
+        for sel_index, raw in enumerate(raw_selections):
+            sel_label = f"{label}.selections[{sel_index}]"
+            if not isinstance(raw, dict) or set(raw) != {
+                "semantic",
+                "triangleRanges",
+            }:
+                raise SemanticPolicyError(
+                    f"{sel_label} must have exactly semantic and triangleRanges"
+                )
+            sel_semantic = _semantic(raw["semantic"], f"{sel_label}.semantic")
+            if sel_semantic == SemanticId.UNKNOWN:
+                raise SemanticPolicyError(
+                    f"{sel_label} must not select nav_unknown; unspecified "
+                    "triangles already default to it"
+                )
+            if not semantic_compatible_with_kind(kind, sel_semantic):
+                raise SemanticPolicyError(
+                    f"{sel_label} semantic "
+                    f"{SEMANTIC_TO_MATERIAL[sel_semantic]} is unsafe for "
+                    f"kind {kind}"
+                )
+            material = raw["semantic"]
+            if previous_material is not None and material <= previous_material:
+                raise SemanticPolicyError(
+                    f"{label}.selections must be sorted by semantic material"
+                )
+            previous_material = material
+            raw_ranges = raw["triangleRanges"]
+            if not isinstance(raw_ranges, list) or not raw_ranges:
+                raise SemanticPolicyError(
+                    f"{sel_label}.triangleRanges must be a non-empty list"
+                )
+            ranges: list[tuple[int, int]] = []
+            previous_end = -1
+            for range_index, raw_range in enumerate(raw_ranges):
+                range_label = f"{sel_label}.triangleRanges[{range_index}]"
+                if (
+                    not isinstance(raw_range, list)
+                    or len(raw_range) != 2
+                    or any(
+                        not isinstance(bound, int) or isinstance(bound, bool)
+                        for bound in raw_range
+                    )
+                ):
+                    raise SemanticPolicyError(
+                        f"{range_label} must be an [start, end] integer pair"
+                    )
+                start, end = raw_range
+                if start < 0 or end < start or end >= triangle_count:
+                    raise SemanticPolicyError(
+                        f"{range_label} is out of range for "
+                        f"{triangle_count} triangles"
+                    )
+                if start <= previous_end:
+                    raise SemanticPolicyError(
+                        f"{range_label} overlaps or is not sorted within "
+                        "its selection"
+                    )
+                previous_end = end
+                overlap = covered.intersection(range(start, end + 1))
+                if overlap:
+                    raise SemanticPolicyError(
+                        f"{range_label} overlaps triangle "
+                        f"{min(overlap)} already selected by another semantic"
+                    )
+                covered.update(range(start, end + 1))
+                ranges.append((start, end))
+            parsed.append((sel_semantic, tuple(ranges)))
+        selections = tuple(parsed)
     if strategy == "uniform":
         semantic = _semantic(value.get("semantic"), f"{label}.semantic")
         if not semantic_compatible_with_kind(kind, semantic):
@@ -281,6 +366,7 @@ def _parse_rule(value: Any, index: int) -> SemanticRule:
         surface_semantic=surface_semantic,
         slope_limit_degrees=slope_limit_degrees,
         precondition=precondition,
+        selections=selections,
     )
 
 
@@ -549,6 +635,17 @@ def classify_mesh_triangles(
             raise SemanticPolicyError(
                 f"surface rule for {actor_file} selected no negative-Y triangles"
             )
+        semantic_ids = bytes(result)
+    elif rule.strategy == "explicit_triangles":
+        assert rule.selections is not None
+        # Purely index-driven: no geometry, name, or coordinate heuristics.
+        # The loader already proved ranges are in-bounds and non-overlapping
+        # against this exact hash-bound triangle count.
+        result = bytearray((SemanticId.UNKNOWN,)) * triangle_count
+        for selection_semantic, ranges in rule.selections:
+            for start, end in ranges:
+                for triangle_index in range(start, end + 1):
+                    result[triangle_index] = selection_semantic
         semantic_ids = bytes(result)
     else:  # pragma: no cover - loader makes this unreachable
         raise SemanticPolicyError(f"unsupported semantic strategy {rule.strategy}")
