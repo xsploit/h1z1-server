@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "583eca95291aed2acb3f11611434b2b17061888e82df4fae5f381815e9eaa662"
+POLICY_SHA256 = "fe39858f0393474ec66ebc30b5de99024162a1333f73a641f7c3cc8806b06160"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,9 +151,9 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 53)
+        self.assertEqual(len(policy.rules), 89)
         self.assertEqual(
-            sum(rule.strategy == "uniform" for rule in policy.rules), 19
+            sum(rule.strategy == "uniform" for rule in policy.rules), 55
         )
         self.assertEqual(
             sum(
@@ -451,14 +451,14 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
             self.assertEqual(len(result), entry["triangleCount"])
             if rule.strategy == "uniform":
                 uniform_count += 1
-                self.assertEqual(set(result), {SemanticId.ROAD})
+                self.assertEqual(set(result), {rule.semantic})
             else:
                 surface_count += 1
                 self.assertIn(rule.surface_semantic, result)
                 self.assertTrue(
                     set(result).issubset({rule.surface_semantic, SemanticId.EXCLUDE})
                 )
-        self.assertEqual((uniform_count, surface_count), (19, 34))
+        self.assertEqual((uniform_count, surface_count), (55, 34))
 
 
 if __name__ == "__main__":
