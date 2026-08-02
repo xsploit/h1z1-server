@@ -111,6 +111,27 @@ into `data/2016/collision/` of this repo. On the next server boot you should see
 If the file is absent the server logs `structure collision disabled` and falls
 back to the heightmap — nothing breaks.
 
+### Audit the native CDTA corpus
+
+Before trusting an extraction, audit every native `.cdt` asset through the
+same strict parser. Run the script with pydmod available on `PYTHONPATH` and
+with pydmod's virtualenv Python:
+
+```powershell
+$env:H1Z1_ASSETS = 'C:\path\to\H1Z1\Resources\Assets'
+$env:PYTHONPATH = 'C:\path\to\pydmod'
+& 'C:\path\to\pydmod\.venv\Scripts\python.exe' -W ignore `
+  tools\forgelight\audit_cdta_corpus.py `
+  --expect-total 2411 --expect-accepted 2390 --expect-rejected 21 `
+  --expect-rejected-category trailing=16 `
+  --expect-rejected-category incomplete-index=5
+```
+
+The command fails closed if the installed corpus drifts from those reviewed
+expectations. Its deterministic `inventorySha256` binds asset names, bytes,
+source hashes, and parse verdicts; `--output <path>` also writes the full,
+sorted rejection evidence as canonical JSON.
+
 ### Optional: visual check
 
 `python export_z1_collision.py` exports a small GLB of one town
