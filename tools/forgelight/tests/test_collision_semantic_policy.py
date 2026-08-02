@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "b925159c0eea4e95a759ae39545e1a53df2864cb22e11d3b947f7bf5982e611d"
+POLICY_SHA256 = "2b7c6ee10745b00f74928dc2dc6fd4a27b0df1293bb999c13cf33a74a57aea57"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,9 +151,9 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 90)
+        self.assertEqual(len(policy.rules), 130)
         self.assertEqual(
-            sum(rule.strategy == "uniform" for rule in policy.rules), 55
+            sum(rule.strategy == "uniform" for rule in policy.rules), 95
         )
         self.assertEqual(
             sum(
@@ -635,9 +635,9 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
                     set(result).issubset({rule.surface_semantic, SemanticId.EXCLUDE})
                 )
         self.assertEqual(
-            (uniform_count, surface_count), (55, 34)
+            (uniform_count, surface_count), (95, 34)
         )
-        self.assertEqual(explicit_count, len(policy.rules) - 89)
+        self.assertEqual(explicit_count, 1)
 
 
 if __name__ == "__main__":
