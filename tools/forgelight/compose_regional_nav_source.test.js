@@ -215,6 +215,15 @@ test("replaces one exact actor while preserving terrain, props, and excludes", a
   assert.match(output, /PoliceRender__instance_11/);
   assert.doesNotMatch(output, /PoliceCollision__instance_7/);
   assert.doesNotMatch(output, /unrelated_render_prop/);
+  assert.equal(
+    output.match(/^o .*PoliceRender__instance_11$/gm)?.length,
+    1,
+    "material changes must not split one exact actor into multiple OBJ objects"
+  );
+  assert.equal(
+    report.rules.materialChangesPreserveExactOutputObjectIdentity,
+    true
+  );
 });
 
 test("produces deterministic geometry for the same owned seam", async () => {
@@ -227,6 +236,37 @@ test("produces deterministic geometry for the same owned seam", async () => {
   );
   assert.equal(first.output.sha256, second.output.sha256);
   assert.deepEqual(first.counts, second.counts);
+});
+
+test("clips base terrain only inside an explicit contained structure footprint", async () => {
+  const fixture = createFixture();
+  const policy = JSON.parse(readFileSync(fixture.paths["policy.json"], "utf8"));
+  policy.ownership[0].terrainOcclusionBounds = {
+    minX: 1,
+    minZ: 0,
+    maxX: 3,
+    maxZ: 2
+  };
+  writeJson(fixture.paths["policy.json"], policy);
+
+  const report = await composeRegionalHybrid(
+    options(fixture, "terrain-occluded.obj")
+  );
+  const areas = projectedMaterialAreas(
+    join(fixture.root, "terrain-occluded.obj")
+  );
+  assert.equal(areas.nav_terrain, 4);
+  assert.equal(report.counts.baseTerrainOcclusionSelectedTriangles, 2);
+  assert.equal(report.counts.baseTerrainOcclusionRemovedProjectedArea, 4);
+  assert.equal(
+    report.ownership[0].matchedInputTriangles
+      .terrainOcclusionRemovedProjectedArea,
+    4
+  );
+  assert.equal(
+    report.rules.terrainOcclusionRequiresExplicitContainedEvidenceBounds,
+    true
+  );
 });
 
 test("supports multiple exact object replacements with overlapping evidence bounds", async () => {
@@ -316,6 +356,41 @@ test("fails closed on duplicate object mappings or missing required semantics", 
   await assert.rejects(
     composeRegionalHybrid(options(missing, "missing.obj")),
     /emitted no required nav_threshold/
+  );
+});
+
+test("rejects terrain occlusion outside evidence or without a replacement structure surface", () => {
+  const outside = createFixture();
+  const outsidePolicy = JSON.parse(
+    readFileSync(outside.paths["policy.json"], "utf8")
+  );
+  outsidePolicy.ownership[0].terrainOcclusionBounds = {
+    minX: 0.5,
+    minZ: 0,
+    maxX: 3,
+    maxZ: 2
+  };
+  writeJson(outside.paths["policy.json"], outsidePolicy);
+  assert.throws(
+    () => loadPolicy(outside.paths["policy.json"]),
+    /terrain occlusion is outside/
+  );
+
+  const noSurface = createFixture();
+  const noSurfacePolicy = JSON.parse(
+    readFileSync(noSurface.paths["policy.json"], "utf8")
+  );
+  noSurfacePolicy.ownership[0].requiredMaterials = ["nav_road"];
+  noSurfacePolicy.ownership[0].terrainOcclusionBounds = {
+    minX: 1,
+    minZ: 0,
+    maxX: 3,
+    maxZ: 2
+  };
+  writeJson(noSurface.paths["policy.json"], noSurfacePolicy);
+  assert.throws(
+    () => loadPolicy(noSurface.paths["policy.json"]),
+    /cannot occlude terrain/
   );
 });
 

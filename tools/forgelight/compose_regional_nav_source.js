@@ -157,10 +157,39 @@ function loadPolicy(path) {
       throw new Error(
         `ownership region ${id} must declare an exact objectReplacement`
       );
+    const terrainOcclusionBounds = entry.terrainOcclusionBounds
+      ? readBounds(
+          entry.terrainOcclusionBounds,
+          `policy.ownership[${index}].terrainOcclusionBounds`
+        )
+      : null;
+    if (
+      terrainOcclusionBounds &&
+      !containsBounds(regionBounds, terrainOcclusionBounds)
+    )
+      throw new Error(
+        `ownership region ${id} terrain occlusion is outside its evidence bounds`
+      );
+    if (
+      terrainOcclusionBounds &&
+      !requiredMaterials.some((material) =>
+        [
+          "nav_floor_exterior",
+          "nav_floor_interior",
+          "nav_stair",
+          "nav_ramp",
+          "nav_threshold"
+        ].includes(material)
+      )
+    )
+      throw new Error(
+        `ownership region ${id} cannot occlude terrain without a required replacement structure surface`
+      );
     return {
       id,
       bounds: regionBounds,
       objectReplacement: { baseObject, overlayObject },
+      terrainOcclusionBounds,
       requiredMaterials
     };
   });
@@ -355,6 +384,20 @@ function triangleAreaSquared(triangle) {
   return cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2;
 }
 
+function projectedAreaXZ(polygon) {
+  let twiceArea = 0;
+  for (let index = 0; index < polygon.length; index++) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    twiceArea += current[0] * next[2] - next[0] * current[2];
+  }
+  return Math.abs(twiceArea) / 2;
+}
+
+function roundNumber(value) {
+  return Number(value.toFixed(6));
+}
+
 function triangulate(polygon) {
   const triangles = [];
   for (let index = 1; index < polygon.length - 1; index++) {
@@ -483,6 +526,8 @@ async function composeRegionalHybrid(options) {
     overlayInput: materialCounter(),
     overlayOutput: materialCounter(),
     overlayUnownedDiscarded: materialCounter(),
+    baseTerrainOcclusionSelectedTriangles: 0,
+    baseTerrainOcclusionRemovedProjectedArea: 0,
     outputVertices: 0,
     outputTriangles: 0,
     droppedDegenerateTriangles: 0
@@ -497,11 +542,14 @@ async function composeRegionalHybrid(options) {
         baseSelectedTriangles: 0,
         baseSelectedOutsideOwnershipTriangles: 0,
         overlaySelectedTriangles: 0,
-        overlaySelectedOutsideOwnershipTriangles: 0
+        overlaySelectedOutsideOwnershipTriangles: 0,
+        terrainOcclusionSelectedTriangles: 0,
+        terrainOcclusionRemovedProjectedArea: 0
       }
     ])
   );
-  let activeGroup = null;
+  let activeObject = null;
+  let activeMaterial = null;
 
   function emit(source, owner, objectName, material, polygon) {
     const triangles = triangulate(polygon);
@@ -509,13 +557,15 @@ async function composeRegionalHybrid(options) {
       counts.droppedDegenerateTriangles++;
       return;
     }
-    const group = `${source}|${owner}|${objectName}|${material}`;
-    if (group !== activeGroup) {
-      writer.line(
-        `o ${safeName(source)}__${safeName(owner)}__${safeName(objectName)}`
-      );
+    const outputObject = `${safeName(source)}__${safeName(owner)}__${safeName(objectName)}`;
+    if (outputObject !== activeObject) {
+      writer.line(`o ${outputObject}`);
+      activeObject = outputObject;
+      activeMaterial = null;
+    }
+    if (material !== activeMaterial) {
       writer.line(`usemtl ${material}`);
-      activeGroup = group;
+      activeMaterial = material;
     }
     for (const triangle of triangles) {
       const first = counts.outputVertices + 1;
@@ -554,7 +604,38 @@ async function composeRegionalHybrid(options) {
           increment(counts.baseObjectReplaced, material);
           return;
         }
-        emit("base", "collision-owned", objectName, material, bounded);
+        let polygons = [bounded];
+        if (material === "nav_terrain") {
+          for (const owner of policy.ownership) {
+            if (!owner.terrainOcclusionBounds || polygons.length === 0)
+              continue;
+            const next = [];
+            let removedArea = 0;
+            for (const polygon of polygons) {
+              const fragments = subtractRectangle(
+                polygon,
+                owner.terrainOcclusionBounds
+              );
+              removedArea +=
+                projectedAreaXZ(polygon) -
+                fragments.reduce(
+                  (sum, fragment) => sum + projectedAreaXZ(fragment),
+                  0
+                );
+              next.push(...fragments);
+            }
+            if (removedArea > EPSILON) {
+              counts.baseTerrainOcclusionSelectedTriangles++;
+              counts.baseTerrainOcclusionRemovedProjectedArea += removedArea;
+              regionMatches[owner.id].terrainOcclusionSelectedTriangles++;
+              regionMatches[owner.id].terrainOcclusionRemovedProjectedArea +=
+                removedArea;
+            }
+            polygons = next;
+          }
+        }
+        for (const polygon of polygons)
+          emit("base", "collision-owned", objectName, material, polygon);
       }
     );
     const overlayParsed = await parseObj(
@@ -621,13 +702,20 @@ async function composeRegionalHybrid(options) {
       bounds: policy.bounds,
       ownership: policy.ownership.map((region) => ({
         ...region,
-        matchedInputTriangles: regionMatches[region.id],
+        matchedInputTriangles: {
+          ...regionMatches[region.id],
+          terrainOcclusionRemovedProjectedArea: roundNumber(
+            regionMatches[region.id].terrainOcclusionRemovedProjectedArea
+          )
+        },
         emittedMaterialTriangles: sortedCounter(regionMaterials[region.id])
       })),
       rules: {
         collisionSourceOwnsTerrainAndUnmappedObjects: true,
         renderSourceOwnsMappedObject: true,
         mappedObjectsRequiredExactlyOnce: true,
+        materialChangesPreserveExactOutputObjectIdentity: true,
+        terrainOcclusionRequiresExplicitContainedEvidenceBounds: true,
         mappedObjectPortionsSelectedByPolicyRequiredInsideOwnershipBounds: true,
         overlayMappedObjectIncludesAllCanonicalFaces: true,
         triangleBoundaryMode: "exact-xz-rectangle-clipping",
@@ -682,6 +770,11 @@ async function composeRegionalHybrid(options) {
         overlayUnownedDiscardedMaterialTriangles: sortedCounter(
           counts.overlayUnownedDiscarded
         ),
+        baseTerrainOcclusionSelectedTriangles:
+          counts.baseTerrainOcclusionSelectedTriangles,
+        baseTerrainOcclusionRemovedProjectedArea: roundNumber(
+          counts.baseTerrainOcclusionRemovedProjectedArea
+        ),
         outputVertices: counts.outputVertices,
         outputTriangles: counts.outputTriangles,
         droppedDegenerateTriangles: counts.droppedDegenerateTriangles
@@ -689,7 +782,8 @@ async function composeRegionalHybrid(options) {
       limitations: [
         "Ownership is regional and must pass topology gates before it can be expanded or deployed.",
         "Only exact mapped objects change authority; collision terrain and separate props remain authoritative.",
-        "Separate collision actors or terrain can overlap a mapped render actor and mask its walkable semantics; topology gates must detect this.",
+        "Separate collision actors can overlap a mapped render actor and mask its walkable semantics; topology gates must detect this.",
+        "Base terrain remains authoritative except inside an explicit, contained terrainOcclusionBounds footprint on a reviewed structure replacement.",
         "This regional source is not a complete-provenance full-world artifact."
       ]
     };
@@ -700,7 +794,9 @@ async function composeRegionalHybrid(options) {
   } catch (error) {
     try {
       writer.close();
-    } catch {}
+    } catch {
+      // Preserve the original composition failure during best-effort cleanup.
+    }
     rmSync(outputPath, { force: true });
     rmSync(reportPath, { force: true });
     throw error;

@@ -13,6 +13,9 @@ The ownership contract is deliberately asymmetric:
   including its static obstacles. This preserves walls that a slope check would
   make non-walkable even when the collision actor labels them
   `nav_floor_exterior`.
+- Material changes inside a mapped actor emit `usemtl` without repeating `o`,
+  preserving one exact OBJ object identity for downstream same-object semantic
+  precedence and coplanar-floor protection.
 - Both exact objects must occur once. Their portions selected by the policy
   build bounds must fit completely inside the same reviewed ownership bounds.
   The collision object is omitted and the render object is inserted, so the
@@ -20,6 +23,11 @@ The ownership contract is deliberately asymmetric:
 - Geometry is clipped to the regional build bounds in X/Z with interpolated
   height. Rectangle clipping remains available for evidence checks, not as a
   substitute for object identity.
+- A reviewed structure replacement may additionally declare one contained
+  `terrainOcclusionBounds` footprint. Only `nav_terrain` is clipped out of that
+  exact footprint; roads, props, doors, and every other actor keep their normal
+  ownership. This is intended for terrain proven to sit underneath an authored
+  building, not as a generic overlap repair.
 
 `compose_regional_nav_source.js` fails before leaving an output when:
 
@@ -28,6 +36,8 @@ The ownership contract is deliberately asymmetric:
 - the render lint report is not schema 3, strict, matching, and zero-error;
 - the manifest and lint bounds differ or do not overlap the policy build bounds;
 - ownership evidence bounds leave the regional bounds;
+- terrain-occlusion bounds leave their owning evidence bounds, or the owner has
+  no required structure surface;
 - an exact base or overlay object is mapped more than once, missing, or extends
   outside its ownership evidence bounds;
 - the mapped render object emits none of an explicitly required walkable
@@ -70,6 +80,12 @@ shape:
         "baseObject": "Common_Structures_PoliceStation02__instance_292492",
         "overlayObject": "Common_Structures_PoliceStation02__instance_3246446299"
       },
+      "terrainOcclusionBounds": {
+        "minX": -243.12,
+        "minZ": -1166.96,
+        "maxX": -224.18,
+        "maxZ": -1133.54
+      },
       "requiredMaterials": ["nav_floor_interior", "nav_stair", "nav_threshold"]
     }
   ]
@@ -90,9 +106,11 @@ mapped actor portion passes the ownership envelope. The output report records
 both build and render-evidence bounds.
 
 Exact replacement prevents cross-source duplication of the mapped actor. It
-does not silently delete separate collision actors or terrain that overlap that
-actor. Those remain collision-owned and can mask a render walkable surface;
-normal, topology-only, and island gates are therefore mandatory.
+does not silently delete separate collision actors. Terrain also remains
+collision-owned unless the policy contains the explicit, contained occlusion
+footprint above. The source report records the number of affected source
+triangles and removed projected area. Normal, topology-only, and island gates
+remain mandatory because the footprint is evidence, not proof of connectivity.
 
 ## Compose a candidate
 
