@@ -135,7 +135,7 @@ def load_actor_collision_mesh(mgr, actor_file):
         "collisionAsset": collision_name,
         "collisionSha256": hashlib.sha256(collision_bytes).hexdigest(),
         "cdtaVersion": parsed.version,
-        "cdtaAssetHash": parsed.asset_hash,
+        "cdtaCollisionType": parsed.collision_type,
         "shapeCount": parsed.shape_count,
         "triangleCount": int(len(indices) // 3),
     }
@@ -389,7 +389,7 @@ def main():
                     "collisionAsset": mesh_sources[index]["collisionAsset"],
                     "collisionAssetSha256": mesh_sources[index]["collisionSha256"],
                     "cdtaVersion": mesh_sources[index]["cdtaVersion"],
-                    "cdtaAssetHash": mesh_sources[index]["cdtaAssetHash"],
+                    "cdtaCollisionType": mesh_sources[index]["cdtaCollisionType"],
                     "shapeCount": mesh_sources[index]["shapeCount"],
                     "triangleCount": mesh_sources[index]["triangleCount"],
                     "kind": mesh_kind[index],
