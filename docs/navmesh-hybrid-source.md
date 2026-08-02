@@ -114,6 +114,12 @@ remain mandatory because the footprint is evidence, not proof of connectivity.
 
 ## Compose a candidate
 
+The reviewed Pleasant Valley ownership seam is frozen in
+`data/2016/navigationHybridOwnership.pvPoliceRegional.json` for bounded A/B
+work and `data/2016/navigationHybridOwnership.pvPoliceFull.json` for a
+full-world collision-first source. Both policies replace the same exact actor
+objects; only the base-source bounds differ.
+
 ```powershell
 npm run navmesh-regional-source-compose -- `
   --base-obj C:\temp\pv-collision-first.obj `
