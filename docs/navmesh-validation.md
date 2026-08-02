@@ -30,6 +30,22 @@ machine-readable JSON report. The report is suitable for A/B comparison; do not
 weaken a threshold simply to make a candidate bake green. Add or correct the
 source classification/topology instead.
 
+Run the same gates with manual off-mesh transitions disabled before accepting
+a bake:
+
+```powershell
+npm run navmesh-regions-check -- `
+  --cache-dir "C:\path\to\data\2016\collision" `
+  --topology-only `
+  --report "$env:TEMP\navigation-topology-only.json"
+```
+
+The normal report proves the deployed runtime behavior. The topology-only
+report proves that roads, thresholds, floors, and stairs are connected by the
+baked polygons themselves. A manual transition may remain as a runtime safety
+net, but it cannot make an otherwise disconnected candidate eligible for a
+full bake or deployment.
+
 Compare a candidate with the preserved baseline report:
 
 ```powershell
