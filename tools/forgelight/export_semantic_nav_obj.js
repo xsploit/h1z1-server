@@ -348,6 +348,18 @@ function loadCollisionMetadata(
     validateInstanceIdContract(value.instanceIds, collision);
 
   if (isProduction) {
+    if (value.semanticMode !== "strict-production")
+      throw new Error(
+        "H1COL2 metadata v4 requires semanticMode strict-production"
+      );
+    if (!Array.isArray(value.limitations) || value.limitations.length !== 0)
+      throw new Error(
+        "H1COL2 metadata v4 strict-production has unresolved limitations"
+      );
+    if (value.dynamicDoorObstaclesAcknowledged !== true)
+      throw new Error(
+        "H1COL2 metadata v4 strict-production lacks dynamic door-obstacle acknowledgement"
+      );
     const semantics = value.triangleSemantics;
     if (
       !semantics ||

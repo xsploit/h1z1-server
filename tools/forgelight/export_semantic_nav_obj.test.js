@@ -10,6 +10,7 @@ const {
   COLLISION_METADATA_SCHEMA,
   exportSemanticRegion,
   loadInstanceIds,
+  loadCollisionMetadata,
   loadSemanticPolicy,
   loadTriangleSemantics,
   parseArgs
@@ -186,6 +187,9 @@ function writeMetadata(
       : {}),
     ...(production
       ? {
+          semanticMode: "strict-production",
+          limitations: [],
+          dynamicDoorObstaclesAcknowledged: true,
           triangleSemantics: {
             file: "collision.triangle_semantics.bin",
             sha256: sha256(readFileSync(triangleSemanticsPath)),
@@ -426,6 +430,49 @@ test("production default rejects missing and legacy metadata", async () => {
       dependencies
     ),
     /legacy v1-v3 metadata requires --allow-legacy-actor-semantics/
+  );
+});
+
+test("producer-shaped v4 requires acknowledged strict-production mode", () => {
+  const root = mkdtempSync(join(tmpdir(), "h1emu-semantic-producer-mode-"));
+  const bundle = writeProductionBundle(root);
+  const collision = readBin(bundle.collisionPath);
+  const collisionHash = sha256(readFileSync(bundle.collisionPath));
+
+  const strict = loadCollisionMetadata(
+    bundle.metadataPath,
+    collisionHash,
+    collision
+  );
+  assert.equal(strict.isProduction, true);
+  assert.equal(strict.value.semanticMode, "strict-production");
+
+  const diagnostic = JSON.parse(readFileSync(bundle.metadataPath, "utf8"));
+  diagnostic.semanticMode = "diagnostic";
+  diagnostic.limitations = [
+    "Diagnostic bundles may contain nav_unknown and must not be consumed as production navigation."
+  ];
+  writeFileSync(bundle.metadataPath, `${JSON.stringify(diagnostic)}\n`);
+  assert.throws(
+    () => loadCollisionMetadata(bundle.metadataPath, collisionHash, collision),
+    /requires semanticMode strict-production/
+  );
+
+  diagnostic.semanticMode = "strict-production";
+  diagnostic.limitations[0] =
+    "Runtime dynamic door-obstacle parity is unproven; non-streaming navigation paths may bypass DoorEntity blockers.";
+  writeFileSync(bundle.metadataPath, `${JSON.stringify(diagnostic)}\n`);
+  assert.throws(
+    () => loadCollisionMetadata(bundle.metadataPath, collisionHash, collision),
+    /strict-production has unresolved limitations/
+  );
+
+  diagnostic.limitations = [];
+  diagnostic.dynamicDoorObstaclesAcknowledged = false;
+  writeFileSync(bundle.metadataPath, `${JSON.stringify(diagnostic)}\n`);
+  assert.throws(
+    () => loadCollisionMetadata(bundle.metadataPath, collisionHash, collision),
+    /lacks dynamic door-obstacle acknowledgement/
   );
 });
 
