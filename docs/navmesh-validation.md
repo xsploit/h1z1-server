@@ -31,6 +31,10 @@ machine-readable JSON report. The report is suitable for A/B comparison; do not
 weaken a threshold simply to make a candidate bake green. Add or correct the
 source classification/topology instead.
 
+Report provenance identifies the validation configuration by hashing canonical
+parsed JSON. Line endings, indentation, and object-key formatting therefore do
+not make semantically identical gates appear incompatible across worktrees.
+
 Run the same gates with manual off-mesh transitions disabled before accepting
 a bake:
 

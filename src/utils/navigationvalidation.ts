@@ -6,6 +6,7 @@
 //
 // ======================================================================
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 export type NavigationProbePoint = { x: number; y: number; z: number };
@@ -395,6 +396,29 @@ export function loadNavigationValidationConfig(
   return parseNavigationValidationConfig(
     JSON.parse(readFileSync(path, "utf8"))
   );
+}
+
+function canonicalizeNavigationConfigValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeNavigationConfigValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entry]) => entry !== undefined)
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([key, entry]) => [key, canonicalizeNavigationConfigValue(entry)])
+    );
+  }
+  return value;
+}
+
+export function navigationValidationConfigSha256(
+  config: NavigationValidationConfig
+): string {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalizeNavigationConfigValue(config)))
+    .digest("hex");
 }
 
 function point(tuple: NavigationProbeTuple): NavigationProbePoint {

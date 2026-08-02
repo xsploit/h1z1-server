@@ -11,6 +11,7 @@ import { describe, it } from "node:test";
 import {
   compareNavigationValidationReports,
   evaluateNavigationValidation,
+  navigationValidationConfigSha256,
   NavigationProbeAdapter,
   NavigationValidationConfig,
   parseNavigationValidationConfig
@@ -125,6 +126,19 @@ function cardinalSeamConfig(): NavigationValidationConfig {
 }
 
 describe("navigation regional validation", () => {
+  it("uses the same reported config identity for LF and CRLF JSON", () => {
+    const serialized = `${JSON.stringify(cardinalSeamConfig(), null, 2)}\n`;
+    const lf = parseNavigationValidationConfig(JSON.parse(serialized));
+    const crlf = parseNavigationValidationConfig(
+      JSON.parse(serialized.replace(/\n/g, "\r\n"))
+    );
+
+    assert.equal(
+      navigationValidationConfigSha256(lf),
+      navigationValidationConfigSha256(crlf)
+    );
+  });
+
   it("requires exactly one route across every cardinal replacement seam", () => {
     const complete = cardinalSeamConfig();
     assert.deepEqual(parseNavigationValidationConfig(complete), complete);
