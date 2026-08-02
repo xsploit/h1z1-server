@@ -9,6 +9,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import {
+  compareNavigationValidationReports,
   evaluateNavigationValidation,
   NavigationProbeAdapter,
   NavigationValidationConfig,
@@ -77,6 +78,49 @@ describe("navigation regional validation", () => {
     assert.throws(
       () => parseNavigationValidationConfig(invalid),
       /segment 0 is invalid/
+    );
+  });
+
+  it("requires an improvement without regressions for an A/B candidate", () => {
+    const adapter: NavigationProbeAdapter = {
+      snap(position) {
+        return { ref: 1, point: position, area: 5 };
+      },
+      path(from, to) {
+        return [from, to];
+      }
+    };
+    const baseline = evaluateNavigationValidation(config, adapter);
+    const improvedConfig = structuredClone(config);
+    improvedConfig.regions[0].segments[0].maxCornerVerticalStep = 1;
+    const candidate = evaluateNavigationValidation(improvedConfig, adapter);
+    const comparison = compareNavigationValidationReports(baseline, candidate);
+    assert.equal(comparison.passed, true);
+    assert.deepEqual(comparison.regressions, []);
+    assert.deepEqual(comparison.improvements, [
+      "region:stairs",
+      "segment:stairs/bottom-to-top"
+    ]);
+  });
+
+  it("rejects reports with a different gate set", () => {
+    const empty = {
+      schemaVersion: 1 as const,
+      passed: true,
+      regions: []
+    };
+    const adapter: NavigationProbeAdapter = {
+      snap(position) {
+        return { ref: 1, point: position, area: 5 };
+      },
+      path(from, to) {
+        return [from, to];
+      }
+    };
+    const baseline = evaluateNavigationValidation(config, adapter);
+    assert.throws(
+      () => compareNavigationValidationReports(baseline, empty),
+      /do not contain the same gates/
     );
   });
 });

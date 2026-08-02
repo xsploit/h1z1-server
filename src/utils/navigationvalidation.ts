@@ -92,6 +92,14 @@ export interface NavigationValidationReport {
   }>;
 }
 
+export interface NavigationValidationComparison {
+  passed: boolean;
+  candidatePassedAllGates: boolean;
+  improvements: string[];
+  regressions: string[];
+  unchangedFailures: string[];
+}
+
 function isFiniteTuple(value: unknown): value is NavigationProbeTuple {
   return (
     Array.isArray(value) &&
@@ -342,5 +350,58 @@ export function evaluateNavigationValidation(
     schemaVersion: 1,
     passed: regions.every((region) => region.passed),
     regions
+  };
+}
+
+function validationStatuses(
+  report: NavigationValidationReport
+): Map<string, boolean> {
+  const statuses = new Map<string, boolean>();
+  for (const region of report.regions) {
+    statuses.set(`region:${region.name}`, region.passed);
+    for (const anchor of region.anchors) {
+      statuses.set(`anchor:${region.name}/${anchor.name}`, anchor.passed);
+    }
+    for (const segment of region.segments) {
+      statuses.set(`segment:${region.name}/${segment.name}`, segment.passed);
+    }
+  }
+  return statuses;
+}
+
+export function compareNavigationValidationReports(
+  baseline: NavigationValidationReport,
+  candidate: NavigationValidationReport,
+  requireAllGates = false
+): NavigationValidationComparison {
+  const baselineStatuses = validationStatuses(baseline);
+  const candidateStatuses = validationStatuses(candidate);
+  const baselineKeys = [...baselineStatuses.keys()].sort();
+  const candidateKeys = [...candidateStatuses.keys()].sort();
+  if (baselineKeys.join("\n") !== candidateKeys.join("\n")) {
+    throw new Error(
+      "navigation validation reports do not contain the same gates"
+    );
+  }
+  const improvements: string[] = [];
+  const regressions: string[] = [];
+  const unchangedFailures: string[] = [];
+  for (const key of baselineKeys) {
+    const before = baselineStatuses.get(key)!;
+    const after = candidateStatuses.get(key)!;
+    if (!before && after) improvements.push(key);
+    else if (before && !after) regressions.push(key);
+    else if (!after) unchangedFailures.push(key);
+  }
+  const candidatePassedAllGates = candidate.passed;
+  return {
+    passed:
+      regressions.length === 0 &&
+      improvements.length > 0 &&
+      (!requireAllGates || candidatePassedAllGates),
+    candidatePassedAllGates,
+    improvements,
+    regressions,
+    unchangedFailures
   };
 }

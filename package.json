@@ -84,6 +84,7 @@
     "navmesh-artifact-create": "tsx scripts/createNavigationArtifactManifest.ts",
     "navmesh-artifact-check": "tsx scripts/verifyNavigationArtifact.ts",
     "navmesh-regions-check": "tsx scripts/validateNavigationRegions.ts",
+    "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
     "crash-capture": "node tools/crash-capture/soe-crash-server.mjs",
     "test-crash-capture": "node --test tools/crash-capture/soe-crash-server.test.mjs"
   },

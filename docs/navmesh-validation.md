@@ -30,6 +30,18 @@ machine-readable JSON report. The report is suitable for A/B comparison; do not
 weaken a threshold simply to make a candidate bake green. Add or correct the
 source classification/topology instead.
 
+Compare a candidate with the preserved baseline report:
+
+```powershell
+npm run navmesh-regions-compare -- `
+  --baseline "$env:TEMP\navigation-baseline.json" `
+  --candidate "$env:TEMP\navigation-candidate.json"
+```
+
+An intermediate candidate passes only when it improves at least one named gate
+and regresses none. Add `--require-pass` before a full-world bake or deployment;
+that mode also requires every candidate gate to be green.
+
 ## Semantic area contract
 
 | Area           |  ID | Runtime flags          |
