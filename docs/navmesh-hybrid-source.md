@@ -145,6 +145,10 @@ render geometry. Bake it only into a staged regional bundle. Run normal and
 topology-only regional gates before considering a wider policy.
 
 This source report uses
-`h1emu-regional-hybrid-nav-source-v1`. Full artifact provenance currently
-accepts the standalone collision-first source contract only, so the hybrid
-candidate cannot accidentally be promoted as a complete full-world artifact.
+`h1emu-regional-hybrid-nav-source-v1`. It is not accepted as direct complete
+full-world provenance. A regional bundle may participate in a complete
+full-cache composition only after it has its own accepted complete manifest,
+regional coverage bounds, and verified topology evidence. The final composed
+bundle must then bind that manifest, a separately verified complete full base,
+and an exact cache-merge report. A runtime-only hybrid candidate cannot be
+promoted by composition.

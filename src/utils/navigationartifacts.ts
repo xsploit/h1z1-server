@@ -25,6 +25,66 @@ export interface NavigationArtifactFile {
   sha256: string;
 }
 
+export interface NavigationArtifactSourceFile {
+  name: string;
+  size: number;
+  sha256: string;
+}
+
+export type NavigationCacheCoverage =
+  | { kind: "full" }
+  | {
+      kind: "regional";
+      bounds: {
+        minX: number;
+        minZ: number;
+        maxX: number;
+        maxZ: number;
+      };
+    };
+
+export interface NavigationCacheMergeReportSnapshot {
+  schema: "h1emu-navigation-cache-merge-v1";
+  schemaVersion: 1;
+  mode: "regional-overlay";
+  tool: {
+    name: string;
+    version: string;
+    commit: string;
+  };
+  base: {
+    artifactId: string;
+    manifestSha256: string;
+    cacheParts: NavigationArtifactFile[];
+  };
+  regional: {
+    artifactId: string;
+    manifestSha256: string;
+    cacheParts: NavigationArtifactFile[];
+  };
+  output: {
+    cacheParts: NavigationArtifactFile[];
+    collision: NavigationArtifactFile;
+    heightmap: NavigationArtifactFile;
+    navigationMetadata: NavigationArtifactFile;
+    semantics: NavigationArtifactFile | null;
+    transitions: NavigationArtifactFile;
+  };
+}
+
+export interface NavigationCacheCompositionProvenance {
+  schema: "h1emu-navigation-cache-composition-v1";
+  base: {
+    manifest: NavigationArtifactFile;
+    snapshot: NavigationArtifactManifest;
+  };
+  regional: {
+    manifest: NavigationArtifactFile;
+    snapshot: NavigationArtifactManifest;
+  };
+  mergeReport: NavigationArtifactFile & NavigationCacheMergeReportSnapshot;
+}
+
 export interface CollisionSemanticSourceInput {
   file: string;
   sha256: string;
@@ -86,24 +146,20 @@ export interface NavigationArtifactManifest {
     extractorCommit: string | null;
     recastCommit: string | null;
     recastNavigationCommit: string | null;
-    sourceWorld: {
-      name: string;
-      size: number;
-      sha256: string;
-    } | null;
-    classifierConfig: {
-      name: string;
-      size: number;
-      sha256: string;
-    } | null;
+    sourceWorld: NavigationArtifactSourceFile | null;
+    classifierConfig: NavigationArtifactSourceFile | null;
     /** Optional for backward-compatible runtime-only manifests; mandatory for complete provenance. */
     sourceReport?: CollisionSemanticSourceReport | null;
+    /** Complete provenance for a full cache assembled from verified full and regional artifacts. */
+    composition?: NavigationCacheCompositionProvenance | null;
   };
   runtime: {
     cache: {
       format: "TSET";
       parts: NavigationArtifactFile[];
       header: NavigationTsetHeader;
+      /** Required for artifacts used as inputs to a cache composition. */
+      coverage?: NavigationCacheCoverage;
     };
     collision: {
       file: NavigationArtifactFile;
@@ -175,6 +231,176 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isSha256(value: unknown): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+function parseArtifactFileRecord(
+  value: unknown,
+  label: string
+): NavigationArtifactFile {
+  if (
+    !isRecord(value) ||
+    typeof value.path !== "string" ||
+    value.path.length === 0 ||
+    !Number.isSafeInteger(value.size) ||
+    (value.size as number) < 0 ||
+    !isSha256(value.sha256)
+  ) {
+    throw new Error(`[NAV] ${label} contains an invalid file record`);
+  }
+  return {
+    path: value.path,
+    size: value.size as number,
+    sha256: value.sha256
+  };
+}
+
+function parseArtifactSourceFile(
+  value: unknown,
+  label: string
+): NavigationArtifactSourceFile {
+  if (
+    !isRecord(value) ||
+    typeof value.name !== "string" ||
+    value.name.length === 0 ||
+    !Number.isSafeInteger(value.size) ||
+    (value.size as number) < 0 ||
+    !isSha256(value.sha256)
+  ) {
+    throw new Error(`[NAV] ${label} contains an invalid source file record`);
+  }
+  return {
+    name: value.name,
+    size: value.size as number,
+    sha256: value.sha256
+  };
+}
+
+function parseCacheCoverage(value: unknown): NavigationCacheCoverage {
+  if (
+    !isRecord(value) ||
+    (value.kind !== "full" && value.kind !== "regional")
+  ) {
+    throw new Error("[NAV] artifact cache has invalid coverage provenance");
+  }
+  if (value.kind === "full") return { kind: "full" };
+  const bounds = value.bounds;
+  if (
+    !isRecord(bounds) ||
+    !["minX", "minZ", "maxX", "maxZ"].every(
+      (field) =>
+        typeof bounds[field] === "number" && Number.isFinite(bounds[field])
+    ) ||
+    (bounds.minX as number) >= (bounds.maxX as number) ||
+    (bounds.minZ as number) >= (bounds.maxZ as number)
+  ) {
+    throw new Error("[NAV] regional cache coverage has invalid bounds");
+  }
+  return {
+    kind: "regional",
+    bounds: {
+      minX: bounds.minX as number,
+      minZ: bounds.minZ as number,
+      maxX: bounds.maxX as number,
+      maxZ: bounds.maxZ as number
+    }
+  };
+}
+
+function parseMergeInput(
+  value: unknown,
+  label: string
+): NavigationCacheMergeReportSnapshot["base"] {
+  if (
+    !isRecord(value) ||
+    !isSha256(value.artifactId) ||
+    !isSha256(value.manifestSha256) ||
+    !Array.isArray(value.cacheParts) ||
+    value.cacheParts.length === 0
+  ) {
+    throw new Error(`[NAV] cache merge report has invalid ${label} input`);
+  }
+  return {
+    artifactId: value.artifactId,
+    manifestSha256: value.manifestSha256,
+    cacheParts: value.cacheParts.map((entry, index) =>
+      parseArtifactFileRecord(entry, `${label} cache part ${index}`)
+    )
+  };
+}
+
+export function parseNavigationCacheMergeReport(
+  value: unknown
+): NavigationCacheMergeReportSnapshot {
+  if (!isRecord(value)) {
+    throw new Error("[NAV] navigation cache merge report must be an object");
+  }
+  if (
+    value.schema !== "h1emu-navigation-cache-merge-v1" ||
+    value.schemaVersion !== 1 ||
+    value.mode !== "regional-overlay"
+  ) {
+    throw new Error(
+      `[NAV] unsupported navigation cache merge report ${String(value.schema)}`
+    );
+  }
+  if (
+    !isRecord(value.tool) ||
+    typeof value.tool.name !== "string" ||
+    value.tool.name.length === 0 ||
+    typeof value.tool.version !== "string" ||
+    value.tool.version.length === 0 ||
+    typeof value.tool.commit !== "string" ||
+    !/^[a-f0-9]{7,64}$/.test(value.tool.commit)
+  ) {
+    throw new Error("[NAV] cache merge report has invalid tool provenance");
+  }
+  if (!isRecord(value.output) || !Array.isArray(value.output.cacheParts)) {
+    throw new Error("[NAV] cache merge report has invalid output");
+  }
+  const outputCacheParts = value.output.cacheParts.map((entry, index) =>
+    parseArtifactFileRecord(entry, `output cache part ${index}`)
+  );
+  if (!outputCacheParts.length) {
+    throw new Error("[NAV] cache merge report output contains no cache parts");
+  }
+  return {
+    schema: "h1emu-navigation-cache-merge-v1",
+    schemaVersion: 1,
+    mode: "regional-overlay",
+    tool: {
+      name: value.tool.name,
+      version: value.tool.version,
+      commit: value.tool.commit
+    },
+    base: parseMergeInput(value.base, "base"),
+    regional: parseMergeInput(value.regional, "regional"),
+    output: {
+      cacheParts: outputCacheParts,
+      collision: parseArtifactFileRecord(
+        value.output.collision,
+        "output collision"
+      ),
+      heightmap: parseArtifactFileRecord(
+        value.output.heightmap,
+        "output heightmap"
+      ),
+      navigationMetadata: parseArtifactFileRecord(
+        value.output.navigationMetadata,
+        "output navigation metadata"
+      ),
+      semantics:
+        value.output.semantics === null
+          ? null
+          : parseArtifactFileRecord(
+              value.output.semantics,
+              "output semantic report"
+            ),
+      transitions: parseArtifactFileRecord(
+        value.output.transitions,
+        "output transitions"
+      )
+    }
+  };
 }
 
 function parseSourceInput(
@@ -391,10 +617,37 @@ export function parseNavigationArtifactManifest(
       "[NAV] artifact manifest is missing provenance or runtime data"
     );
   }
+  if (
+    value.provenance.status !== "complete" &&
+    value.provenance.status !== "runtime-only"
+  ) {
+    throw new Error("[NAV] artifact manifest has an invalid provenance status");
+  }
+  if (
+    value.provenance.sourceWorld !== null &&
+    value.provenance.sourceWorld !== undefined
+  ) {
+    parseArtifactSourceFile(value.provenance.sourceWorld, "source world");
+  }
+  if (
+    value.provenance.classifierConfig !== null &&
+    value.provenance.classifierConfig !== undefined
+  ) {
+    parseArtifactSourceFile(
+      value.provenance.classifierConfig,
+      "classifier config"
+    );
+  }
   const runtime = value.runtime;
   if (!isRecord(runtime.cache) || !Array.isArray(runtime.cache.parts)) {
     throw new Error("[NAV] artifact manifest is missing cache parts");
   }
+  if (runtime.cache.coverage !== undefined) {
+    parseCacheCoverage(runtime.cache.coverage);
+  }
+  runtime.cache.parts.forEach((part, index) =>
+    parseArtifactFileRecord(part, `cache part ${index}`)
+  );
   const parsed = value as unknown as NavigationArtifactManifest;
   const expectedId = calculateNavigationArtifactId(parsed);
   if (parsed.artifactId !== expectedId) {
@@ -447,13 +700,238 @@ function collectManifestFiles(
   ]) {
     if (entry) files.push(entry.file);
   }
+  if (manifest.provenance.composition) {
+    files.push(
+      manifest.provenance.composition.base.manifest,
+      manifest.provenance.composition.regional.manifest,
+      manifest.provenance.composition.mergeReport
+    );
+  }
   return files;
 }
 
-function validateCompleteProvenance(
+function assertSame(label: string, actual: unknown, expected: unknown): void {
+  if (canonicalJson(actual) !== canonicalJson(expected)) {
+    throw new Error(`[NAV] cache composition ${label} mismatch`);
+  }
+}
+
+function assertContiguousCacheParts(
+  parts: NavigationArtifactFile[],
+  label: string
+): void {
+  const orderedParts = [...parts].sort(
+    (left, right) => cachePartIndex(left.path) - cachePartIndex(right.path)
+  );
+  orderedParts.forEach((part, index) => {
+    if (cachePartIndex(part.path) !== index) {
+      throw new Error(
+        `[NAV] ${label} cache parts are not contiguous at index ${index}`
+      );
+    }
+  });
+}
+
+function parseCompositionComponent(
+  value: unknown,
+  label: "base" | "regional"
+): NavigationCacheCompositionProvenance["base"] {
+  if (!isRecord(value)) {
+    throw new Error(`[NAV] cache composition is missing ${label} provenance`);
+  }
+  const manifest = parseArtifactFileRecord(value.manifest, `${label} manifest`);
+  const snapshot = parseNavigationArtifactManifest(value.snapshot);
+  return { manifest, snapshot };
+}
+
+function parseCacheComposition(
+  value: unknown
+): NavigationCacheCompositionProvenance {
+  if (
+    !isRecord(value) ||
+    value.schema !== "h1emu-navigation-cache-composition-v1" ||
+    !isRecord(value.mergeReport)
+  ) {
+    throw new Error(
+      "[NAV] complete artifact has invalid cache composition provenance"
+    );
+  }
+  const mergeReportFile = parseArtifactFileRecord(
+    value.mergeReport,
+    "cache merge report"
+  );
+  const mergeReport = parseNavigationCacheMergeReport(value.mergeReport);
+  return {
+    schema: "h1emu-navigation-cache-composition-v1",
+    base: parseCompositionComponent(value.base, "base"),
+    regional: parseCompositionComponent(value.regional, "regional"),
+    mergeReport: { ...mergeReportFile, ...mergeReport }
+  };
+}
+
+function assertCacheComposition(
+  manifest: NavigationArtifactManifest,
+  rawComposition: NavigationCacheCompositionProvenance
+): void {
+  const composition = parseCacheComposition(rawComposition);
+  if (canonicalJson(composition) !== canonicalJson(rawComposition)) {
+    throw new Error(
+      "[NAV] complete artifact cache composition contains invalid fields"
+    );
+  }
+
+  const { base, regional, mergeReport } = composition;
+  for (const [label, component] of [
+    ["base", base],
+    ["regional", regional]
+  ] as const) {
+    if (component.snapshot.provenance.composition) {
+      throw new Error(
+        `[NAV] cache composition ${label} artifact cannot be composed`
+      );
+    }
+    if (component.snapshot.provenance.status !== "complete") {
+      throw new Error(
+        `[NAV] cache composition ${label} artifact requires complete provenance`
+      );
+    }
+    assertCompleteNavigationArtifactProvenance(component.snapshot);
+    assertContiguousCacheParts(
+      component.snapshot.runtime.cache.parts,
+      `${label} artifact`
+    );
+  }
+
+  if (base.snapshot.runtime.cache.coverage?.kind !== "full") {
+    throw new Error(
+      "[NAV] cache composition base artifact must have full coverage"
+    );
+  }
+  if (regional.snapshot.runtime.cache.coverage?.kind !== "regional") {
+    throw new Error(
+      "[NAV] cache composition regional artifact must have regional coverage"
+    );
+  }
+  if (manifest.runtime.cache.coverage?.kind !== "full") {
+    throw new Error("[NAV] composed artifact must have full cache coverage");
+  }
+
+  assertSame(
+    "base artifactId",
+    mergeReport.base.artifactId,
+    base.snapshot.artifactId
+  );
+  assertSame(
+    "base manifest hash",
+    mergeReport.base.manifestSha256,
+    base.manifest.sha256
+  );
+  assertSame(
+    "base cache parts",
+    mergeReport.base.cacheParts,
+    base.snapshot.runtime.cache.parts
+  );
+  assertSame(
+    "regional artifactId",
+    mergeReport.regional.artifactId,
+    regional.snapshot.artifactId
+  );
+  assertSame(
+    "regional manifest hash",
+    mergeReport.regional.manifestSha256,
+    regional.manifest.sha256
+  );
+  assertSame(
+    "regional cache parts",
+    mergeReport.regional.cacheParts,
+    regional.snapshot.runtime.cache.parts
+  );
+  assertSame(
+    "output cache parts",
+    mergeReport.output.cacheParts,
+    manifest.runtime.cache.parts
+  );
+  assertSame(
+    "output collision",
+    mergeReport.output.collision,
+    manifest.runtime.collision?.file
+  );
+  assertSame(
+    "output heightmap",
+    mergeReport.output.heightmap,
+    manifest.runtime.heightmap?.file
+  );
+  assertSame(
+    "output navigation metadata",
+    mergeReport.output.navigationMetadata,
+    manifest.runtime.navigationMetadata?.file
+  );
+  assertSame(
+    "output semantics",
+    mergeReport.output.semantics,
+    manifest.runtime.semantics?.file ?? null
+  );
+  assertSame(
+    "output transitions",
+    mergeReport.output.transitions,
+    manifest.runtime.transitions?.file
+  );
+
+  for (const [label, component] of [
+    ["base", base.snapshot],
+    ["regional", regional.snapshot]
+  ] as const) {
+    for (const dependency of [
+      "collision",
+      "heightmap",
+      "navigationMetadata",
+      "transitions"
+    ] as const) {
+      assertSame(
+        `${label} ${dependency}`,
+        component.runtime[dependency],
+        manifest.runtime[dependency]
+      );
+    }
+  }
+}
+
+export function assertCompleteNavigationArtifactProvenance(
   manifest: NavigationArtifactManifest
 ): void {
   if (manifest.provenance.status !== "complete") return;
+  if (manifest.provenance.composition) {
+    for (const [name, value] of Object.entries({
+      extractorCommit: manifest.provenance.extractorCommit,
+      recastCommit: manifest.provenance.recastCommit,
+      recastNavigationCommit: manifest.provenance.recastNavigationCommit,
+      sourceWorld: manifest.provenance.sourceWorld,
+      classifierConfig: manifest.provenance.classifierConfig,
+      sourceReport: manifest.provenance.sourceReport
+    })) {
+      if (value !== null && value !== undefined) {
+        throw new Error(
+          `[NAV] composed complete artifact cannot claim direct ${name} provenance`
+        );
+      }
+    }
+    for (const [name, value] of Object.entries({
+      collision: manifest.runtime.collision,
+      heightmap: manifest.runtime.heightmap,
+      navigationMetadata: manifest.runtime.navigationMetadata,
+      transitions: manifest.runtime.transitions
+    })) {
+      if (!value) {
+        throw new Error(`[NAV] composed complete artifact is missing ${name}`);
+      }
+    }
+    assertContiguousCacheParts(
+      manifest.runtime.cache.parts,
+      "composed artifact"
+    );
+    assertCacheComposition(manifest, manifest.provenance.composition);
+    return;
+  }
   for (const [name, value] of Object.entries({
     extractorCommit: manifest.provenance.extractorCommit,
     recastCommit: manifest.provenance.recastCommit,
@@ -536,7 +1014,7 @@ export async function verifyNavigationArtifact(options: {
   const manifest = parseNavigationArtifactManifest(
     JSON.parse(readFileSync(manifestPath, "utf8"))
   );
-  validateCompleteProvenance(manifest);
+  assertCompleteNavigationArtifactProvenance(manifest);
   const bundleRoot = dirname(manifestPath);
   if (options.requireRuntimeDependencies) {
     const required = [
@@ -589,13 +1067,7 @@ export async function verifyNavigationArtifact(options: {
   const orderedParts = [...manifest.runtime.cache.parts].sort(
     (left, right) => cachePartIndex(left.path) - cachePartIndex(right.path)
   );
-  orderedParts.forEach((part, index) => {
-    if (cachePartIndex(part.path) !== index) {
-      throw new Error(
-        `[NAV] artifact cache parts are not contiguous at index ${index}`
-      );
-    }
-  });
+  assertContiguousCacheParts(orderedParts, "artifact");
 
   const expectedCachePaths = new Set(
     orderedParts.map((part) => resolveArtifactFile(bundleRoot, part))
@@ -668,6 +1140,41 @@ export async function verifyNavigationArtifact(options: {
     ) {
       throw new Error(
         "[NAV] source report heightmap hash does not match runtime heightmap"
+      );
+    }
+  }
+
+  if (manifest.provenance.composition) {
+    const composition = manifest.provenance.composition;
+    for (const [label, component] of [
+      ["base", composition.base],
+      ["regional", composition.regional]
+    ] as const) {
+      const componentPath = resolveArtifactFile(bundleRoot, component.manifest);
+      const diskSnapshot = parseNavigationArtifactManifest(
+        JSON.parse(readFileSync(componentPath, "utf8"))
+      );
+      if (canonicalJson(diskSnapshot) !== canonicalJson(component.snapshot)) {
+        throw new Error(
+          `[NAV] ${label} component manifest does not match manifested snapshot`
+        );
+      }
+    }
+
+    const report = composition.mergeReport;
+    const {
+      path: _path,
+      size: _size,
+      sha256: _sha256,
+      ...manifestSnapshot
+    } = report;
+    const reportPath = resolveArtifactFile(bundleRoot, report);
+    const diskSnapshot = parseNavigationCacheMergeReport(
+      JSON.parse(readFileSync(reportPath, "utf8"))
+    );
+    if (canonicalJson(diskSnapshot) !== canonicalJson(manifestSnapshot)) {
+      throw new Error(
+        "[NAV] cache merge report does not match manifested provenance"
       );
     }
   }

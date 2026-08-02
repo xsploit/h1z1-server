@@ -8,8 +8,10 @@ import {
   assertNavigationRuntimeConfiguration,
   calculateNavigationArtifactId,
   canonicalJson,
+  NavigationArtifactFile,
   NavigationArtifactManifest,
   parseCollisionSemanticSourceReport,
+  parseNavigationCacheMergeReport,
   parseTsetHeader,
   verifyNavigationArtifact
 } from "./navigationartifacts";
@@ -184,6 +186,133 @@ function bindSourceReport(
   };
 }
 
+function makeCompleteSnapshot(
+  source: NavigationArtifactManifest,
+  coverage: "full" | "regional"
+): NavigationArtifactManifest {
+  const manifest = structuredClone(source);
+  claimCompleteProvenance(manifest);
+  const file = manifest.runtime.cache.parts[0];
+  const base = collisionSemanticSourceReport();
+  manifest.provenance.sourceReport = {
+    file,
+    ...parseCollisionSemanticSourceReport({
+      ...base,
+      output: { ...base.output, sha256: file.sha256 },
+      inputs: {
+        ...base.inputs,
+        heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
+        collision: { ...base.inputs.collision, sha256: file.sha256 }
+      }
+    })
+  };
+  manifest.runtime.cache.coverage =
+    coverage === "full"
+      ? { kind: "full" }
+      : {
+          kind: "regional",
+          bounds: { minX: -255, minZ: -1180, maxX: -210, maxZ: -1125 }
+        };
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  return manifest;
+}
+
+function record(path: string, bytes: Buffer): NavigationArtifactFile {
+  return { path, size: bytes.length, sha256: sha256(bytes) };
+}
+
+function compositeFixture() {
+  const result = fixture();
+  const base = makeCompleteSnapshot(result.manifest, "full");
+  const regional = makeCompleteSnapshot(result.manifest, "regional");
+  const baseBytes = Buffer.from(JSON.stringify(base));
+  const regionalBytes = Buffer.from(JSON.stringify(regional));
+  writeFileSync(join(result.root, "base-manifest.json"), baseBytes);
+  writeFileSync(join(result.root, "regional-manifest.json"), regionalBytes);
+
+  result.manifest.runtime = structuredClone(base.runtime);
+  result.manifest.runtime.cache.coverage = { kind: "full" };
+  const mergeReport = {
+    schema: "h1emu-navigation-cache-merge-v1" as const,
+    schemaVersion: 1 as const,
+    mode: "regional-overlay" as const,
+    tool: { name: "h1emu-cache-merge", version: "1.0.0", commit: "abcdef1" },
+    base: {
+      artifactId: base.artifactId,
+      manifestSha256: sha256(baseBytes),
+      cacheParts: structuredClone(base.runtime.cache.parts)
+    },
+    regional: {
+      artifactId: regional.artifactId,
+      manifestSha256: sha256(regionalBytes),
+      cacheParts: structuredClone(regional.runtime.cache.parts)
+    },
+    output: {
+      cacheParts: structuredClone(result.manifest.runtime.cache.parts),
+      collision: structuredClone(result.manifest.runtime.collision!.file),
+      heightmap: structuredClone(result.manifest.runtime.heightmap!.file),
+      navigationMetadata: structuredClone(
+        result.manifest.runtime.navigationMetadata!.file
+      ),
+      semantics: structuredClone(result.manifest.runtime.semantics!.file),
+      transitions: structuredClone(result.manifest.runtime.transitions!.file)
+    }
+  };
+  const mergeBytes = Buffer.from(JSON.stringify(mergeReport));
+  writeFileSync(join(result.root, "cache-merge-report.json"), mergeBytes);
+  result.manifest.provenance = {
+    status: "complete",
+    extractorCommit: null,
+    recastCommit: null,
+    recastNavigationCommit: null,
+    sourceWorld: null,
+    classifierConfig: null,
+    sourceReport: null,
+    composition: {
+      schema: "h1emu-navigation-cache-composition-v1",
+      base: {
+        manifest: record("base-manifest.json", baseBytes),
+        snapshot: base
+      },
+      regional: {
+        manifest: record("regional-manifest.json", regionalBytes),
+        snapshot: regional
+      },
+      mergeReport: {
+        ...record("cache-merge-report.json", mergeBytes),
+        ...mergeReport
+      }
+    }
+  };
+  result.manifest.artifactId = calculateNavigationArtifactId(result.manifest);
+  writeFileSync(result.manifestPath, JSON.stringify(result.manifest));
+  return { ...result, base, regional, mergeReport };
+}
+
+function persistCompositeManifest(
+  manifestPath: string,
+  manifest: NavigationArtifactManifest
+): void {
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+}
+
+function persistMergeReport(
+  root: string,
+  manifest: NavigationArtifactManifest
+): void {
+  const mergeReport = manifest.provenance.composition!.mergeReport;
+  const {
+    path: _path,
+    size: _size,
+    sha256: _sha256,
+    ...snapshot
+  } = mergeReport;
+  const bytes = Buffer.from(JSON.stringify(snapshot));
+  writeFileSync(join(root, "cache-merge-report.json"), bytes);
+  Object.assign(mergeReport, record("cache-merge-report.json", bytes));
+}
+
 test("canonical JSON and artifact IDs ignore object key order", () => {
   assert.equal(canonicalJson({ b: 2, a: 1 }), '{"a":1,"b":2}');
   const { manifest } = fixture();
@@ -198,6 +327,132 @@ test("verifies a runtime-only cache manifest", async () => {
   });
   assert.equal(verified.manifest.artifactId, manifest.artifactId);
   assert.equal(verified.filesVerified, 1);
+});
+
+test("verifies a complete full plus regional cache composition", async () => {
+  const { cache, manifestPath, manifest } = compositeFixture();
+  const verified = await verifyNavigationArtifact({
+    manifestPath,
+    cacheDirectory: cache
+  });
+  assert.equal(verified.manifest.artifactId, manifest.artifactId);
+  assert.equal(verified.manifest.runtime.cache.coverage?.kind, "full");
+  assert.equal(
+    verified.manifest.provenance.composition?.regional.snapshot.runtime.cache
+      .coverage?.kind,
+    "regional"
+  );
+});
+
+test("rejects a runtime-only cache composition input", async () => {
+  const { cache, manifestPath, manifest } = compositeFixture();
+  const regional = manifest.provenance.composition!.regional.snapshot;
+  regional.provenance.status = "runtime-only";
+  regional.artifactId = calculateNavigationArtifactId(regional);
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /regional artifact requires complete provenance/
+  );
+});
+
+test("rejects incorrect cache composition coverage", async () => {
+  const { cache, manifestPath, manifest } = compositeFixture();
+  manifest.provenance.composition!.regional.snapshot.runtime.cache.coverage = {
+    kind: "full"
+  };
+  manifest.provenance.composition!.regional.snapshot.artifactId =
+    calculateNavigationArtifactId(
+      manifest.provenance.composition!.regional.snapshot
+    );
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /regional artifact must have regional coverage/
+  );
+});
+
+test("rejects a mismatched component manifest hash", async () => {
+  const { root, cache, manifestPath, manifest } = compositeFixture();
+  manifest.provenance.composition!.mergeReport.base.manifestSha256 = "f".repeat(
+    64
+  );
+  persistMergeReport(root, manifest);
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /base manifest hash mismatch/
+  );
+});
+
+test("rejects cache inputs that differ from the merge report", async () => {
+  const { root, cache, manifestPath, manifest } = compositeFixture();
+  manifest.provenance.composition!.mergeReport.regional.cacheParts[0].sha256 =
+    "d".repeat(64);
+  persistMergeReport(root, manifest);
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /regional cache parts mismatch/
+  );
+});
+
+test("rejects runtime dependency drift between composition inputs", async () => {
+  const { cache, manifestPath, manifest } = compositeFixture();
+  const composition = manifest.provenance.composition!;
+  composition.regional.snapshot.runtime.transitions!.count = 7;
+  composition.regional.snapshot.artifactId = calculateNavigationArtifactId(
+    composition.regional.snapshot
+  );
+  composition.mergeReport.regional.artifactId =
+    composition.regional.snapshot.artifactId;
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /regional transitions mismatch/
+  );
+});
+
+test("rejects a merge report whose output hashes do not match the bundle", async () => {
+  const { root, cache, manifestPath, manifest } = compositeFixture();
+  manifest.provenance.composition!.mergeReport.output.cacheParts[0].sha256 =
+    "e".repeat(64);
+  persistMergeReport(root, manifest);
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /output cache parts mismatch/
+  );
+});
+
+test("rejects a staged component manifest that differs from its snapshot", async () => {
+  const { root, cache, manifestPath, manifest, base } = compositeFixture();
+  const changedBase = structuredClone(base);
+  changedBase.provenance.extractorCommit = "different-extractor";
+  changedBase.artifactId = calculateNavigationArtifactId(changedBase);
+  const changedBytes = Buffer.from(JSON.stringify(changedBase));
+  writeFileSync(join(root, "base-manifest.json"), changedBytes);
+  const composition = manifest.provenance.composition!;
+  composition.base.manifest = record("base-manifest.json", changedBytes);
+  composition.mergeReport.base.manifestSha256 = sha256(changedBytes);
+  persistMergeReport(root, manifest);
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /base component manifest does not match manifested snapshot/
+  );
+});
+
+test("rejects invalid merge tool provenance", () => {
+  const { mergeReport } = compositeFixture();
+  assert.throws(
+    () =>
+      parseNavigationCacheMergeReport({
+        ...mergeReport,
+        tool: { ...mergeReport.tool, commit: "not-a-commit" }
+      }),
+    /invalid tool provenance/
+  );
 });
 
 test("binds and verifies a collision-first semantic source report", async () => {
