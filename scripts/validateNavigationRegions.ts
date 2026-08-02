@@ -20,7 +20,7 @@ function option(name: string): string | undefined {
 
 const cacheDirectory = option("--cache-dir");
 const configPath = resolve(
-  option("--config") ?? "data/2016/navigationValidationRegions.json"
+  option("--config") ?? "data/2016/navigationValidationRegions.pvEvidence.json"
 );
 const reportPath = option("--report");
 const topologyOnly = process.argv.includes("--topology-only");
