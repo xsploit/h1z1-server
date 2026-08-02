@@ -10,6 +10,7 @@ const {
   COLLISION_METADATA_SCHEMA,
   exportSemanticRegion,
   loadInstanceIds,
+  loadSemanticPolicy,
   loadTriangleSemantics,
   parseArgs
 } = require("./export_semantic_nav_obj");
@@ -95,6 +96,34 @@ function histogram(ids) {
   );
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value))
+    return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  return JSON.stringify(value);
+}
+
+function writeSemanticPolicy(path, overrides = {}) {
+  const value = {
+    schema: "h1emu-h1col2-semantic-policy-v1",
+    semanticContract: "h1emu-nav-semantics-v1",
+    semanticSchemaVersion: 1,
+    coordinateSpace: "h1z1-world-y-up-meters",
+    defaults: { walkable: "nav_unknown" },
+    rules: [
+      { actorFile: "Common_Props_Modular_Stair01.adr", semantic: "nav_stair" },
+      { actorFile: "Mesh1.adr", semantic: "nav_obstacle_static" }
+    ],
+    ...overrides
+  };
+  writeFileSync(path, `${canonicalJson(value)}\n`);
+  return value;
+}
+
 function writeH1sem(path, collisionPath, meshSemantics) {
   const collisionHash = createHash("sha256")
     .update(readFileSync(collisionPath))
@@ -121,7 +150,8 @@ function writeMetadata(
   schema,
   instanceIdsPath = null,
   triangleSemanticsPath = null,
-  meshSemantics = null
+  meshSemantics = null,
+  semanticPolicyPath = null
 ) {
   const collision = readBin(collisionPath);
   const collisionBytes = readFileSync(collisionPath);
@@ -169,9 +199,9 @@ function writeMetadata(
             histogram: histogram(meshSemantics.flat())
           },
           semanticPolicy: {
-            schema: "h1emu-navigation-semantic-policy-v1",
+            schema: "h1emu-h1col2-semantic-policy-v1",
             file: "semantic-policy.json",
-            sha256: "a".repeat(64)
+            sha256: sha256(readFileSync(semanticPolicyPath))
           }
         }
       : {}),
@@ -216,6 +246,7 @@ function writeProductionBundle(
   const collisionPath = join(root, "collision.bin");
   const instanceIdsPath = join(root, "collision.instance_ids.bin");
   const triangleSemanticsPath = join(root, "collision.triangle_semantics.bin");
+  const semanticPolicyPath = join(root, "semantic-policy.json");
   const metadataPath = join(root, "collision.metadata.json");
   writeCollision(collisionPath, meshes);
   writeInstanceIds(
@@ -225,18 +256,21 @@ function writeProductionBundle(
   const semantics =
     meshSemantics ?? meshes.map((mesh) => [[5, 8, 10, 9][mesh.kind]]);
   writeH1sem(triangleSemanticsPath, collisionPath, semantics);
+  writeSemanticPolicy(semanticPolicyPath);
   writeMetadata(
     metadataPath,
     collisionPath,
     COLLISION_METADATA_SCHEMA,
     instanceIdsPath,
     triangleSemanticsPath,
-    semantics
+    semantics,
+    semanticPolicyPath
   );
   return {
     collisionPath,
     instanceIdsPath,
     triangleSemanticsPath,
+    semanticPolicyPath,
     metadataPath,
     meshSemantics: semantics
   };
@@ -280,6 +314,13 @@ test("exports deterministic strict v4/H1SEM1 semantics and stable IDs", async ()
   assert.equal(first.output.sha256, second.output.sha256);
   assert.equal(first.semanticMode, "per-triangle-h1sem1");
   assert.equal(first.inputs.collisionTriangleSemantics.matched, true);
+  assert.deepEqual(first.inputs.collisionSemanticPolicy, {
+    file: "semantic-policy.json",
+    sha256: sha256(readFileSync(bundle.semanticPolicyPath)),
+    matched: true,
+    schema: "h1emu-h1col2-semantic-policy-v1",
+    canonical: true
+  });
   assert.deepEqual(first.counts.materialTriangles, {
     nav_door_panel_dynamic: 1,
     nav_exclude: 1,
@@ -331,8 +372,8 @@ test("normalizes only downward-wound H1SEM1 walkable faces", async () => {
   const meshes = [
     {
       kind: 0,
-      positions: [0, 0, 0, 1, 0, 0, 0, 0, 1],
-      indices: [0, 1, 2, 0, 1, 2]
+      positions: [0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0],
+      indices: [0, 1, 2, 3, 4, 5]
     }
   ];
   const bundle = writeProductionBundle(root, meshes, [[2, 8]]);
@@ -352,7 +393,7 @@ test("normalizes only downward-wound H1SEM1 walkable faces", async () => {
   const first = faceLines[0].split(" ").slice(1).map(Number);
   const second = faceLines[1].split(" ").slice(1).map(Number);
   assert.deepEqual(first, [first[0], first[0] + 2, first[0] + 1]);
-  assert.deepEqual(second, [second[0], second[0] + 1, second[0] + 2]);
+  assert.deepEqual(second, [first[0] + 3, first[0] + 4, first[0] + 5]);
   assert.match(
     collisionObj,
     /usemtl nav_road\nf \d+ \d+ \d+\nusemtl nav_obstacle_static\nf \d+ \d+ \d+/
@@ -410,6 +451,102 @@ test("legacy actor semantics remain available only by explicit diagnostic flag",
   );
   assert.equal(report.semanticMode, "legacy-actor-diagnostic");
   assert.match(readFileSync(outputPath, "utf8"), /usemtl nav_stair/);
+});
+
+test("requires hash-bound canonical semantic policy bytes and sorted unique rules", async () => {
+  const root = mkdtempSync(join(tmpdir(), "h1emu-semantic-policy-"));
+  const bundle = writeProductionBundle(root);
+  const validBytes = readFileSync(bundle.semanticPolicyPath);
+  const validExpected = {
+    schema: "h1emu-h1col2-semantic-policy-v1",
+    file: "semantic-policy.json",
+    sha256: sha256(validBytes)
+  };
+  assert.equal(
+    loadSemanticPolicy(bundle.semanticPolicyPath, validExpected).schema,
+    "h1emu-h1col2-semantic-policy-v1"
+  );
+  assert.throws(
+    () =>
+      loadSemanticPolicy(bundle.semanticPolicyPath, {
+        ...validExpected,
+        sha256: "0".repeat(64)
+      }),
+    /SHA256 does not match/
+  );
+
+  const policy = JSON.parse(validBytes);
+  const cases = [
+    [
+      "bom",
+      Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), validBytes]),
+      /without a BOM/
+    ],
+    ["pretty", `${JSON.stringify(policy, null, 2)}\n`, /not canonical JSON/],
+    [
+      "wrong-schema",
+      `${canonicalJson({ ...policy, schema: "wrong" })}\n`,
+      /invalid H1COL2 semantic policy contract/
+    ],
+    [
+      "unsorted",
+      `${canonicalJson({ ...policy, rules: [...policy.rules].reverse() })}\n`,
+      /not sorted by actorFile.casefold/
+    ],
+    [
+      "duplicate",
+      `${canonicalJson({
+        ...policy,
+        rules: [
+          policy.rules[0],
+          {
+            ...policy.rules[0],
+            actorFile: policy.rules[0].actorFile.toUpperCase()
+          }
+        ]
+      })}\n`,
+      /duplicate actorFile/
+    ]
+  ];
+  for (const [name, contents, expectedError] of cases) {
+    const path = join(root, `${name}.json`);
+    writeFileSync(path, contents);
+    assert.throws(
+      () =>
+        loadSemanticPolicy(path, {
+          ...validExpected,
+          sha256: sha256(readFileSync(path))
+        }),
+      expectedError,
+      name
+    );
+  }
+
+  writeFileSync(
+    bundle.semanticPolicyPath,
+    `${JSON.stringify(policy, null, 2)}\n`
+  );
+  const brokenSemantics = Buffer.from(
+    readFileSync(bundle.triangleSemanticsPath)
+  );
+  brokenSemantics.write("BROKEN!!", 0, "latin1");
+  writeFileSync(bundle.triangleSemanticsPath, brokenSemantics);
+  const metadata = JSON.parse(readFileSync(bundle.metadataPath, "utf8"));
+  metadata.semanticPolicy.sha256 = sha256(
+    readFileSync(bundle.semanticPolicyPath)
+  );
+  metadata.triangleSemantics.sha256 = sha256(brokenSemantics);
+  writeFileSync(bundle.metadataPath, JSON.stringify(metadata));
+  await assert.rejects(
+    exportSemanticRegion(
+      {
+        ...exportInputs(root, bundle),
+        outputPath: join(root, "policy-before-h1sem.obj")
+      },
+      dependencies
+    ),
+    /semantic policy bytes are not canonical/
+  );
 });
 
 test("rejects H1SEM1 header, exact-length, hash, cardinality, offset, and ID corruption", () => {
@@ -523,28 +660,37 @@ test("rejects H1SEM1 header, exact-length, hash, cardinality, offset, and ID cor
   );
 });
 
-test("rejects unsafe walkable semantics on nonwalkable collision kinds", () => {
-  const root = mkdtempSync(join(tmpdir(), "h1emu-semantic-unsafe-"));
-  const bundle = writeProductionBundle(root);
-  const data = Buffer.from(readFileSync(bundle.triangleSemanticsPath));
-  const semanticsStart = 64 + (4 + 1) * 4;
-  data[semanticsStart + 2] = 3;
-  writeFileSync(bundle.triangleSemanticsPath, data);
-  const metadata = JSON.parse(readFileSync(bundle.metadataPath, "utf8"));
-  metadata.triangleSemantics.sha256 = sha256(data);
-  metadata.triangleSemantics.histogram = histogram([5, 8, 3, 9]);
-  metadata.meshes[2].semanticHistogram = histogram([3]);
-  writeFileSync(bundle.metadataPath, JSON.stringify(metadata));
-  assert.throws(
-    () =>
-      loadTriangleSemantics(
-        bundle.triangleSemanticsPath,
-        metadata.triangleSemantics,
-        sha256(readFileSync(bundle.collisionPath)),
-        readBin(bundle.collisionPath)
-      ),
-    /kind 2 has unsafe semantic nav_floor_exterior/
-  );
+test("enforces the production H1COL2-kind to H1SEM1 compatibility matrix", () => {
+  const cases = [
+    [0, 9, /kind 0 has unsafe semantic nav_door_panel_dynamic/],
+    [1, 10, /kind 1 has unsafe semantic nav_exclude/],
+    [2, 3, /kind 2 has unsafe semantic nav_floor_exterior/],
+    [2, 9, /kind 2 has unsafe semantic nav_door_panel_dynamic/],
+    [3, 8, /kind 3 has unsafe semantic nav_obstacle_static/]
+  ];
+  for (const [kind, semanticId, expectedError] of cases) {
+    const root = mkdtempSync(
+      join(tmpdir(), `h1emu-semantic-kind-${kind}-${semanticId}-`)
+    );
+    const mesh = {
+      kind,
+      positions: [0, 0, 0, 0, 0, 1, 1, 0, 0],
+      indices: [0, 1, 2]
+    };
+    const bundle = writeProductionBundle(root, [mesh], [[semanticId]]);
+    const metadata = JSON.parse(readFileSync(bundle.metadataPath, "utf8"));
+    assert.throws(
+      () =>
+        loadTriangleSemantics(
+          bundle.triangleSemanticsPath,
+          metadata.triangleSemantics,
+          sha256(readFileSync(bundle.collisionPath)),
+          readBin(bundle.collisionPath)
+        ),
+      expectedError,
+      `kind ${kind} semantic ${semanticId}`
+    );
+  }
 });
 
 test("rejects mismatched v4 metadata histograms and preserves H1CID1 validation", async () => {

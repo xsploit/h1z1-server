@@ -32,6 +32,7 @@ const H1SEM1_MAGIC = "H1SEM1\0\0";
 const H1SEM1_VERSION = 1;
 const H1SEM1_HEADER_BYTES = 64;
 const H1SEM1_SEMANTIC_SCHEMA_VERSION = 1;
+const SEMANTIC_POLICY_SCHEMA = "h1emu-h1col2-semantic-policy-v1";
 const KIND_NAMES = ["walkable", "solid", "thin", "door"];
 const DEFAULT_KIND_MATERIALS = [
   "nav_floor_exterior",
@@ -145,14 +146,16 @@ function allowedMaterial(kind, material) {
 }
 
 function semanticCompatibleWithKind(kind, semanticId) {
-  if (semanticId === DOOR_PANEL_SEMANTIC_ID) return kind === 3;
-  if (
-    kind !== 0 &&
-    semanticId >= FIRST_WALKABLE_SEMANTIC_ID &&
-    semanticId <= LAST_WALKABLE_SEMANTIC_ID
-  )
-    return false;
-  return true;
+  if (kind === 0)
+    return (
+      (semanticId >= FIRST_WALKABLE_SEMANTIC_ID &&
+        semanticId <= LAST_WALKABLE_SEMANTIC_ID) ||
+      semanticId === 8 ||
+      semanticId === 10
+    );
+  if (kind === 1) return semanticId === 8;
+  if (kind === 2) return semanticId === 8 || semanticId === 10;
+  return kind === 3 && semanticId === DOOR_PANEL_SEMANTIC_ID;
 }
 
 function isSha256(value) {
@@ -181,6 +184,83 @@ function assertHistogram(expected, actual, label) {
   const normalized = normalizedHistogram(expected, label);
   if (JSON.stringify(normalized) !== JSON.stringify(actual))
     throw new Error(`${label} does not match H1SEM1 triangle semantics`);
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value))
+    return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  const encoded = JSON.stringify(value);
+  if (encoded === undefined)
+    throw new Error("semantic policy contains a non-JSON value");
+  return encoded;
+}
+
+function loadSemanticPolicy(path, expected) {
+  const data = readFileSync(path);
+  if (sha256File(path) !== expected.sha256)
+    throw new Error("semantic policy SHA256 does not match H1COL2 metadata");
+  if (
+    data.length >= 3 &&
+    data.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))
+  )
+    throw new Error("semantic policy must be canonical UTF-8 without a BOM");
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(data);
+  } catch {
+    throw new Error("semantic policy is not valid UTF-8");
+  }
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new Error("semantic policy is not valid JSON");
+  }
+  if (
+    value?.schema !== SEMANTIC_POLICY_SCHEMA ||
+    expected.schema !== SEMANTIC_POLICY_SCHEMA ||
+    value.semanticContract !== SEMANTIC_SCHEMA ||
+    value.semanticSchemaVersion !== H1SEM1_SEMANTIC_SCHEMA_VERSION ||
+    value.coordinateSpace !== "h1z1-world-y-up-meters" ||
+    !value.defaults ||
+    typeof value.defaults !== "object" ||
+    Array.isArray(value.defaults) ||
+    !Array.isArray(value.rules)
+  )
+    throw new Error("invalid H1COL2 semantic policy contract");
+  let previousActorFile = null;
+  const actorFiles = new Set();
+  for (let index = 0; index < value.rules.length; index++) {
+    const rule = value.rules[index];
+    if (
+      !rule ||
+      typeof rule !== "object" ||
+      Array.isArray(rule) ||
+      typeof rule.actorFile !== "string" ||
+      !rule.actorFile
+    )
+      throw new Error(`semantic policy rule ${index} has invalid actorFile`);
+    const actorFile = rule.actorFile.toLowerCase();
+    if (actorFiles.has(actorFile))
+      throw new Error(
+        `semantic policy has duplicate actorFile ${rule.actorFile}`
+      );
+    if (previousActorFile !== null && previousActorFile > actorFile)
+      throw new Error(
+        "semantic policy rules are not sorted by actorFile.casefold"
+      );
+    actorFiles.add(actorFile);
+    previousActorFile = actorFile;
+  }
+  const canonicalBytes = Buffer.from(`${canonicalJson(value)}\n`, "utf8");
+  if (!data.equals(canonicalBytes))
+    throw new Error("semantic policy bytes are not canonical JSON plus LF");
+  return value;
 }
 
 function validateInstanceIdContract(value, collision) {
@@ -290,8 +370,7 @@ function loadCollisionMetadata(
     );
     if (
       !value.semanticPolicy ||
-      typeof value.semanticPolicy.schema !== "string" ||
-      !value.semanticPolicy.schema ||
+      value.semanticPolicy.schema !== SEMANTIC_POLICY_SCHEMA ||
       typeof value.semanticPolicy.file !== "string" ||
       !value.semanticPolicy.file ||
       !isSha256(value.semanticPolicy.sha256)
@@ -550,7 +629,17 @@ async function exportSemanticRegion(options, dependencies = {}) {
     );
   let triangleSemanticsPath = null;
   let triangleSemantics = null;
+  let semanticPolicyPath = null;
+  let semanticPolicy = null;
   if (metadata?.isProduction) {
+    semanticPolicyPath = resolve(
+      dirname(metadataPath),
+      metadata.value.semanticPolicy.file
+    );
+    semanticPolicy = loadSemanticPolicy(
+      semanticPolicyPath,
+      metadata.value.semanticPolicy
+    );
     triangleSemanticsPath = options.triangleSemanticsPath
       ? resolve(options.triangleSemanticsPath)
       : resolve(dirname(metadataPath), metadata.value.triangleSemantics.file);
@@ -809,6 +898,15 @@ async function exportSemanticRegion(options, dependencies = {}) {
             matched: true,
             format: H1SEM1_FORMAT
           }
+        : null,
+      collisionSemanticPolicy: semanticPolicyPath
+        ? {
+            file: basename(semanticPolicyPath),
+            sha256: sha256File(semanticPolicyPath),
+            matched: true,
+            schema: semanticPolicy.schema,
+            canonical: true
+          }
         : null
     },
     counts: {
@@ -887,10 +985,12 @@ async function main() {
 module.exports = {
   COLLISION_METADATA_SCHEMA,
   H1SEM1_FORMAT,
+  SEMANTIC_POLICY_SCHEMA,
   SOURCE_SCHEMA,
   exportSemanticRegion,
   loadInstanceIds,
   loadCollisionMetadata,
+  loadSemanticPolicy,
   loadTriangleSemantics,
   parseArgs,
   validateH1Col2
