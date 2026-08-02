@@ -1,0 +1,63 @@
+{
+  "schema": "h1emu-regional-hybrid-policy-v1",
+  "coordinateSpace": "h1z1-world-y-up-meters",
+  "bounds": {
+    "minX": -358.9,
+    "minZ": -1280.5,
+    "maxX": -179.7,
+    "maxZ": -1049.7
+  },
+  "ownership": [
+    {
+      "id": "pv-police-station-02",
+      "owner": "render-semantic-object",
+      "bounds": {
+        "minX": -243.12,
+        "minZ": -1166.96,
+        "maxX": -224.18,
+        "maxZ": -1133.54
+      },
+      "objectReplacement": {
+        "baseObject": "Common_Structures_PoliceStation02__instance_292492",
+        "overlayObject": "Common_Structures_PoliceStation02__instance_3246446299"
+      },
+      "terrainOcclusionBounds": {
+        "minX": -243.12,
+        "minZ": -1166.96,
+        "maxX": -224.18,
+        "maxZ": -1133.54
+      },
+      "requiredMaterials": ["nav_floor_interior", "nav_stair", "nav_threshold"]
+    },
+    {
+      "id": "pv-road-straight-64",
+      "owner": "render-semantic-object",
+      "bounds": {
+        "minX": -274.04,
+        "minZ": -1202.01,
+        "maxX": -253.96,
+        "maxZ": -1137.99
+      },
+      "objectReplacement": {
+        "baseObject": "Road_City_Straight_64__instance_216496",
+        "overlayObject": "Road_City_Straight_64__instance_3108850697"
+      },
+      "requiredMaterials": ["nav_road"]
+    },
+    {
+      "id": "pv-road-intersection-t-64",
+      "owner": "render-semantic-object",
+      "bounds": {
+        "minX": -296.01,
+        "minZ": -1138.01,
+        "maxX": -231.99,
+        "maxZ": -1095.96
+      },
+      "objectReplacement": {
+        "baseObject": "Road_City_IntersectionT_64__instance_216537",
+        "overlayObject": "Road_City_IntersectionT_64__instance_2378123317"
+      },
+      "requiredMaterials": ["nav_road"]
+    }
+  ]
+}
