@@ -10,13 +10,16 @@ function percentile(sorted: number[], fraction: number): number {
 }
 
 async function main() {
-  const heightmapPath = join(
-    process.cwd(),
-    "data",
-    "2016",
-    "zoneData",
-    "heightmap.png"
-  );
+  // Whole-map validation requires the fully imported direct navmesh from
+  // data/2016/navData/z1_*.bin. Streaming mode deliberately starts with an
+  // empty navmesh and only materialises tiles near live players, so every
+  // getFloorY sample here would return null (observed as compared=0 with
+  // missing_nav covering the entire grid) whenever a streaming cache exists
+  // on disk. Force the non-streaming loader regardless of local cache state.
+  process.env.NAV_STREAMING = "0";
+  const heightmapPath =
+    process.env.HEIGHTMAP_PATH ??
+    join(process.cwd(), "data", "2016", "zoneData", "heightmap.png");
   const image = await loadImage(heightmapPath);
   if (image.width !== 8192 || image.height !== 8192) {
     throw new Error(
@@ -67,6 +70,12 @@ async function main() {
     `[heightmap-check] compared=${differences.length} ` +
       `structures_skipped=${structureSamples} missing_nav=${missingNavSamples}`
   );
+  if (differences.length === 0) {
+    throw new Error(
+      "no comparable samples: the navmesh answered zero floor queries. " +
+        "Check that data/2016/navData/z1_*.bin exist and load correctly."
+    );
+  }
   console.log(
     `[heightmap-check] absolute error ` +
       `median=${percentile(differences, 0.5).toFixed(3)}m ` +
