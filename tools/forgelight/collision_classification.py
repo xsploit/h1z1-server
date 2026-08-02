@@ -1,4 +1,10 @@
-"""Conservative actor-name classification for the Z1 collision dataset."""
+"""Conservative actor-name classification for the Z1 collision dataset.
+
+The numeric kind is the compact runtime contract stored in H1COL2.  The
+semantic material is the richer, optional build-time hint written alongside a
+new H1COL2 export.  It never promotes a non-walkable kind to a walkable Recast
+area.
+"""
 
 # Per-mesh kind:
 #   0 = walkable ground
@@ -70,6 +76,12 @@ WALKABLE_STRUCTURE_PREFIXES = (
     "hospital_structures_basement",
 )
 
+KIND_SEMANTICS = {
+    1: "nav_obstacle_static",
+    2: "nav_obstacle_static",
+    3: "nav_door_panel_dynamic",
+}
+
 
 def classify(actor_file: str) -> int:
     name = actor_file.lower()
@@ -84,3 +96,42 @@ def classify(actor_file: str) -> int:
     if name.startswith(WALKABLE_STRUCTURE_PREFIXES):
         return 0
     return 2
+
+
+def semantic_material(actor_file: str, kind: int | None = None) -> str:
+    """Return the canonical semantic material for an H1COL2 actor mesh.
+
+    H1COL2 stores one kind per merged actor mesh, not per connected component,
+    so the walkable mapping is deliberately coarse.  Roads, stairs, ramps and
+    explicit interior floors retain useful area identities; every other
+    walkable mesh is an exterior floor.  Non-walkable and door kinds are fixed
+    by the numeric binary contract and cannot be overridden by the actor name.
+    """
+
+    resolved_kind = classify(actor_file) if kind is None else kind
+    if resolved_kind in KIND_SEMANTICS:
+        return KIND_SEMANTICS[resolved_kind]
+    if resolved_kind != 0:
+        raise ValueError(f"unsupported H1COL2 mesh kind: {resolved_kind}")
+
+    name = actor_file.lower()
+    if any(
+        token in name
+        for token in (
+            "roadintersection",
+            "roadstraight",
+            "roadcurve",
+            "roadtunnel",
+            "dam_road",
+        )
+    ):
+        return "nav_road"
+    if "_stair" in name or "stairs" in name:
+        return "nav_stair"
+    if "_ramp" in name or "ramp_" in name:
+        return "nav_ramp"
+    if "threshold" in name:
+        return "nav_threshold"
+    if "interior" in name and "floor" in name:
+        return "nav_floor_interior"
+    return "nav_floor_exterior"

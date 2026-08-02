@@ -13,10 +13,12 @@ const { Matrix4, Vector3, Quaternion } = require("three");
 const ROOT = join(__dirname, "..", "..");
 const HEIGHTMAP = join(ROOT, "data", "2016", "zoneData", "heightmap.png");
 const BIN = join(ROOT, "data", "2016", "collision", "z1_collision.bin");
-const TERRAIN_STEP = process.env.NAV_TSTEP ? Number(process.env.NAV_TSTEP) : 1.0;
+const TERRAIN_STEP = process.env.NAV_TSTEP
+  ? Number(process.env.NAV_TSTEP)
+  : 1.0;
 
-async function loadHeightmap() {
-  const img = await loadImage(HEIGHTMAP);
+async function loadHeightmap(path = HEIGHTMAP) {
+  const img = await loadImage(path);
   const cv = createCanvas(img.width, img.height);
   const ctx = cv.getContext("2d");
   ctx.drawImage(img, 0, 0);
@@ -31,24 +33,35 @@ async function loadHeightmap() {
   };
 }
 
-function readBin() {
-  const buf = readFileSync(BIN);
-  if (buf.subarray(0, 6).toString("latin1") !== "H1COL2")
+function readBin(path = BIN) {
+  const buf = readFileSync(path);
+  if (
+    buf.length < 20 ||
+    !buf.subarray(0, 8).equals(Buffer.from("H1COL2\0\0", "latin1"))
+  )
     throw new Error("bad bin magic");
   let off = 8;
+  const version = buf.readUInt32LE(off);
   off += 4;
+  if (version !== 2) throw new Error(`unsupported H1COL2 version ${version}`);
   const meshCount = buf.readUInt32LE(off);
   off += 4;
   const instCount = buf.readUInt32LE(off);
   off += 4;
   const meshes = [];
+  const requireBytes = (count, label) => {
+    if (!Number.isSafeInteger(count) || count < 0 || off + count > buf.length)
+      throw new Error(`truncated H1COL2 ${label}`);
+  };
   for (let m = 0; m < meshCount; m++) {
+    requireBytes(9, `mesh ${m} header`);
     const kind = buf.readUInt8(off);
     off += 1;
     const vc = buf.readUInt32LE(off);
     off += 4;
     const ic = buf.readUInt32LE(off);
     off += 4;
+    requireBytes(vc * 12 + ic * 4, `mesh ${m} geometry`);
     const pos = new Float32Array(
       buf.buffer.slice(buf.byteOffset + off, buf.byteOffset + off + vc * 12)
     );
@@ -59,6 +72,7 @@ function readBin() {
     off += ic * 4;
     meshes.push({ pos, idx, kind });
   }
+  requireBytes(instCount * 4 + instCount * 16 * 4, "instance tables");
   const instMesh = new Uint32Array(
     buf.buffer.slice(buf.byteOffset + off, buf.byteOffset + off + instCount * 4)
   );
@@ -69,7 +83,10 @@ function readBin() {
       buf.byteOffset + off + instCount * 16 * 4
     )
   );
-  return { meshes, instMesh, instData, instCount };
+  off += instCount * 16 * 4;
+  if (off !== buf.length)
+    throw new Error(`unexpected ${buf.length - off} trailing H1COL2 bytes`);
+  return { version, meshes, instMesh, instData, instCount };
 }
 
 // Build terrain+structure triangle soup for the region.
@@ -122,7 +139,14 @@ async function buildRegionGeometry(x1, z1, x2, z2) {
   let bakedInst = 0;
   for (let i = 0; i < instCount; i++) {
     const b = i * 16;
-    if (!inRegion(instData[b + 10], instData[b + 12], instData[b + 13], instData[b + 15]))
+    if (
+      !inRegion(
+        instData[b + 10],
+        instData[b + 12],
+        instData[b + 13],
+        instData[b + 15]
+      )
+    )
       continue;
     const mesh = meshes[instMesh[i]];
     if (mesh.kind === 3) continue; // doors: leave the opening passable
@@ -146,16 +170,31 @@ async function buildRegionGeometry(x1, z1, x2, z2) {
   // drop degenerate triangles (non-finite or near-zero area / coincident verts)
   // — a single bad tri can abort the whole tile build in recast
   const cleanIdx = [];
-  const ax = new Vector3(), bx = new Vector3(), cx = new Vector3(), e1 = new Vector3(), e2 = new Vector3();
+  const ax = new Vector3(),
+    bx = new Vector3(),
+    cx = new Vector3(),
+    e1 = new Vector3(),
+    e2 = new Vector3();
   let dropped = 0;
   for (let k = 0; k < indices.length; k += 3) {
-    const i0 = indices[k] * 3, i1 = indices[k + 1] * 3, i2 = indices[k + 2] * 3;
+    const i0 = indices[k] * 3,
+      i1 = indices[k + 1] * 3,
+      i2 = indices[k + 2] * 3;
     ax.set(positions[i0], positions[i0 + 1], positions[i0 + 2]);
     bx.set(positions[i1], positions[i1 + 1], positions[i1 + 2]);
     cx.set(positions[i2], positions[i2 + 1], positions[i2 + 2]);
-    if (!isFinite(ax.x + ax.y + ax.z + bx.x + bx.y + bx.z + cx.x + cx.y + cx.z)) { dropped++; continue; }
-    e1.subVectors(bx, ax); e2.subVectors(cx, ax);
-    if (e1.cross(e2).length() < 1e-6) { dropped++; continue; }
+    if (
+      !isFinite(ax.x + ax.y + ax.z + bx.x + bx.y + bx.z + cx.x + cx.y + cx.z)
+    ) {
+      dropped++;
+      continue;
+    }
+    e1.subVectors(bx, ax);
+    e2.subVectors(cx, ax);
+    if (e1.cross(e2).length() < 1e-6) {
+      dropped++;
+      continue;
+    }
     cleanIdx.push(indices[k], indices[k + 1], indices[k + 2]);
   }
   if (dropped) console.log(`dropped ${dropped} degenerate triangles`);
@@ -197,17 +236,25 @@ async function generateRegion(x1, z1, x2, z2) {
     `region x[${x1},${x2}] z[${z1},${z2}]: ${geo.bakedInst} structures, ${geo.positions.length / 3} verts, ${geo.indices.length / 3} tris`
   );
   const { init } = require("recast-navigation");
-  const { generateTileCache, generateSoloNavMesh, generateTiledNavMesh } =
-    require("recast-navigation/generators");
+  const {
+    generateTileCache,
+    generateSoloNavMesh,
+    generateTiledNavMesh
+  } = require("recast-navigation/generators");
   await init();
   const tStart = Date.now();
-  const mode = process.env.NAV_SOLO === "1" ? "solo"
-    : process.env.NAV_TILED === "1" ? "tiled"
-    : "tilecache";
+  const mode =
+    process.env.NAV_SOLO === "1"
+      ? "solo"
+      : process.env.NAV_TILED === "1"
+        ? "tiled"
+        : "tilecache";
   const result =
-    mode === "solo" ? generateSoloNavMesh(geo.positions, geo.indices, NAV_CONFIG)
-    : mode === "tiled" ? generateTiledNavMesh(geo.positions, geo.indices, NAV_CONFIG)
-    : generateTileCache(geo.positions, geo.indices, NAV_CONFIG);
+    mode === "solo"
+      ? generateSoloNavMesh(geo.positions, geo.indices, NAV_CONFIG)
+      : mode === "tiled"
+        ? generateTiledNavMesh(geo.positions, geo.indices, NAV_CONFIG)
+        : generateTileCache(geo.positions, geo.indices, NAV_CONFIG);
   console.log(`(${mode} generator)`);
   console.log(
     `generate ${((Date.now() - tStart) / 1000).toFixed(1)}s success=${result.success}` +
@@ -217,14 +264,17 @@ async function generateRegion(x1, z1, x2, z2) {
 }
 
 async function main() {
-  const [x1 = -1980, z1 = -2200, x2 = -1880, z2 = -2100] =
-    process.argv.slice(2).map(Number);
+  const [x1 = -1980, z1 = -2200, x2 = -1880, z2 = -2100] = process.argv
+    .slice(2)
+    .map(Number);
   const { result, geo } = await generateRegion(x1, z1, x2, z2);
   if (!result.success) process.exit(1);
 
   const { getNavMeshPositionsAndIndices } = require("recast-navigation");
   const [npos, nidx] = getNavMeshPositionsAndIndices(result.navMesh);
-  console.log(`navmesh walkable: ${npos.length / 3} verts, ${nidx.length / 3} polys`);
+  console.log(
+    `navmesh walkable: ${npos.length / 3} verts, ${nidx.length / 3} polys`
+  );
 
   const S = 1000;
   const out = createCanvas(S, S);
@@ -246,22 +296,38 @@ async function main() {
   o.strokeStyle = "rgba(230,80,80,0.9)";
   for (let i = 0; i < geo.instCount; i++) {
     const b = i * 16;
-    const mnx = geo.instData[b + 10], mnz = geo.instData[b + 12],
-      mxx = geo.instData[b + 13], mxz = geo.instData[b + 15];
+    const mnx = geo.instData[b + 10],
+      mnz = geo.instData[b + 12],
+      mxx = geo.instData[b + 13],
+      mxz = geo.instData[b + 15];
     if (mxx < x1 || mnx > x2 || mxz < z1 || mnz > z2) continue;
     if (geo.instData[b + 14] - geo.instData[b + 11] < 1.2) continue;
-    const [ax, ay] = px(mnx, mnz), [bx, by] = px(mxx, mxz);
-    o.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
+    const [ax, ay] = px(mnx, mnz),
+      [bx, by] = px(mxx, mxz);
+    o.strokeRect(
+      Math.min(ax, bx),
+      Math.min(ay, by),
+      Math.abs(bx - ax),
+      Math.abs(by - ay)
+    );
   }
   const pngPath = join(ROOT, "navmesh_preview.png");
   writeFileSync(pngPath, out.toBuffer("image/png"));
   console.log(`wrote ${pngPath}`);
 }
 
-module.exports = { generateRegion, buildRegionGeometry, NAV_CONFIG };
+module.exports = {
+  generateRegion,
+  buildRegionGeometry,
+  loadHeightmap,
+  readBin,
+  NAV_CONFIG
+};
 
 if (require.main === module)
-  main().then(() => process.exit(0)).catch((e) => {
-    console.error("FAIL:", e);
-    process.exit(1);
-  });
+  main()
+    .then(() => process.exit(0))
+    .catch((e) => {
+      console.error("FAIL:", e);
+      process.exit(1);
+    });

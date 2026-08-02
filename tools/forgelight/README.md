@@ -76,6 +76,7 @@ debris, furniture, spawners, and roof props from becoming false ground.
    cp <h1z1-server>/tools/forgelight/export_z1_collision.py .
    cp <h1z1-server>/tools/forgelight/export_z1_instanced.py .
    cp <h1z1-server>/tools/forgelight/export_z1_heightmap.py .
+   cp <h1z1-server>/tools/forgelight/collision_classification.py .
    ```
 
 ## Export structure collision
@@ -84,6 +85,7 @@ debris, furniture, spawners, and roof props from becoming false ground.
 # point at your H1Z1 assets and where the .bin should land
 export H1Z1_ASSETS="/path/to/H1Z1/Resources/Assets"        # Windows: set H1Z1_ASSETS=...
 export COLLISION_OUT="<h1z1-server>/data/2016/collision/z1_collision.bin"
+export COLLISION_METADATA_OUT="<h1z1-server>/data/2016/collision/z1_collision.metadata.json"
 
 python export_z1_instanced.py
 ```
@@ -91,6 +93,13 @@ python export_z1_instanced.py
 `Z1.zone` is read straight from the packs (no manual extraction needed). The
 script prints a coverage + a flat-surface sanity check (road/sidewalk/floor AABB
 height span should be small, confirming correct orientation).
+
+`COLLISION_METADATA_OUT` is optional but recommended for navigation builds. It
+writes a deterministic build-time sidecar binding every H1COL2 mesh index to
+its actor file, numeric kind, and canonical `nav_*` semantic hint. The running
+server does not load this sidecar. Because actor meshes are merged, it cannot
+separate a composite building's roof, walls, stairs, and floors; that limitation
+is explicit instead of being guessed away.
 
 If `COLLISION_OUT` was left at its default, copy the resulting `z1_collision.bin`
 into `data/2016/collision/` of this repo. On the next server boot you should see:
@@ -136,14 +145,49 @@ python export_z1_heightmap.py --inspect-only
 python export_z1_heightmap.py --validate-topology-only
 ```
 
+## Export a collision-first regional semantic OBJ
+
+`export_semantic_nav_obj.js` bridges the authoritative server grounding sources
+to the canonical OBJ interface consumed by `h1emu-recast`. It emits a bounded
+heightmap grid as `nav_terrain` and each intersecting H1COL2 instance exactly
+once. H1COL2 kinds map conservatively:
+
+| H1COL2 kind  | semantic OBJ material                        | behavior                                              |
+| ------------ | -------------------------------------------- | ----------------------------------------------------- |
+| `0` walkable | sidecar hint, otherwise `nav_floor_exterior` | slope-filtered walkable surface                       |
+| `1` solid    | `nav_obstacle_static`                        | non-walkable and carved                               |
+| `2` thin     | `nav_obstacle_static`                        | fail-closed non-walkable geometry                     |
+| `3` door     | `nav_door_panel_dynamic`                     | excluded by the baker; runtime door obstacle required |
+
+The export is a standalone source—do not concatenate it with the
+render/ADR-derived `world.obj`, because that would duplicate terrain and actor
+geometry. A deterministic `<output>.source.json` records input hashes, bounds,
+counts, and unresolved source limitations. Existing outputs are never replaced.
+
+```powershell
+node tools/forgelight/export_semantic_nav_obj.js `
+  --bounds -255 -1180 -210 -1125 `
+  --heightmap C:\path\to\heightmap.png `
+  --collision C:\path\to\z1_collision.bin `
+  --collision-metadata C:\path\to\z1_collision.metadata.json `
+  --output C:\path\to\pv-police-collision-first.obj
+```
+
+This bridge is deliberately regional. The default four-million terrain-vertex
+guard prevents accidentally materializing the full 8192-square one-metre grid
+as OBJ. Increase `--terrain-step` for coarse experiments; do not raise the guard
+and call that a production full bake. The full-world pipeline should stream or
+tile the same source contract.
+
 ## Environment variables
 
-| var             | meaning                                                   | default                    |
-| --------------- | --------------------------------------------------------- | -------------------------- |
-| `H1Z1_ASSETS`   | directory holding `Assets_*.pack`                         | `D:/h1z1/Resources/Assets` |
-| `Z1_ZONE`       | optional pre-extracted `Z1.zone` (else pulled from packs) | —                          |
-| `COLLISION_OUT` | output `.bin` path                                        | `./z1_collision.bin`       |
-| `HEIGHTMAP_OUT` | output terrain PNG                                        | `./heightmap.png`          |
+| var                      | meaning                                                   | default                    |
+| ------------------------ | --------------------------------------------------------- | -------------------------- |
+| `H1Z1_ASSETS`            | directory holding `Assets_*.pack`                         | `D:/h1z1/Resources/Assets` |
+| `Z1_ZONE`                | optional pre-extracted `Z1.zone` (else pulled from packs) | —                          |
+| `COLLISION_OUT`          | output `.bin` path                                        | `./z1_collision.bin`       |
+| `COLLISION_METADATA_OUT` | optional H1COL2 actor/semantic metadata sidecar           | —                          |
+| `HEIGHTMAP_OUT`          | output terrain PNG                                        | `./heightmap.png`          |
 
 ## Notes / caveats
 

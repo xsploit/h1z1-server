@@ -16,10 +16,13 @@ Run from inside a pydmod checkout (see tools/forgelight/README.md). Env vars:
   Z1_ZONE       optional path to a pre-extracted Z1.zone (else pulled from packs)
   COLLISION_OUT output .bin path (default: ./z1_collision.bin) -> copy into
                 <h1z1-server>/data/2016/collision/z1_collision.bin
+  COLLISION_METADATA_OUT optional deterministic mesh/actor semantic sidecar
 """
 
 import os
 import struct
+import hashlib
+import json
 import logging
 import warnings
 from io import BytesIO
@@ -28,7 +31,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from collision_classification import classify
+from collision_classification import classify, semantic_material
 
 logging.disable(logging.WARNING)  # silence dme_loader layout spam
 warnings.filterwarnings(
@@ -42,6 +45,7 @@ from zone_loader import Zone  # noqa: E402
 
 MAGIC = b"H1COL2\x00\x00"
 BIN = Path(os.environ.get("COLLISION_OUT", "z1_collision.bin"))
+METADATA_OUT = os.environ.get("COLLISION_METADATA_OUT")
 
 
 def load_zone(mgr):
@@ -90,6 +94,7 @@ def main():
     # 1) dedup unique actor meshes
     mesh_index = {}  # actor_file -> int index or None
     meshes = []  # list of (pos, idx)
+    mesh_actors = []  # actor file per unique mesh, in binary order
     mesh_kind = []  # 0 walkable / 1 obstacle, per unique mesh
     local_corners = []  # 8x3 local AABB corners per mesh (for world AABB calc)
     for o in zone.objects:
@@ -101,6 +106,7 @@ def main():
             continue
         mesh_index[o.actor_file] = len(meshes)
         meshes.append(m)
+        mesh_actors.append(o.actor_file)
         mesh_kind.append(classify(o.actor_file))
         mn, mx = m[0].min(0), m[0].max(0)
         local_corners.append(
@@ -194,6 +200,45 @@ def main():
         f.write(inst_mesh.tobytes())
         f.write(inst_data.tobytes())
     print(f"[inst] wrote {BIN}  ({BIN.stat().st_size / 1e6:.1f} MB)")
+
+    # Optional deterministic build-time sidecar.  The H1COL2 runtime format is
+    # intentionally compact and does not store actor names, so without this
+    # file a later semantic OBJ export can only distinguish the four numeric
+    # kinds.  The sidecar is not needed by the server and can be regenerated.
+    if METADATA_OUT:
+        metadata_path = Path(METADATA_OUT)
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        instance_counts = np.bincount(inst_mesh, minlength=len(meshes))
+        with open(BIN, "rb") as collision_file:
+            collision_sha256 = hashlib.file_digest(
+                collision_file, "sha256"
+            ).hexdigest()
+        metadata = {
+            "schema": "h1emu-h1col2-metadata-v1",
+            "formatVersion": 2,
+            "coordinateSpace": "h1z1-world-y-up-meters",
+            "collisionFile": BIN.name,
+            "collisionSha256": collision_sha256,
+            "meshCount": len(meshes),
+            "instanceCount": len(inst_mesh),
+            "meshes": [
+                {
+                    "meshIndex": index,
+                    "actorFile": actor_file,
+                    "kind": mesh_kind[index],
+                    "semanticMaterial": semantic_material(
+                        actor_file, mesh_kind[index]
+                    ),
+                    "instanceCount": int(instance_counts[index]),
+                }
+                for index, actor_file in enumerate(mesh_actors)
+            ],
+        }
+        metadata_path.write_text(
+            json.dumps(metadata, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        print(f"[inst] wrote semantic metadata {metadata_path}")
 
     # 4) sanity: flat surfaces should have small AABB Y span (correct orientation)
     if flat_check:

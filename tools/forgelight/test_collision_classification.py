@@ -1,6 +1,6 @@
 import unittest
 
-from collision_classification import classify
+from collision_classification import classify, semantic_material
 
 
 class CollisionClassificationTests(unittest.TestCase):
@@ -53,6 +53,32 @@ class CollisionClassificationTests(unittest.TestCase):
             classify("Common_Structures_ModularWall_Door.adr"),
             3,
         )
+
+    def test_semantic_material_preserves_known_walkable_areas(self):
+        cases = {
+            "Common_Props_RoadStraight01.adr": "nav_road",
+            "Common_Props_Modular_Stair01.adr": "nav_stair",
+            "Common_Props_Bridge_Ramp_01.adr": "nav_ramp",
+            "Hospital_Structures_Floor1_Interior.adr": "nav_floor_interior",
+            "Common_Props_Sidewalks_Straight01.adr": "nav_floor_exterior",
+        }
+        for name, expected in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(semantic_material(name, 0), expected)
+
+    def test_non_walkable_kind_cannot_be_promoted_by_name(self):
+        self.assertEqual(
+            semantic_material("Common_Props_RoadStraight01.adr", 2),
+            "nav_obstacle_static",
+        )
+        self.assertEqual(
+            semantic_material("Common_Props_RoadStraight01.adr", 3),
+            "nav_door_panel_dynamic",
+        )
+
+    def test_unknown_kind_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "unsupported H1COL2 mesh kind"):
+            semantic_material("Whatever.adr", 9)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,11 @@ animation problems as pathfinding fixes and keeps manual links auditable.
 
 ## Build artifacts
 
-The `h1emu-map-data-extraction` integration branch produces:
+There are two mutually exclusive geometry-source paths. Never concatenate their
+OBJs.
+
+The render/ADR path from the `h1emu-map-data-extraction` integration branch
+produces:
 
 - `out/world.obj`: terrain and static walkable/collision geometry. Movable door
   panels are deliberately excluded, while their surrounding buildings remain.
@@ -22,9 +26,25 @@ data/2016/collision/z1_cache_*.bin
 data/2016/navigation_metadata.json
 ```
 
-The runtime bundle also contains the independently extracted H1COL2 collision
-mesh and heightmap used for collision and grounding. Those files are not inputs
-to the C++ Recast bake, but they must describe the same world revision.
+The collision-first regional path uses `tools/forgelight/export_semantic_nav_obj.js`
+to produce one canonical semantic OBJ directly from the native heightmap and
+H1COL2 instanced collision used by server grounding. This is the authoritative
+fallback when the render/ADR extraction has no triangle at a known road,
+sidewalk, or approach anchor. Its source report hashes both runtime inputs and
+states the mesh-level classification limitations. Feed that OBJ directly to
+the same C++ baker; do not merge it with render geometry.
+
+H1COL2 has only four mesh-level kinds. Walkable geometry is preserved (and can
+retain road/stair/ramp identity when the optional actor metadata sidecar is
+available); solid and thin geometry map fail-closed to `nav_obstacle_static`;
+door panels map to `nav_door_panel_dynamic`. Because a merged composite actor
+does not identify connected surface components, this bridge does not claim
+perfect roof/interior classification. Regional topology gates decide whether
+it is stronger than the render path before any full bake is considered.
+
+Whichever path is selected, the runtime bundle still contains the matching
+H1COL2 collision mesh and heightmap. They must describe the same world revision
+as the bake and remain bound by the artifact manifest.
 
 ## Artifact contract
 
