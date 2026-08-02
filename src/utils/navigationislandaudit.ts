@@ -80,6 +80,10 @@ export type NavigationIslandComponentReport = {
   classification: "isolated" | "under-floor";
   polygonCount: number;
   surfaceArea: number;
+  /** Union of the reported audited polygons; excludes weak-component context outside the audit bounds. */
+  bounds: NavigationAuditBounds;
+  /** Area-weighted diagnostic point; it is not guaranteed to lie on a non-convex island. */
+  centroid: NavigationAuditPoint;
   minY: number;
   maxY: number;
   meanY: number;
@@ -87,7 +91,7 @@ export type NavigationIslandComponentReport = {
 };
 
 export type NavigationIslandAuditReport = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   algorithm: string;
   name: string;
   passed: boolean;
@@ -488,13 +492,33 @@ export function evaluateNavigationIslandAudit(
       (sum, polygon) => sum + polygon.surfaceArea,
       0
     );
-    const weightedY = polygons.reduce(
-      (sum, polygon) =>
-        sum + polygon.centroid[1] * Math.max(polygon.surfaceArea, 1e-9),
-      0
+    const spatial = polygons.reduce(
+      (state, polygon) => {
+        const weight = Math.max(polygon.surfaceArea, 1e-9);
+        state.totalWeight += weight;
+        for (let axis = 0; axis < 3; axis++) {
+          state.weighted[axis] += polygon.centroid[axis] * weight;
+          state.min[axis] = Math.min(state.min[axis], polygon.bounds.min[axis]);
+          state.max[axis] = Math.max(state.max[axis], polygon.bounds.max[axis]);
+        }
+        return state;
+      },
+      {
+        totalWeight: 0,
+        weighted: [0, 0, 0] as NavigationAuditPoint,
+        min: [...polygons[0].bounds.min] as NavigationAuditPoint,
+        max: [...polygons[0].bounds.max] as NavigationAuditPoint
+      }
     );
-    const minY = Math.min(...polygons.map((polygon) => polygon.bounds.min[1]));
-    const maxY = Math.max(...polygons.map((polygon) => polygon.bounds.max[1]));
+    const weightedCentroid = spatial.weighted.map((value) =>
+      round(value / spatial.totalWeight)
+    ) as NavigationAuditPoint;
+    const bounds: NavigationAuditBounds = {
+      min: spatial.min.map(round) as NavigationAuditPoint,
+      max: spatial.max.map(round) as NavigationAuditPoint
+    };
+    const minY = spatial.min[1];
+    const maxY = spatial.max[1];
     islands.push({
       id: canonicalComponentId(polygonIds),
       classification:
@@ -503,9 +527,11 @@ export function evaluateNavigationIslandAudit(
           : "isolated",
       polygonCount: polygons.length,
       surfaceArea: round(surfaceArea),
+      bounds,
+      centroid: weightedCentroid,
       minY: round(minY),
       maxY: round(maxY),
-      meanY: round(weightedY / Math.max(surfaceArea, 1e-9)),
+      meanY: weightedCentroid[1],
       polygonIds
     });
   }
@@ -557,7 +583,7 @@ export function evaluateNavigationIslandAudit(
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     algorithm: NAVIGATION_ISLAND_AUDIT_ALGORITHM,
     name: config.name,
     passed: reasons.length === 0,

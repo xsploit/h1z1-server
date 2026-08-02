@@ -92,8 +92,18 @@ test("native topology flood distinguishes reachable surfaces and under-floor isl
   });
   assert.equal(report.islands[0].classification, "under-floor");
   assert.deepEqual(report.islands[0].polygonIds, ["c", "d"]);
+  assert.deepEqual(report.islands[0].bounds, {
+    min: [2.5, -3, 2.5],
+    max: [4.5, -3, 3.5]
+  });
+  assert.deepEqual(report.islands[0].centroid, [3.5, -3, 3]);
   assert.equal(report.islands[1].classification, "isolated");
   assert.deepEqual(report.islands[1].polygonIds, ["e"]);
+  assert.deepEqual(report.islands[1].bounds, {
+    min: [6.5, 0, 6.5],
+    max: [7.5, 0, 7.5]
+  });
+  assert.deepEqual(report.islands[1].centroid, [7, 0, 7]);
   assert.deepEqual(report.reasons, [
     "unreachable-components:2>0",
     "unreachable-polygons:3>0",
@@ -124,6 +134,38 @@ test("report and island ids are deterministic across polygon and edge order", ()
     [validAnchor("street", "a")]
   );
   assert.deepEqual(second, first);
+});
+
+test("component centroid uses consistent area weights and remains finite for degenerate polygons", () => {
+  const weighted = evaluateNavigationIslandAudit(
+    baseConfig,
+    {
+      polygons: [
+        polygon("a", [1, 0, 1]),
+        polygon("c", [2, -3, 3], ["d"], 1),
+        polygon("d", [4, -3, 3], ["c"], 3)
+      ],
+      unresolvedLinkCount: 0
+    },
+    [validAnchor("street", "a")]
+  );
+  assert.deepEqual(weighted.islands[0].centroid, [3.5, -3, 3]);
+  assert.equal(weighted.islands[0].meanY, -3);
+
+  const degenerate = evaluateNavigationIslandAudit(
+    baseConfig,
+    {
+      polygons: [
+        polygon("a", [1, 0, 1]),
+        polygon("c", [2, -3, 3], ["d"], 0),
+        polygon("d", [4, -3, 3], ["c"], 0)
+      ],
+      unresolvedLinkCount: 0
+    },
+    [validAnchor("street", "a")]
+  );
+  assert.deepEqual(degenerate.islands[0].centroid, [3, -3, 3]);
+  assert.ok(degenerate.islands[0].centroid.every(Number.isFinite));
 });
 
 test("explicit limits can permit a known bounded island budget", () => {
