@@ -9,6 +9,7 @@ const {
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   rmSync,
   writeFileSync,
   writeSync
@@ -38,7 +39,18 @@ const WALKABLE_MATERIALS = new Set([
 ]);
 
 function sha256File(path) {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
+  const hash = createHash("sha256");
+  const descriptor = openSync(path, "r");
+  const buffer = Buffer.allocUnsafe(8 * 1024 * 1024);
+  try {
+    let bytesRead;
+    while ((bytesRead = readSync(descriptor, buffer, 0, buffer.length, null))) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    closeSync(descriptor);
+  }
+  return hash.digest("hex");
 }
 
 function finiteNumber(value, label) {
@@ -118,7 +130,7 @@ function loadCollisionMetadata(path, collisionHash, collision) {
   )
     throw new Error("H1COL2 metadata does not match the collision artifact");
 
-  const byMesh = new Array(collision.meshes.length);
+  const byMesh = Array.from({ length: collision.meshes.length });
   for (const entry of value.meshes) {
     const index = entry?.meshIndex;
     if (
@@ -369,7 +381,9 @@ async function exportSemanticRegion(options, dependencies = {}) {
   } catch (error) {
     try {
       writer.close();
-    } catch {}
+    } catch {
+      // Preserve the original export failure during best-effort cleanup.
+    }
     rmSync(outputPath, { force: true });
     throw error;
   }

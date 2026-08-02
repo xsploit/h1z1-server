@@ -14,6 +14,7 @@ const {
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   rmSync,
   writeFileSync,
   writeSync
@@ -48,7 +49,18 @@ const INPUT_MATERIALS = new Set([
 ]);
 
 function sha256File(path) {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
+  const hash = createHash("sha256");
+  const descriptor = openSync(path, "r");
+  const buffer = Buffer.allocUnsafe(8 * 1024 * 1024);
+  try {
+    let bytesRead;
+    while ((bytesRead = readSync(descriptor, buffer, 0, buffer.length, null))) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    closeSync(descriptor);
+  }
+  return hash.digest("hex");
 }
 
 function finiteNumber(value, label) {
