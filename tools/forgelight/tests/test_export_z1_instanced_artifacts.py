@@ -246,6 +246,28 @@ class ExportArtifactBundleTests(unittest.TestCase):
                 **fixture(), dynamic_door_obstacles_acknowledged="true"
             )
 
+    def test_payload_basenames_cannot_collapse_the_artifact_mapping(self):
+        collisions = (
+            ("instance_ids_name", "z1_collision.bin"),
+            ("semantics_name", "Z1_COLLISION.BIN"),
+            ("policy_name", "z1_collision.semantics.bin"),
+        )
+        for field, duplicate in collisions:
+            values = fixture()
+            values[field] = duplicate
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError, "payload names collide"
+            ):
+                build_collision_artifact_bundle(**values)
+
+        for invalid in ("", "nested/policy.json", "nested\\policy.json"):
+            values = fixture()
+            values["policy_name"] = invalid
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                ValueError, "non-empty basename"
+            ):
+                build_collision_artifact_bundle(**values)
+
 
 if __name__ == "__main__":
     unittest.main()

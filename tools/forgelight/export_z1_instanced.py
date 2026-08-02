@@ -205,6 +205,25 @@ def parse_strict_bool(value, label):
     raise ValueError(f"{label} must be exactly true or false")
 
 
+def _validate_unique_payload_names(names):
+    """Reject invalid or colliding basenames before constructing a mapping."""
+
+    seen = set()
+    for label, name in names:
+        if (
+            not isinstance(name, str)
+            or not name
+            or Path(name).name != name
+            or "/" in name
+            or "\\" in name
+        ):
+            raise ValueError(f"{label} must be a non-empty basename")
+        folded = name.casefold()
+        if folded in seen:
+            raise ValueError(f"collision artifact payload names collide at {name!r}")
+        seen.add(folded)
+
+
 def encode_h1cid1(instance_ids):
     """Encode the deterministic stable-instance-ID sidecar."""
 
@@ -318,6 +337,14 @@ def build_collision_artifact_bundle(
 ):
     """Build and validate one same-directory H1COL2 v4 artifact bundle."""
 
+    _validate_unique_payload_names(
+        (
+            ("H1COL2 filename", collision_name),
+            ("H1CID1 filename", instance_ids_name),
+            ("H1SEM1 filename", semantics_name),
+            ("semantic policy filename", policy_name),
+        )
+    )
     mesh_count = len(meshes)
     if not (
         len(mesh_actors)
