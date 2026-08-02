@@ -31,6 +31,23 @@ function Write-TestFile {
     [System.IO.File]::WriteAllText($Path, $Content)
 }
 
+function New-FixtureArtifactRecord {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Root,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath
+    )
+
+    $path = Join-Path $Root $RelativePath
+    return [ordered]@{
+        path   = $RelativePath.Replace('\', '/')
+        size   = (Get-Item -LiteralPath $path).Length
+        sha256 = Get-NavigationFileSha256 -Path $path
+    }
+}
+
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
     "h1z1-navigation-deployment-$([guid]::NewGuid().ToString('N'))"
 )
@@ -149,6 +166,198 @@ try {
             -Message "Successful deployment hash mismatch: $relativePath"
     }
 
+    # Runtime and manifested bundle files must commit or roll back together.
+    $bundleRoot = Join-Path $testRoot 'staged-bundle'
+    $bundleFiles = [ordered]@{
+        'collision\z1_cache_0.bin' = 'new-cache-zero'
+        'collision\z1_collision.bin' = 'new-collision'
+        'navigationTransitions.json' = '[]'
+    }
+    foreach ($entry in $bundleFiles.GetEnumerator()) {
+        Write-TestFile `
+            -Path (Join-Path $bundleRoot $entry.Key) `
+            -Content $entry.Value
+    }
+    $fixtureManifest = [ordered]@{
+        runtime = [ordered]@{
+            cache = [ordered]@{
+                parts = @(
+                    New-FixtureArtifactRecord `
+                        -Root $bundleRoot `
+                        -RelativePath 'collision\z1_cache_0.bin'
+                )
+            }
+            collision = [ordered]@{
+                file = New-FixtureArtifactRecord `
+                    -Root $bundleRoot `
+                    -RelativePath 'collision\z1_collision.bin'
+            }
+            heightmap = $null
+            navigationMetadata = $null
+            semantics = $null
+            transitions = [ordered]@{
+                file = New-FixtureArtifactRecord `
+                    -Root $bundleRoot `
+                    -RelativePath 'navigationTransitions.json'
+            }
+        }
+        provenance = [ordered]@{
+            sourceReport = $null
+            composition = $null
+        }
+    }
+    $manifestPath = Join-Path $bundleRoot 'navigation-artifact-manifest.json'
+    [System.IO.File]::WriteAllText(
+        $manifestPath,
+        (($fixtureManifest | ConvertTo-Json -Depth 8) + [Environment]::NewLine)
+    )
+
+    $combinedDestination = Join-Path $testRoot 'combined-destination'
+    foreach ($entry in $newFiles.GetEnumerator()) {
+        Write-TestFile `
+            -Path (Join-Path $combinedDestination $entry.Key) `
+            -Content "old:$($entry.Key)"
+    }
+    foreach ($entry in $bundleFiles.GetEnumerator()) {
+        Write-TestFile `
+            -Path (Join-Path $combinedDestination "data\2016\$($entry.Key)") `
+            -Content "old:$($entry.Key)"
+    }
+    Write-TestFile `
+        -Path (Join-Path $combinedDestination 'data\2016\collision\z1_cache_1.bin') `
+        -Content 'obsolete-cache-one'
+    Write-TestFile `
+        -Path (Join-Path $combinedDestination 'data\2016\navigation-artifact-manifest.json') `
+        -Content 'old-manifest'
+    Write-TestFile `
+        -Path (Join-Path $combinedDestination 'data\2016\loot.json') `
+        -Content 'unrelated-quickstart-data'
+
+    $combinedPlan = @(New-NavigationDeploymentFilePlan `
+            -SourceRoot $sourceRoot `
+            -RuntimeRelativePaths $closure `
+            -BundleRoot $bundleRoot `
+            -DestinationRoot $combinedDestination)
+    Assert-True `
+        -Condition (@($combinedPlan | Where-Object Kind -eq 'manifest').Count -eq 1) `
+        -Message 'Combined plan did not include the staged manifest.'
+    Assert-True `
+        -Condition (@($combinedPlan | Where-Object Action -eq 'Remove').Count -eq 1) `
+        -Message 'Combined plan did not scope the obsolete cache part.'
+    Assert-True `
+        -Condition (-not ($combinedPlan.RelativePath -contains 'data\2016\loot.json')) `
+        -Message 'Combined plan included unrelated QuickStart data.'
+
+    $combinedOldHashes = @{}
+    foreach ($entry in $combinedPlan) {
+        $path = Join-Path $combinedDestination $entry.RelativePath
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $combinedOldHashes[$entry.RelativePath] = Get-NavigationFileSha256 -Path $path
+        }
+    }
+    $unrelatedHash = Get-NavigationFileSha256 `
+        -Path (Join-Path $combinedDestination 'data\2016\loot.json')
+
+    $combinedStageOne = Join-Path $testRoot 'combined-stage-one'
+    $combinedBackupOne = Join-Path $testRoot 'combined-backup-one'
+    New-NavigationDeploymentStageFromPlan `
+        -StageRoot $combinedStageOne `
+        -FilePlan $combinedPlan
+    $combinedPartialRollback = $false
+    try {
+        Invoke-NavigationFileReplacement `
+            -StageRoot $combinedStageOne `
+            -DestinationRoot $combinedDestination `
+            -BackupRoot $combinedBackupOne `
+            -FilePlan $combinedPlan `
+            -TestFailureAfter ($closure.Count + 2)
+    } catch {
+        $combinedPartialRollback = $_.Exception.Message -like '*rolled back*'
+    }
+    Assert-True `
+        -Condition $combinedPartialRollback `
+        -Message 'Combined partial deployment did not report rollback.'
+    foreach ($entry in $combinedOldHashes.GetEnumerator()) {
+        Assert-True `
+            -Condition ((Get-NavigationFileSha256 `
+                    -Path (Join-Path $combinedDestination $entry.Key)) -eq $entry.Value) `
+            -Message "Combined partial rollback mismatch: $($entry.Key)"
+    }
+
+    $combinedStageTwo = Join-Path $testRoot 'combined-stage-two'
+    $combinedBackupTwo = Join-Path $testRoot 'combined-backup-two'
+    New-NavigationDeploymentStageFromPlan `
+        -StageRoot $combinedStageTwo `
+        -FilePlan $combinedPlan
+    $combinedValidationRollback = $false
+    try {
+        Invoke-NavigationFileReplacement `
+            -StageRoot $combinedStageTwo `
+            -DestinationRoot $combinedDestination `
+            -BackupRoot $combinedBackupTwo `
+            -FilePlan $combinedPlan `
+            -PostReplaceValidation { throw 'Injected bundle verification failure.' }
+    } catch {
+        $combinedValidationRollback = $_.Exception.Message -like '*rolled back*'
+    }
+    Assert-True `
+        -Condition $combinedValidationRollback `
+        -Message 'Combined post-verify failure did not report rollback.'
+    foreach ($entry in $combinedOldHashes.GetEnumerator()) {
+        Assert-True `
+            -Condition ((Get-NavigationFileSha256 `
+                    -Path (Join-Path $combinedDestination $entry.Key)) -eq $entry.Value) `
+            -Message "Combined validation rollback mismatch: $($entry.Key)"
+    }
+    Assert-True `
+        -Condition ((Get-NavigationFileSha256 `
+                -Path (Join-Path $combinedDestination 'data\2016\loot.json')) -eq $unrelatedHash) `
+        -Message 'Rollback changed unrelated QuickStart data.'
+
+    $combinedStageThree = Join-Path $testRoot 'combined-stage-three'
+    $combinedBackupThree = Join-Path $testRoot 'combined-backup-three'
+    New-NavigationDeploymentStageFromPlan `
+        -StageRoot $combinedStageThree `
+        -FilePlan $combinedPlan
+    $null = Invoke-NavigationFileReplacement `
+        -StageRoot $combinedStageThree `
+        -DestinationRoot $combinedDestination `
+        -BackupRoot $combinedBackupThree `
+        -FilePlan $combinedPlan
+    Assert-True `
+        -Condition (-not (Test-Path -LiteralPath (
+                Join-Path $combinedDestination 'data\2016\collision\z1_cache_1.bin'
+            ))) `
+        -Message 'Successful deployment retained an obsolete cache part.'
+    foreach ($entry in $combinedPlan | Where-Object { $_.Action -ne 'Remove' }) {
+        Assert-True `
+            -Condition ((Get-NavigationFileSha256 `
+                    -Path (Join-Path $combinedDestination $entry.RelativePath)) -eq
+                $entry.Sha256) `
+            -Message "Combined deployment hash mismatch: $($entry.RelativePath)"
+    }
+    Assert-True `
+        -Condition ((Get-NavigationFileSha256 `
+                -Path (Join-Path $combinedDestination 'data\2016\loot.json')) -eq $unrelatedHash) `
+        -Message 'Successful deployment changed unrelated QuickStart data.'
+
+    $originalManifest = Get-Content -Raw -LiteralPath $manifestPath
+    $fixtureManifest.runtime.cache.parts[0].path = '../escape.bin'
+    [System.IO.File]::WriteAllText(
+        $manifestPath,
+        (($fixtureManifest | ConvertTo-Json -Depth 8) + [Environment]::NewLine)
+    )
+    $traversalRejected = $false
+    try {
+        $null = Get-NavigationBundleFileRecords -BundleRoot $bundleRoot
+    } catch {
+        $traversalRejected = $_.Exception.Message -like '*escaped*'
+    }
+    Assert-True `
+        -Condition $traversalRejected `
+        -Message 'Manifest path traversal was not rejected.'
+    [System.IO.File]::WriteAllText($manifestPath, $originalManifest)
+
     $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
     $actualClosure = @(Get-NavigationRuntimeClosure -SourceRoot $repositoryRoot)
     foreach ($requiredFile in @(
@@ -169,6 +378,10 @@ try {
         IncludesNavigationAreas = 'out\utils\navigationareas.js' -in $actualClosure
         PartialFailureRolledBack = $injectedFailure
         ValidationFailureRolledBack = $validationFailure
+        BundlePartialFailureRolledBack = $combinedPartialRollback
+        BundleValidationFailureRolledBack = $combinedValidationRollback
+        UnrelatedDataPreserved = $true
+        ManifestTraversalRejected = $traversalRejected
     } | Format-List
 } finally {
     if (Test-Path -LiteralPath $testRoot -PathType Container) {
