@@ -11,6 +11,7 @@ const POINTS = Object.freeze({
   frontSteps: Object.freeze({ x: -233.65, y: 23.7, z: -1133.8 }),
   doorway: Object.freeze({ x: -233.65, y: 25.3, z: -1136.5 }),
   groundInterior: Object.freeze({ x: -230.0, y: 25.45, z: -1162.0 }),
+  basementInterior: Object.freeze({ x: -233.1, y: 22.22, z: -1165.6 }),
   stairBottom: Object.freeze({ x: -226.7, y: 25.48, z: -1162.25 }),
   upperInterior: Object.freeze({ x: -232.4, y: 28.75, z: -1161.5 }),
   roofLanding: Object.freeze({ x: -227.8, y: 31.9, z: -1165.5 })
@@ -31,6 +32,11 @@ const ROUTES = Object.freeze([
     name: "doorway -> ground-floor interior",
     from: "doorway",
     to: "groundInterior"
+  }),
+  Object.freeze({
+    name: "basement -> ground floor via stairs",
+    from: "basementInterior",
+    to: "stairBottom"
   }),
   Object.freeze({
     name: "ground floor -> upper floor via stairs",

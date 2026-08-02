@@ -30,11 +30,11 @@ function fakeQuery({ partialRoute = null, roofPresent = false } = {}) {
   };
 }
 
-test("accepts four complete routes while the roof remains excluded", () => {
+test("accepts all complete routes while the roof remains excluded", () => {
   const report = validatePoliceStationRoutes(fakeQuery());
   assert.equal(report.ok, true);
   assert.equal(report.roofIsolated, true);
-  assert.equal(report.results.length, 4);
+  assert.equal(report.results.length, 5);
   assert.ok(report.results.every((result) => result.endpointGap === 0));
 });
 
