@@ -21,6 +21,7 @@ Run from inside a pydmod checkout (see tools/forgelight/README.md). Env vars:
   COLLISION_SEMANTICS_OUT H1SEM1 path (must share the H1COL2 directory)
   COLLISION_SEMANTIC_POLICY exact canonical policy path
   COLLISION_SEMANTIC_MODE diagnostic (default) or strict-production
+  COLLISION_DYNAMIC_DOOR_OBSTACLES_ACKNOWLEDGED explicit true/false evidence flag
 """
 
 import os
@@ -76,6 +77,9 @@ SEMANTIC_POLICY_PATH = Path(
     )
 )
 SEMANTIC_MODE = os.environ.get("COLLISION_SEMANTIC_MODE", "diagnostic")
+DYNAMIC_DOOR_OBSTACLES_ACKNOWLEDGED = os.environ.get(
+    "COLLISION_DYNAMIC_DOOR_OBSTACLES_ACKNOWLEDGED", "false"
+)
 
 # This is the only non-CDTA CollisionData reference among the 980 actor types
 # in Z1's previous runtime collision inventory.  It is a destroyed decorative
@@ -191,6 +195,16 @@ def _canonical_json_bytes(value):
     ).encode("utf-8")
 
 
+def parse_strict_bool(value, label):
+    """Parse only explicit lowercase JSON boolean spellings."""
+
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise ValueError(f"{label} must be exactly true or false")
+
+
 def encode_h1cid1(instance_ids):
     """Encode the deterministic stable-instance-ID sidecar."""
 
@@ -300,6 +314,7 @@ def build_collision_artifact_bundle(
     inventory,
     policy_bytes,
     strict_production=False,
+    dynamic_door_obstacles_acknowledged=False,
 ):
     """Build and validate one same-directory H1COL2 v4 artifact bundle."""
 
@@ -381,6 +396,22 @@ def build_collision_artifact_bundle(
     if policy.canonical_bytes != bytes(policy_bytes):
         raise ValueError("semantic policy payload differs from canonical bytes")
 
+    if not isinstance(dynamic_door_obstacles_acknowledged, bool):
+        raise ValueError("dynamic door obstacle acknowledgement must be boolean")
+    limitations = [
+        "Only exact actor, collision hash, kind, and triangle-count policy bindings may classify kind-0 or kind-2 geometry.",
+        "Diagnostic bundles may contain nav_unknown and must not be consumed as production navigation.",
+        "H1COL2 remains runtime format v2; H1SEM1 and H1CID1 are build-time sidecars.",
+    ]
+    if dynamic_door_obstacles_acknowledged:
+        limitations.append(
+            "Dynamic door-obstacle parity was explicitly acknowledged by the operator; this exporter does not prove runtime DoorEntity blocker coverage."
+        )
+    else:
+        limitations.append(
+            "Runtime dynamic door-obstacle parity is unproven; non-streaming navigation paths may bypass DoorEntity blockers."
+        )
+
     metadata = {
         "schema": METADATA_SCHEMA,
         "formatVersion": 2,
@@ -388,12 +419,8 @@ def build_collision_artifact_bundle(
         "geometrySource": "adr_collision_cdta",
         "renderFallbackCount": 0,
         "semanticMode": "strict-production" if strict_production else "diagnostic",
-        "limitations": [
-            "Only exact actor, collision hash, kind, and triangle-count policy bindings may classify kind-0 or kind-2 geometry.",
-            "Diagnostic bundles may contain nav_unknown and must not be consumed as production navigation.",
-            "H1COL2 remains runtime format v2; H1SEM1 and H1CID1 are build-time sidecars.",
-        ],
-        "dynamicDoorObstaclesAcknowledged": True,
+        "limitations": limitations,
+        "dynamicDoorObstaclesAcknowledged": dynamic_door_obstacles_acknowledged,
         "collisionFile": collision_name,
         "collisionSha256": collision_sha256,
         "meshCount": mesh_count,
@@ -672,6 +699,10 @@ def main():
         inventory=inventory,
         policy_bytes=policy.canonical_bytes,
         strict_production=SEMANTIC_MODE == "strict-production",
+        dynamic_door_obstacles_acknowledged=parse_strict_bool(
+            DYNAMIC_DOOR_OBSTACLES_ACKNOWLEDGED,
+            "COLLISION_DYNAMIC_DOOR_OBSTACLES_ACKNOWLEDGED",
+        ),
     )
     destinations = publish_artifact_bundle(
         BIN.parent,

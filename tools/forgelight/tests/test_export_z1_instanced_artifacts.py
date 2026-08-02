@@ -22,6 +22,7 @@ from collision_semantic_policy import (
 from export_z1_instanced import (
     build_collision_artifact_bundle,
     decode_h1cid1,
+    parse_strict_bool,
 )
 from h1sem import H1SEM1Error, SemanticId, decode_h1sem1
 
@@ -122,7 +123,13 @@ class ExportArtifactBundleTests(unittest.TestCase):
         self.assertEqual(metadata["schema"], "h1emu-h1col2-metadata-v4")
         self.assertEqual(metadata["formatVersion"], 2)
         self.assertEqual(metadata["semanticMode"], "diagnostic")
-        self.assertTrue(metadata["dynamicDoorObstaclesAcknowledged"])
+        self.assertFalse(metadata["dynamicDoorObstaclesAcknowledged"])
+        self.assertTrue(
+            any(
+                "parity is unproven" in limitation
+                for limitation in metadata["limitations"]
+            )
+        )
         self.assertEqual(metadata["meshCount"], 2)
         self.assertEqual(metadata["totalTriangleCount"], 2)
         self.assertEqual(metadata["unknownCount"], 0)
@@ -213,6 +220,31 @@ class ExportArtifactBundleTests(unittest.TestCase):
         self.assertNotEqual(metadata["collisionSha256"], sha256(tampered_collision))
         with self.assertRaisesRegex(SemanticPolicyError, "collision hash mismatch"):
             build_collision_artifact_bundle(**fixture(source_hash="c" * 64))
+
+    def test_dynamic_door_acknowledgement_is_explicit_and_strictly_typed(self):
+        self.assertTrue(parse_strict_bool("true", "door flag"))
+        self.assertFalse(parse_strict_bool("false", "door flag"))
+        for invalid in ("True", "1", "yes", "", None):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                ValueError, "exactly true or false"
+            ):
+                parse_strict_bool(invalid, "door flag")
+
+        _, acknowledged_bytes = build_collision_artifact_bundle(
+            **fixture(), dynamic_door_obstacles_acknowledged=True
+        )
+        acknowledged = json.loads(acknowledged_bytes)
+        self.assertTrue(acknowledged["dynamicDoorObstaclesAcknowledged"])
+        self.assertTrue(
+            any(
+                "explicitly acknowledged by the operator" in limitation
+                for limitation in acknowledged["limitations"]
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "acknowledgement must be boolean"):
+            build_collision_artifact_bundle(
+                **fixture(), dynamic_door_obstacles_acknowledged="true"
+            )
 
 
 if __name__ == "__main__":
