@@ -16,15 +16,17 @@ const configPath = resolve(
   option("--config") ?? "data/2016/navigationValidationRegions.json"
 );
 const reportPath = option("--report");
+const topologyOnly = process.argv.includes("--topology-only");
 if (!cacheDirectory) {
   console.error(
-    "Usage: npx tsx scripts/validateNavigationRegions.ts --cache-dir <dir> [--config <file>] [--report <file>]"
+    "Usage: npx tsx scripts/validateNavigationRegions.ts --cache-dir <dir> [--config <file>] [--report <file>] [--topology-only]"
   );
   process.exit(1);
 }
 
 process.env.NAV_STREAMING = "1";
 process.env.NAV_CACHE_DIR = resolve(cacheDirectory);
+if (topologyOnly) process.env.NAV_TRANSITIONS = "0";
 
 async function main() {
   const { hasDetourSuccess, NavManager } = await import("../src/utils/recast");

@@ -109,7 +109,14 @@ export function selectNavigationTransitionsForTile(
   );
 }
 
+export function shouldLoadNavigationTransitions(
+  requestedMode: string | undefined
+): boolean {
+  return requestedMode !== "0";
+}
+
 function loadNavigationTransitions(): NavigationTransition[] {
+  if (!shouldLoadNavigationTransitions(process.env.NAV_TRANSITIONS)) return [];
   if (!existsSync(NAVIGATION_TRANSITIONS_PATH)) return [];
   const entries = JSON.parse(
     readFileSync(NAVIGATION_TRANSITIONS_PATH, "utf8")

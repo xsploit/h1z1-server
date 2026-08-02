@@ -5,10 +5,17 @@ import {
   NavManager,
   selectNavigationTransitionsForTile,
   selectStreamingReferenceCapacity,
+  shouldLoadNavigationTransitions,
   shouldRecycleStreamingCache,
   shouldUseStreamingNav,
   sortTileCacheParts
 } from "./recast";
+
+test("topology validation can exclude manual navigation transitions", () => {
+  assert.equal(shouldLoadNavigationTransitions(undefined), true);
+  assert.equal(shouldLoadNavigationTransitions("1"), true);
+  assert.equal(shouldLoadNavigationTransitions("0"), false);
+});
 
 test("streaming trades one tile bit for dense POI polygon capacity", () => {
   assert.deepEqual(selectStreamingReferenceCapacity(32768), {
