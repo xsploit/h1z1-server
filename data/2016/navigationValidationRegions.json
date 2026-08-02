@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "coordinateSpace": "h1z1-world-y-up-meters",
+  "regions": [
+    {
+      "name": "pleasant-valley-police-entrance",
+      "description": "Road, exterior steps, door threshold, and ground-floor interior must form one bounded route.",
+      "anchors": [
+        {
+          "name": "road",
+          "position": [-222, 22.93, -1157],
+          "halfExtents": [2, 0.75, 2],
+          "expectedAreas": [2],
+          "maxHorizontalSnap": 1,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "landing",
+          "position": [-222, 25.22, -1165],
+          "halfExtents": [2, 0.75, 2],
+          "expectedAreas": [3, 5],
+          "maxHorizontalSnap": 1,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "door-road-side",
+          "position": [-225.99, 25.48, -1159.13],
+          "halfExtents": [2, 0.75, 2],
+          "expectedAreas": [7],
+          "maxHorizontalSnap": 1,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "door-interior-side",
+          "position": [-225.99, 25.48, -1165.13],
+          "halfExtents": [2, 0.75, 2],
+          "expectedAreas": [4, 7],
+          "maxHorizontalSnap": 1,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "interior",
+          "position": [-236.22, 25.47, -1149.2],
+          "halfExtents": [2, 0.75, 2],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 1,
+          "maxVerticalSnap": 0.75
+        }
+      ],
+      "segments": [
+        {
+          "name": "road-to-landing",
+          "from": "road",
+          "to": "landing",
+          "maxDetourRatio": 2.5,
+          "maxCornerVerticalStep": 0.75,
+          "monotonicVertical": "ascending"
+        },
+        {
+          "name": "road-to-door",
+          "from": "road",
+          "to": "door-road-side",
+          "maxDetourRatio": 2.5,
+          "maxCornerVerticalStep": 0.75
+        },
+        {
+          "name": "door-threshold",
+          "from": "door-road-side",
+          "to": "door-interior-side",
+          "maxDetourRatio": 2.5,
+          "maxCornerVerticalStep": 0.5
+        },
+        {
+          "name": "door-to-interior",
+          "from": "door-interior-side",
+          "to": "interior",
+          "maxDetourRatio": 2.5,
+          "maxCornerVerticalStep": 0.5
+        },
+        {
+          "name": "road-to-interior",
+          "from": "road",
+          "to": "interior",
+          "maxDetourRatio": 3,
+          "maxCornerVerticalStep": 0.75
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-police-interior-stairs",
+      "description": "Lower and upper police-station floors must connect through a gradual monotonic stair route without an elevator edge.",
+      "anchors": [
+        {
+          "name": "lower",
+          "position": [-235.1, 25.45, -1153.1],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4, 5],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "upper",
+          "position": [-235.84, 28.68, -1153.33],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4, 5],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        }
+      ],
+      "segments": [
+        {
+          "name": "lower-to-upper",
+          "from": "lower",
+          "to": "upper",
+          "maxDetourRatio": 8,
+          "maxCornerVerticalStep": 0.75,
+          "monotonicVertical": "ascending"
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-static-obstacle-control",
+      "description": "Known street-level anchors around the police parking area must route around static geometry without snapping onto roofs.",
+      "anchors": [
+        {
+          "name": "parking-west",
+          "position": [-222, 22.93, -1157],
+          "halfExtents": [2, 1, 2],
+          "expectedAreas": [2, 3],
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "parking-east",
+          "position": [-216, 23.4, -1135],
+          "halfExtents": [2, 1, 2],
+          "expectedAreas": [2, 3],
+          "maxVerticalSnap": 0.75
+        }
+      ],
+      "segments": [
+        {
+          "name": "parking-crossing",
+          "from": "parking-west",
+          "to": "parking-east",
+          "maxDetourRatio": 3,
+          "maxCornerVerticalStep": 0.5
+        }
+      ]
+    }
+  ]
+}
