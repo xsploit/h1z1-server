@@ -152,12 +152,12 @@ to the canonical OBJ interface consumed by `h1emu-recast`. It emits a bounded
 heightmap grid as `nav_terrain` and each intersecting H1COL2 instance exactly
 once. H1COL2 kinds map conservatively:
 
-| H1COL2 kind  | semantic OBJ material                        | behavior                                              |
-| ------------ | -------------------------------------------- | ----------------------------------------------------- |
-| `0` walkable | sidecar hint, otherwise `nav_floor_exterior` | slope-filtered walkable surface                       |
-| `1` solid    | `nav_obstacle_static`                        | non-walkable and carved                               |
-| `2` thin     | `nav_obstacle_static`                        | fail-closed non-walkable geometry                     |
-| `3` door     | `nav_door_panel_dynamic`                     | excluded by the baker; runtime door obstacle required |
+| H1COL2 kind  | semantic OBJ material                        | behavior                                                  |
+| ------------ | -------------------------------------------- | --------------------------------------------------------- |
+| `0` walkable | sidecar hint, otherwise `nav_floor_exterior` | slope-filtered walkable surface                           |
+| `1` solid    | `nav_obstacle_static`                        | non-walkable and carved                                   |
+| `2` thin     | sidecar: `nav_obstacle_static`/`nav_exclude` | structural blocker or excluded decoration; never walkable |
+| `3` door     | `nav_door_panel_dynamic`                     | excluded by the baker; runtime door obstacle required     |
 
 The export is a standalone source—do not concatenate it with the
 render/ADR-derived `world.obj`, because that would duplicate terrain and actor
@@ -178,6 +178,12 @@ guard prevents accidentally materializing the full 8192-square one-metre grid
 as OBJ. Increase `--terrain-step` for coarse experiments; do not raise the guard
 and call that a production full bake. The full-world pipeline should stream or
 tile the same source contract.
+
+Kind 2 in H1COL2 means only that a mesh is not eligible for grounding. With a
+matching metadata sidecar, structural actors such as walls, fences, dumpsters,
+and furniture remain static blockers while paper, cans, road paint, spawners,
+and other decoration use `nav_exclude`. Without actor metadata the bridge keeps
+the original fail-closed `nav_obstacle_static` fallback.
 
 ## Environment variables
 

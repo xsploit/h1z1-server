@@ -78,9 +78,44 @@ WALKABLE_STRUCTURE_PREFIXES = (
 
 KIND_SEMANTICS = {
     1: "nav_obstacle_static",
-    2: "nav_obstacle_static",
     3: "nav_door_panel_dynamic",
 }
+
+# H1COL2 kind 2 only means "do not use this mesh for grounding".  It contains
+# both real navigation blockers (walls, fences, furniture) and thousands of
+# decorative/spawner meshes (paper, cans, road paint).  Treating the entire
+# kind as a carved obstacle punches holes through otherwise valid floors.
+# Actor metadata refines only whether a kind-2 mesh blocks or is excluded; it
+# still cannot promote that mesh to a walkable area.
+THIN_STATIC_OBSTACLE_KEYWORDS = (
+    "wall",
+    "fence",
+    "barbedwire",
+    "guardrail",
+    "railing",
+    "streetlight",
+    "gaspole",
+    "dumpster",
+    "garbagecan",
+    "filecabinet",
+    "cabinet",
+    "locker",
+    "shelve",
+    "bookshelf",
+    "boardroomtable",
+    "desk",
+    "office_chair",
+    "toilet",
+    "urinal",
+    "commercialsink",
+    "hplc",
+    "fumehood",
+    "glasscabinet",
+    "dispatchconsole",
+    "mattress",
+    "roofhvac",
+    "roofelectricbox",
+)
 
 
 def classify(actor_file: str) -> int:
@@ -104,13 +139,21 @@ def semantic_material(actor_file: str, kind: int | None = None) -> str:
     H1COL2 stores one kind per merged actor mesh, not per connected component,
     so the walkable mapping is deliberately coarse.  Roads, stairs, ramps and
     explicit interior floors retain useful area identities; every other
-    walkable mesh is an exterior floor.  Non-walkable and door kinds are fixed
-    by the numeric binary contract and cannot be overridden by the actor name.
+    walkable mesh is an exterior floor.  Kind 2 remains non-walkable but actor
+    metadata distinguishes structural blockers from excluded decoration.
+    Door and solid-obstacle kinds remain fixed by the numeric binary contract.
     """
 
     resolved_kind = classify(actor_file) if kind is None else kind
     if resolved_kind in KIND_SEMANTICS:
         return KIND_SEMANTICS[resolved_kind]
+    if resolved_kind == 2:
+        name = actor_file.lower()
+        return (
+            "nav_obstacle_static"
+            if any(token in name for token in THIN_STATIC_OBSTACLE_KEYWORDS)
+            else "nav_exclude"
+        )
     if resolved_kind != 0:
         raise ValueError(f"unsupported H1COL2 mesh kind: {resolved_kind}")
 

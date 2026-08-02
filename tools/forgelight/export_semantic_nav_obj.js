@@ -97,7 +97,9 @@ function validateH1Col2(data) {
 
 function allowedMaterial(kind, material) {
   if (kind === 0) return WALKABLE_MATERIALS.has(material);
-  if (kind === 1 || kind === 2) return material === "nav_obstacle_static";
+  if (kind === 1) return material === "nav_obstacle_static";
+  if (kind === 2)
+    return material === "nav_obstacle_static" || material === "nav_exclude";
   return kind === 3 && material === "nav_door_panel_dynamic";
 }
 

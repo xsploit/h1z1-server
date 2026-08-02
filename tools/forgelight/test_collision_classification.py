@@ -69,7 +69,15 @@ class CollisionClassificationTests(unittest.TestCase):
     def test_non_walkable_kind_cannot_be_promoted_by_name(self):
         self.assertEqual(
             semantic_material("Common_Props_RoadStraight01.adr", 2),
+            "nav_exclude",
+        )
+        self.assertEqual(
+            semantic_material("Common_Props_ChainLinkFence1x2.adr", 2),
             "nav_obstacle_static",
+        )
+        self.assertEqual(
+            semantic_material("Common_Props_PaperScrap01.adr", 2),
+            "nav_exclude",
         )
         self.assertEqual(
             semantic_material("Common_Props_RoadStraight01.adr", 3),

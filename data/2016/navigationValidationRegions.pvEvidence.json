@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "coordinateSpace": "h1z1-world-y-up-meters",
+  "regions": [
+    {
+      "name": "pleasant-valley-police-authored-front-entry",
+      "description": "Evidence-backed front stair, glass-door threshold, and ground-floor interior route from extracted PD geometry and door metadata.",
+      "anchors": [
+        {
+          "name": "road",
+          "position": [-255.0, 23.05, -1140.0],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [2],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "stair-foot",
+          "position": [-233.5, 23.65, -1133.8],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [3, 5],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "stair-landing",
+          "position": [-233.5, 25.44, -1138.0],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4, 5],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "door-outside",
+          "position": [-233.5, 25.48, -1138.8],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4, 5, 7],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "door-inside",
+          "position": [-233.5, 25.48, -1139.5],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4, 7],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "interior",
+          "position": [-233.5, 25.48, -1143.0],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        }
+      ],
+      "segments": [
+        {
+          "name": "road-to-stair-foot",
+          "from": "road",
+          "to": "stair-foot",
+          "maxDetourRatio": 2.5,
+          "maxSegmentSlopeDegrees": 45
+        },
+        {
+          "name": "stair-ascent",
+          "from": "stair-foot",
+          "to": "stair-landing",
+          "maxDetourRatio": 2.5,
+          "maxSegmentSlopeDegrees": 45,
+          "monotonicVertical": "ascending"
+        },
+        {
+          "name": "landing-to-door",
+          "from": "stair-landing",
+          "to": "door-outside",
+          "maxDetourRatio": 2.5,
+          "maxCornerVerticalStep": 0.5
+        },
+        {
+          "name": "door-threshold",
+          "from": "door-outside",
+          "to": "door-inside",
+          "maxDetourRatio": 2.5,
+          "maxCornerVerticalStep": 0.5
+        },
+        {
+          "name": "door-to-interior",
+          "from": "door-inside",
+          "to": "interior",
+          "maxDetourRatio": 2.5,
+          "maxCornerVerticalStep": 0.5
+        },
+        {
+          "name": "exterior-to-interior",
+          "from": "stair-foot",
+          "to": "interior",
+          "maxDetourRatio": 3.0,
+          "maxSegmentSlopeDegrees": 45,
+          "monotonicVertical": "ascending"
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-police-authored-interior-ramp",
+      "description": "Evidence-backed first-to-second-floor ramp in the PD structural mesh.",
+      "anchors": [
+        {
+          "name": "lower",
+          "position": [-227.2, 25.5, -1163.2],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4, 5],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        },
+        {
+          "name": "upper",
+          "position": [-232.6, 28.5, -1163.3],
+          "halfExtents": [1, 0.75, 1],
+          "expectedAreas": [4, 5],
+          "maxHorizontalSnap": 0.75,
+          "maxVerticalSnap": 0.75
+        }
+      ],
+      "segments": [
+        {
+          "name": "lower-to-upper",
+          "from": "lower",
+          "to": "upper",
+          "maxDetourRatio": 2.5,
+          "maxSegmentSlopeDegrees": 45,
+          "monotonicVertical": "ascending"
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-police-static-dumpster",
+      "description": "Evidence-backed center probe for the H1COL2 Common_Props_Dumpster instance at the south side of the PV police station.",
+      "anchors": [
+        {
+          "name": "dumpster-center",
+          "position": [-222.84, 23.55, -1164.65],
+          "halfExtents": [0.4, 1.5, 0.4],
+          "mustBeOffNavmesh": true
+        }
+      ],
+      "segments": []
+    }
+  ]
+}

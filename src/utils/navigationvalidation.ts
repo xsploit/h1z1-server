@@ -16,6 +16,7 @@ export interface NavigationValidationAnchor {
   position: NavigationProbeTuple;
   halfExtents?: NavigationProbeTuple;
   expectedAreas?: number[];
+  mustBeOffNavmesh?: boolean;
   maxHorizontalSnap?: number;
   maxVerticalSnap?: number;
 }
@@ -28,6 +29,7 @@ export interface NavigationValidationSegment {
   reachTolerance?: number;
   maxDetourRatio?: number;
   maxCornerVerticalStep?: number;
+  maxSegmentSlopeDegrees?: number;
   monotonicVertical?: "ascending" | "descending" | "either";
 }
 
@@ -64,6 +66,14 @@ export interface NavigationProbeAdapter {
 
 export interface NavigationValidationReport {
   schemaVersion: 1;
+  provenance?: {
+    configSha256: string;
+    adapterVersion: string;
+    straightPathOptions: number;
+    maxPathPolys: number;
+    maxStraightPathPoints: number;
+    topologyOnly: boolean;
+  };
   passed: boolean;
   regions: Array<{
     name: string;
@@ -87,6 +97,7 @@ export interface NavigationValidationReport {
       pathLength: number;
       detourRatio: number | null;
       maxCornerVerticalStep: number;
+      maxSegmentSlopeDegrees: number;
       failures: string[];
     }>;
   }>;
@@ -165,7 +176,12 @@ export function parseNavigationValidationConfig(
           !isFiniteTuple(anchor.halfExtents)) ||
         (anchor.expectedAreas !== undefined &&
           (!Array.isArray(anchor.expectedAreas) ||
-            anchor.expectedAreas.some((area) => !Number.isInteger(area))))
+            anchor.expectedAreas.some((area) => !Number.isInteger(area)))) ||
+        (anchor.mustBeOffNavmesh !== undefined &&
+          typeof anchor.mustBeOffNavmesh !== "boolean") ||
+        (anchor.mustBeOffNavmesh === true &&
+          Array.isArray(anchor.expectedAreas) &&
+          anchor.expectedAreas.length > 0)
       ) {
         throw new Error(`${region.name} anchor ${anchorIndex} is invalid`);
       }
@@ -190,7 +206,11 @@ export function parseNavigationValidationConfig(
         typeof segment.from !== "string" ||
         typeof segment.to !== "string" ||
         !anchors.has(segment.from) ||
-        !anchors.has(segment.to)
+        !anchors.has(segment.to) ||
+        (segment.maxSegmentSlopeDegrees !== undefined &&
+          (!Number.isFinite(segment.maxSegmentSlopeDegrees as number) ||
+            (segment.maxSegmentSlopeDegrees as number) < 0 ||
+            (segment.maxSegmentSlopeDegrees as number) > 90))
       ) {
         throw new Error(`${region.name} segment ${segmentIndex} is invalid`);
       }
@@ -235,8 +255,13 @@ export function evaluateNavigationValidation(
       );
       const verticalSnap = Math.abs(snap.point.y - requested.y);
       const failures: string[] = [];
-      if (!snap.ref) failures.push("not-on-navmesh");
+      if (anchor.mustBeOffNavmesh) {
+        if (snap.ref) failures.push("unexpectedly-on-navmesh");
+      } else if (!snap.ref) {
+        failures.push("not-on-navmesh");
+      }
       if (
+        !anchor.mustBeOffNavmesh &&
         anchor.expectedAreas?.length &&
         (snap.area === null || !anchor.expectedAreas.includes(snap.area))
       ) {
@@ -295,6 +320,23 @@ export function evaluateNavigationValidation(
         (maximum, step) => Math.max(maximum, Math.abs(step)),
         0
       );
+      const maxSegmentSlopeDegrees = path
+        .slice(1)
+        .reduce((maximum, current, index) => {
+          const previous = path[index];
+          const horizontal = Math.hypot(
+            current.x - previous.x,
+            current.z - previous.z
+          );
+          const vertical = Math.abs(current.y - previous.y);
+          const slope =
+            horizontal === 0
+              ? vertical === 0
+                ? 0
+                : 90
+              : (Math.atan2(vertical, horizontal) * 180) / Math.PI;
+          return Math.max(maximum, slope);
+        }, 0);
       const failures: string[] = [];
       if (required && !reached) failures.push("unreachable");
       if (
@@ -311,6 +353,13 @@ export function evaluateNavigationValidation(
         maxCornerVerticalStep > segment.maxCornerVerticalStep
       ) {
         failures.push(`vertical-step:${maxCornerVerticalStep.toFixed(3)}`);
+      }
+      if (
+        reached &&
+        segment.maxSegmentSlopeDegrees !== undefined &&
+        maxSegmentSlopeDegrees > segment.maxSegmentSlopeDegrees
+      ) {
+        failures.push(`slope-degrees:${maxSegmentSlopeDegrees.toFixed(3)}`);
       }
       if (reached && segment.monotonicVertical) {
         const epsilon = 0.05;
@@ -334,6 +383,7 @@ export function evaluateNavigationValidation(
         pathLength,
         detourRatio,
         maxCornerVerticalStep,
+        maxSegmentSlopeDegrees,
         failures
       };
     });
@@ -374,6 +424,14 @@ export function compareNavigationValidationReports(
   candidate: NavigationValidationReport,
   requireAllGates = false
 ): NavigationValidationComparison {
+  if (
+    JSON.stringify(baseline.provenance ?? null) !==
+    JSON.stringify(candidate.provenance ?? null)
+  ) {
+    throw new Error(
+      "navigation validation reports do not share the same validation provenance"
+    );
+  }
   const baselineStatuses = validationStatuses(baseline);
   const candidateStatuses = validationStatuses(candidate);
   const baselineKeys = [...baselineStatuses.keys()].sort();

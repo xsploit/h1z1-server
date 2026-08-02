@@ -55,7 +55,7 @@ function writeMetadata(path, collisionPath) {
   const materials = [
     "nav_stair",
     "nav_obstacle_static",
-    "nav_obstacle_static",
+    "nav_exclude",
     "nav_door_panel_dynamic"
   ];
   writeFileSync(
@@ -120,7 +120,8 @@ test("exports deterministic canonical semantics from heightmap plus H1COL2", asy
   assert.deepEqual(first, second);
   assert.deepEqual(first.counts.materialTriangles, {
     nav_door_panel_dynamic: 1,
-    nav_obstacle_static: 2,
+    nav_exclude: 1,
+    nav_obstacle_static: 1,
     nav_stair: 1,
     nav_terrain: 16
   });
@@ -135,6 +136,7 @@ test("exports deterministic canonical semantics from heightmap plus H1COL2", asy
   assert.match(obj, /usemtl nav_terrain/);
   assert.match(obj, /usemtl nav_stair/);
   assert.match(obj, /usemtl nav_obstacle_static/);
+  assert.match(obj, /usemtl nav_exclude/);
   assert.match(obj, /usemtl nav_door_panel_dynamic/);
   assert.doesNotMatch(obj, /usemtl (?!nav_)/);
 });
