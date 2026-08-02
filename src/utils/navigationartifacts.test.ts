@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
+  assertCompleteNavigationArtifactProvenance,
   assertNavigationRuntimeConfiguration,
   calculateNavigationArtifactId,
   canonicalJson,
@@ -12,6 +13,7 @@ import {
   NavigationArtifactManifest,
   parseCollisionSemanticSourceReport,
   parseNavigationCacheMergeReport,
+  parseNavigationSemanticBakeReport,
   parseTsetHeader,
   verifyNavigationArtifact
 } from "./navigationartifacts";
@@ -55,6 +57,7 @@ function collisionSemanticSourceReport() {
   return {
     schema: "h1emu-collision-semantic-obj-v1",
     semanticContract: "h1emu-nav-semantics-v1",
+    semanticMode: "per-triangle-h1sem1" as const,
     coordinateSpace: "h1z1-world-y-up-meters",
     sourceStrategy: "heightmap-plus-h1col2-only",
     renderGeometryMerged: false,
@@ -68,9 +71,40 @@ function collisionSemanticSourceReport() {
         file: "z1_collision.metadata.json",
         sha256: "3".repeat(64),
         matched: true
+      },
+      collisionTriangleSemantics: {
+        file: "z1_collision.semantics.bin",
+        sha256: "5".repeat(64),
+        matched: true,
+        format: "H1SEM1-u8le-v1" as const
+      },
+      collisionSemanticPolicy: {
+        file: "z1_collision.semantic-policy.json",
+        sha256: "6".repeat(64),
+        matched: true,
+        schema: "h1emu-h1col2-semantic-policy-v1" as const,
+        canonical: true
       }
     },
-    limitations: ["H1COL2 classifies merged actor meshes."]
+    limitations: []
+  };
+}
+
+function semanticBakeReport() {
+  return {
+    schemaVersion: 1,
+    semanticContract: "h1emu-nav-semantics-v1" as const,
+    semanticInput: true,
+    legacyObjectFallback: false,
+    dynamicDoorObstaclesAcknowledged: true,
+    bakedSemanticsVerified: true,
+    sourceTriangles: 1,
+    keptTriangles: 1,
+    excludedTriangles: 0,
+    fallbackTriangles: 0,
+    ordinaryMaterialTriangles: 0,
+    materials: { nav_floor_exterior: 1 },
+    warnings: [] as string[]
   };
 }
 
@@ -80,6 +114,9 @@ function fixture() {
   mkdirSync(cache);
   const part = tsetBuffer();
   writeFileSync(join(cache, "z1_cache_0.bin"), part);
+  const semanticBytes = Buffer.from(JSON.stringify(semanticBakeReport()));
+  writeFileSync(join(root, "navigation-semantics.json"), semanticBytes);
+  const semanticFile = record("navigation-semantics.json", semanticBytes);
   const payload: Omit<NavigationArtifactManifest, "artifactId"> = {
     schemaVersion: 1,
     provenance: {
@@ -115,10 +152,13 @@ function fixture() {
   };
   const manifestPath = join(root, "navigation-artifact-manifest.json");
   writeFileSync(manifestPath, JSON.stringify(manifest));
-  return { root, cache, manifestPath, manifest };
+  return { root, cache, manifestPath, manifest, semanticFile };
 }
 
-function claimCompleteProvenance(manifest: NavigationArtifactManifest): void {
+function claimCompleteProvenance(
+  manifest: NavigationArtifactManifest,
+  semanticFile: NavigationArtifactFile
+): void {
   const file = manifest.runtime.cache.parts[0];
   manifest.provenance = {
     status: "complete",
@@ -150,21 +190,12 @@ function claimCompleteProvenance(manifest: NavigationArtifactManifest): void {
     schemaVersion: 2,
     instanceCount: 1,
     kinds: { walkable: 1 },
-    semanticMode: "strict"
+    semanticMode: "strict",
+    bakedDoorGeometryExcluded: false
   };
   manifest.runtime.semantics = {
-    file,
-    schemaVersion: 1,
-    semanticContract: "h1emu-nav-semantics-v1",
-    semanticInput: true,
-    legacyObjectFallback: false,
-    sourceTriangles: 1,
-    keptTriangles: 1,
-    excludedTriangles: 0,
-    fallbackTriangles: 0,
-    ordinaryMaterialTriangles: 0,
-    materials: { nav_floor_exterior: 1 },
-    warnings: []
+    file: semanticFile,
+    ...semanticBakeReport()
   };
   manifest.runtime.transitions = { file, count: 0 };
 }
@@ -186,12 +217,30 @@ function bindSourceReport(
   };
 }
 
+function bindCompleteSourceReport(manifest: NavigationArtifactManifest): void {
+  const file = manifest.runtime.cache.parts[0];
+  const base = collisionSemanticSourceReport();
+  manifest.provenance.sourceReport = {
+    file,
+    ...parseCollisionSemanticSourceReport({
+      ...base,
+      output: { ...base.output, sha256: file.sha256 },
+      inputs: {
+        ...base.inputs,
+        heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
+        collision: { ...base.inputs.collision, sha256: file.sha256 }
+      }
+    })
+  };
+}
+
 function makeCompleteSnapshot(
   source: NavigationArtifactManifest,
-  coverage: "full" | "regional"
+  coverage: "full" | "regional",
+  semanticFile: NavigationArtifactFile
 ): NavigationArtifactManifest {
   const manifest = structuredClone(source);
-  claimCompleteProvenance(manifest);
+  claimCompleteProvenance(manifest, semanticFile);
   const file = manifest.runtime.cache.parts[0];
   const base = collisionSemanticSourceReport();
   manifest.provenance.sourceReport = {
@@ -223,8 +272,16 @@ function record(path: string, bytes: Buffer): NavigationArtifactFile {
 
 function compositeFixture() {
   const result = fixture();
-  const base = makeCompleteSnapshot(result.manifest, "full");
-  const regional = makeCompleteSnapshot(result.manifest, "regional");
+  const base = makeCompleteSnapshot(
+    result.manifest,
+    "full",
+    result.semanticFile
+  );
+  const regional = makeCompleteSnapshot(
+    result.manifest,
+    "regional",
+    result.semanticFile
+  );
   const baseBytes = Buffer.from(JSON.stringify(base));
   const regionalBytes = Buffer.from(JSON.stringify(regional));
   writeFileSync(join(result.root, "base-manifest.json"), baseBytes);
@@ -341,6 +398,16 @@ test("verifies a complete full plus regional cache composition", async () => {
     verified.manifest.provenance.composition?.regional.snapshot.runtime.cache
       .coverage?.kind,
     "regional"
+  );
+});
+
+test("composed complete artifacts cannot downgrade output semantic evidence", async () => {
+  const { cache, manifestPath, manifest } = compositeFixture();
+  manifest.runtime.semantics!.bakedSemanticsVerified = false;
+  persistCompositeManifest(manifestPath, manifest);
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /incomplete or legacy semantic provenance/
   );
 });
 
@@ -481,6 +548,31 @@ test("binds and verifies a collision-first semantic source report", async () => 
     verified.manifest.provenance.sourceReport?.collisionMetadataMatched,
     true
   );
+  assert.equal(
+    verified.manifest.provenance.sourceReport?.semanticMode,
+    "per-triangle-h1sem1"
+  );
+  assert.equal(
+    verified.manifest.provenance.sourceReport?.inputs.collisionTriangleSemantics
+      ?.format,
+    "H1SEM1-u8le-v1"
+  );
+  assert.equal(
+    verified.manifest.provenance.sourceReport?.inputs.collisionSemanticPolicy
+      ?.canonical,
+    true
+  );
+
+  const legacySnapshot = manifest.provenance.sourceReport!;
+  delete legacySnapshot.semanticMode;
+  delete legacySnapshot.inputs.collisionInstanceIds;
+  delete legacySnapshot.inputs.collisionTriangleSemantics;
+  delete legacySnapshot.inputs.collisionSemanticPolicy;
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  await assert.doesNotReject(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache })
+  );
 });
 
 test("rejects source claims that differ from the bound source report", async () => {
@@ -530,8 +622,8 @@ test("rejects a false complete-provenance claim", async () => {
 });
 
 test("complete provenance requires a collision semantic source report", async () => {
-  const { cache, manifestPath, manifest } = fixture();
-  claimCompleteProvenance(manifest);
+  const { cache, manifestPath, manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
   manifest.artifactId = calculateNavigationArtifactId(manifest);
   writeFileSync(manifestPath, JSON.stringify(manifest));
 
@@ -542,8 +634,8 @@ test("complete provenance requires a collision semantic source report", async ()
 });
 
 test("complete provenance requires a matched collision metadata sidecar", async () => {
-  const { root, cache, manifestPath, manifest } = fixture();
-  claimCompleteProvenance(manifest);
+  const { root, cache, manifestPath, manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
   const file = manifest.runtime.cache.parts[0];
   const base = collisionSemanticSourceReport();
   const report = {
@@ -567,8 +659,8 @@ test("complete provenance requires a matched collision metadata sidecar", async 
 });
 
 test("complete provenance binds the source report output to sourceWorld", async () => {
-  const { root, cache, manifestPath, manifest } = fixture();
-  claimCompleteProvenance(manifest);
+  const { root, cache, manifestPath, manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
   const file = manifest.runtime.cache.parts[0];
   const base = collisionSemanticSourceReport();
   const report = {
@@ -587,6 +679,151 @@ test("complete provenance binds the source report output to sourceWorld", async 
   await assert.rejects(
     verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
     /does not match its sidecar, source world, or runtime inputs/
+  );
+});
+
+test("runtime-only semantic reports preserve optional verification evidence", async () => {
+  const { cache, manifestPath, manifest, semanticFile } = fixture();
+  manifest.runtime.semantics = {
+    file: semanticFile,
+    ...semanticBakeReport()
+  };
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  const verified = await verifyNavigationArtifact({
+    manifestPath,
+    cacheDirectory: cache
+  });
+  assert.equal(
+    verified.manifest.runtime.semantics?.dynamicDoorObstaclesAcknowledged,
+    true
+  );
+  assert.equal(
+    verified.manifest.runtime.semantics?.bakedSemanticsVerified,
+    true
+  );
+
+  delete manifest.runtime.semantics!.dynamicDoorObstaclesAcknowledged;
+  delete manifest.runtime.semantics!.bakedSemanticsVerified;
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  await assert.doesNotReject(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache })
+  );
+
+  const legacy = semanticBakeReport();
+  delete (legacy as { dynamicDoorObstaclesAcknowledged?: boolean })
+    .dynamicDoorObstaclesAcknowledged;
+  delete (legacy as { bakedSemanticsVerified?: boolean })
+    .bakedSemanticsVerified;
+  assert.doesNotThrow(() => parseNavigationSemanticBakeReport(legacy));
+});
+
+test("rejects semantic verification evidence invented only in the manifest", async () => {
+  const { cache, manifestPath, manifest, semanticFile } = fixture();
+  manifest.runtime.semantics = {
+    file: semanticFile,
+    ...semanticBakeReport(),
+    bakedSemanticsVerified: false
+  };
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /semantic bake report does not match manifested provenance/
+  );
+});
+
+test("complete provenance requires verified baked semantics", () => {
+  const { manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  bindCompleteSourceReport(manifest);
+  delete (manifest.runtime.semantics as { bakedSemanticsVerified?: boolean })
+    .bakedSemanticsVerified;
+
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /incomplete or legacy semantic provenance/
+  );
+});
+
+test("complete provenance rejects actor-default and unresolved source limitations", () => {
+  const { manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  bindCompleteSourceReport(manifest);
+  manifest.provenance.sourceReport!.limitations = [
+    "actor_default_pending_per_triangle_table"
+  ];
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /actor-default pending per-triangle semantics/
+  );
+
+  manifest.provenance.sourceReport!.limitations = [
+    "Composite floors remain unresolved."
+  ];
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /unresolved semantic limitations/
+  );
+});
+
+test("complete provenance requires matched H1SEM1 and canonical policy inputs", () => {
+  const { manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  bindCompleteSourceReport(manifest);
+  const report = manifest.provenance.sourceReport!;
+  const triangleSemantics = report.inputs.collisionTriangleSemantics;
+  const semanticPolicy = report.inputs.collisionSemanticPolicy;
+
+  report.semanticMode = "legacy-actor-diagnostic";
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /diagnostic actor-default semantics/
+  );
+
+  report.semanticMode = "per-triangle-h1sem1";
+  report.inputs.collisionTriangleSemantics = null;
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /matched per-triangle H1SEM1 source provenance/
+  );
+
+  report.inputs.collisionTriangleSemantics = triangleSemantics;
+  report.inputs.collisionSemanticPolicy = null;
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /matched canonical semantic policy/
+  );
+
+  report.inputs.collisionSemanticPolicy = semanticPolicy;
+  assert.doesNotThrow(() =>
+    assertCompleteNavigationArtifactProvenance(manifest)
+  );
+});
+
+test("complete provenance binds excluded doors to dynamic obstacle acknowledgement", () => {
+  const { manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  bindCompleteSourceReport(manifest);
+  delete manifest.runtime.semantics!.dynamicDoorObstaclesAcknowledged;
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /missing dynamic door semantic provenance/
+  );
+
+  manifest.runtime.navigationMetadata!.bakedDoorGeometryExcluded = true;
+  manifest.runtime.semantics!.dynamicDoorObstaclesAcknowledged = false;
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /without acknowledged dynamic door obstacles/
+  );
+
+  manifest.runtime.semantics!.dynamicDoorObstaclesAcknowledged = true;
+  assert.doesNotThrow(() =>
+    assertCompleteNavigationArtifactProvenance(manifest)
   );
 });
 

@@ -94,6 +94,8 @@ export interface CollisionSemanticSourceReport {
   file: NavigationArtifactFile;
   schema: "h1emu-collision-semantic-obj-v1";
   semanticContract: "h1emu-nav-semantics-v1";
+  /** Optional only for legacy runtime-only source reports. */
+  semanticMode?: "per-triangle-h1sem1" | "legacy-actor-diagnostic";
   coordinateSpace: "h1z1-world-y-up-meters";
   sourceStrategy: string;
   renderGeometryMerged: boolean;
@@ -113,9 +115,45 @@ export interface CollisionSemanticSourceReport {
           matched: boolean;
         })
       | null;
+    collisionInstanceIds?:
+      | (CollisionSemanticSourceInput & {
+          matched: boolean;
+        })
+      | null;
+    collisionTriangleSemantics?:
+      | (CollisionSemanticSourceInput & {
+          matched: boolean;
+          format: "H1SEM1-u8le-v1";
+        })
+      | null;
+    collisionSemanticPolicy?:
+      | (CollisionSemanticSourceInput & {
+          matched: boolean;
+          schema: "h1emu-h1col2-semantic-policy-v1";
+          canonical: boolean;
+        })
+      | null;
   };
   collisionMetadataMatched: boolean;
   limitations: string[];
+}
+
+export interface NavigationSemanticBakeReport {
+  schemaVersion: number;
+  semanticContract: "h1emu-nav-semantics-v1";
+  semanticInput: boolean;
+  legacyObjectFallback: boolean;
+  /** Present in current strict reports; optional only for legacy runtime-only bundles. */
+  dynamicDoorObstaclesAcknowledged?: boolean;
+  /** True only when both direct and TileCache baked-semantic inspection passed. */
+  bakedSemanticsVerified?: boolean;
+  sourceTriangles: number;
+  keptTriangles: number;
+  excludedTriangles: number;
+  fallbackTriangles: number;
+  ordinaryMaterialTriangles: number;
+  materials: Record<string, number>;
+  warnings: string[];
 }
 
 export interface NavigationTsetHeader {
@@ -182,20 +220,11 @@ export interface NavigationArtifactManifest {
       semanticMode?: "strict" | "legacy";
       bakedDoorGeometryExcluded?: boolean;
     } | null;
-    semantics: {
-      file: NavigationArtifactFile;
-      schemaVersion: number;
-      semanticContract: "h1emu-nav-semantics-v1";
-      semanticInput: boolean;
-      legacyObjectFallback: boolean;
-      sourceTriangles: number;
-      keptTriangles: number;
-      excludedTriangles: number;
-      fallbackTriangles: number;
-      ordinaryMaterialTriangles: number;
-      materials: Record<string, number>;
-      warnings: string[];
-    } | null;
+    semantics:
+      | (NavigationSemanticBakeReport & {
+          file: NavigationArtifactFile;
+        })
+      | null;
     transitions: {
       file: NavigationArtifactFile;
       count: number;
@@ -433,6 +462,9 @@ export function parseCollisionSemanticSourceReport(
   const inputs = value.inputs;
   if (
     value.semanticContract !== "h1emu-nav-semantics-v1" ||
+    (value.semanticMode !== undefined &&
+      value.semanticMode !== "per-triangle-h1sem1" &&
+      value.semanticMode !== "legacy-actor-diagnostic") ||
     value.coordinateSpace !== "h1z1-world-y-up-meters" ||
     typeof value.sourceStrategy !== "string" ||
     value.sourceStrategy.length === 0 ||
@@ -487,9 +519,82 @@ export function parseCollisionSemanticSourceReport(
       "[NAV] source report collisionMetadata matched state is inconsistent"
     );
   }
+  const parseMatchedSource = (
+    raw: unknown,
+    label: string
+  ): (CollisionSemanticSourceInput & { matched: boolean }) | null => {
+    if (raw === null || raw === undefined) return null;
+    const input = parseSourceInput(raw, label);
+    if (!isRecord(raw) || typeof raw.matched !== "boolean") {
+      throw new Error(`[NAV] source report has invalid ${label} matched state`);
+    }
+    return { ...input, matched: raw.matched };
+  };
+  const collisionInstanceIds = parseMatchedSource(
+    inputs.collisionInstanceIds,
+    "collisionInstanceIds"
+  );
+  const triangleInput = parseMatchedSource(
+    inputs.collisionTriangleSemantics,
+    "collisionTriangleSemantics"
+  );
+  let collisionTriangleSemantics: CollisionSemanticSourceReport["inputs"]["collisionTriangleSemantics"] =
+    null;
+  if (triangleInput) {
+    if (
+      !isRecord(inputs.collisionTriangleSemantics) ||
+      inputs.collisionTriangleSemantics.format !== "H1SEM1-u8le-v1"
+    ) {
+      throw new Error(
+        "[NAV] source report has invalid collisionTriangleSemantics format"
+      );
+    }
+    collisionTriangleSemantics = {
+      ...triangleInput,
+      format: "H1SEM1-u8le-v1"
+    };
+  }
+  const policyInput = parseMatchedSource(
+    inputs.collisionSemanticPolicy,
+    "collisionSemanticPolicy"
+  );
+  let collisionSemanticPolicy: CollisionSemanticSourceReport["inputs"]["collisionSemanticPolicy"] =
+    null;
+  if (policyInput) {
+    if (
+      !isRecord(inputs.collisionSemanticPolicy) ||
+      inputs.collisionSemanticPolicy.schema !==
+        "h1emu-h1col2-semantic-policy-v1" ||
+      typeof inputs.collisionSemanticPolicy.canonical !== "boolean"
+    ) {
+      throw new Error(
+        "[NAV] source report has invalid collisionSemanticPolicy contract"
+      );
+    }
+    collisionSemanticPolicy = {
+      ...policyInput,
+      schema: "h1emu-h1col2-semantic-policy-v1",
+      canonical: inputs.collisionSemanticPolicy.canonical
+    };
+  }
+  const parsedInputs: CollisionSemanticSourceReport["inputs"] = {
+    heightmap,
+    collision,
+    collisionMetadata
+  };
+  if (Object.hasOwn(inputs, "collisionInstanceIds")) {
+    parsedInputs.collisionInstanceIds = collisionInstanceIds;
+  }
+  if (Object.hasOwn(inputs, "collisionTriangleSemantics")) {
+    parsedInputs.collisionTriangleSemantics = collisionTriangleSemantics;
+  }
+  if (Object.hasOwn(inputs, "collisionSemanticPolicy")) {
+    parsedInputs.collisionSemanticPolicy = collisionSemanticPolicy;
+  }
   return {
     schema: "h1emu-collision-semantic-obj-v1",
     semanticContract: "h1emu-nav-semantics-v1",
+    semanticMode: value.semanticMode,
     coordinateSpace: "h1z1-world-y-up-meters",
     sourceStrategy: value.sourceStrategy,
     renderGeometryMerged: value.renderGeometryMerged,
@@ -501,9 +606,61 @@ export function parseCollisionSemanticSourceReport(
     },
     terrainStep: value.terrainStep,
     output,
-    inputs: { heightmap, collision, collisionMetadata },
+    inputs: parsedInputs,
     collisionMetadataMatched,
     limitations: [...value.limitations]
+  };
+}
+
+export function parseNavigationSemanticBakeReport(
+  value: unknown
+): NavigationSemanticBakeReport {
+  if (!isRecord(value)) {
+    throw new Error("[NAV] semantic bake report must be an object");
+  }
+  const integerFields = [
+    "schemaVersion",
+    "sourceTriangles",
+    "keptTriangles",
+    "excludedTriangles",
+    "fallbackTriangles",
+    "ordinaryMaterialTriangles"
+  ] as const;
+  if (
+    value.semanticContract !== "h1emu-nav-semantics-v1" ||
+    typeof value.semanticInput !== "boolean" ||
+    typeof value.legacyObjectFallback !== "boolean" ||
+    !integerFields.every(
+      (field) =>
+        Number.isSafeInteger(value[field]) && (value[field] as number) >= 0
+    ) ||
+    !isRecord(value.materials) ||
+    !Object.values(value.materials).every(
+      (count) => Number.isSafeInteger(count) && (count as number) >= 0
+    ) ||
+    !Array.isArray(value.warnings) ||
+    !value.warnings.every((warning) => typeof warning === "string") ||
+    (value.dynamicDoorObstaclesAcknowledged !== undefined &&
+      typeof value.dynamicDoorObstaclesAcknowledged !== "boolean") ||
+    (value.bakedSemanticsVerified !== undefined &&
+      typeof value.bakedSemanticsVerified !== "boolean")
+  ) {
+    throw new Error("[NAV] semantic bake report is invalid");
+  }
+  return {
+    schemaVersion: value.schemaVersion as number,
+    semanticContract: "h1emu-nav-semantics-v1",
+    semanticInput: value.semanticInput,
+    legacyObjectFallback: value.legacyObjectFallback,
+    dynamicDoorObstaclesAcknowledged: value.dynamicDoorObstaclesAcknowledged,
+    bakedSemanticsVerified: value.bakedSemanticsVerified,
+    sourceTriangles: value.sourceTriangles as number,
+    keptTriangles: value.keptTriangles as number,
+    excludedTriangles: value.excludedTriangles as number,
+    fallbackTriangles: value.fallbackTriangles as number,
+    ordinaryMaterialTriangles: value.ordinaryMaterialTriangles as number,
+    materials: { ...(value.materials as Record<string, number>) },
+    warnings: [...value.warnings]
   };
 }
 
@@ -896,6 +1053,55 @@ function assertCacheComposition(
   }
 }
 
+function assertCompleteSemanticBakeProvenance(
+  manifest: NavigationArtifactManifest
+): void {
+  const semantics = manifest.runtime.semantics;
+  const metadata = manifest.runtime.navigationMetadata;
+  if (!semantics) {
+    throw new Error("[NAV] complete artifact provenance is missing semantics");
+  }
+  if (!metadata) {
+    throw new Error(
+      "[NAV] complete artifact provenance is missing navigationMetadata"
+    );
+  }
+  if (
+    semantics.semanticContract !== "h1emu-nav-semantics-v1" ||
+    !semantics.semanticInput ||
+    semantics.legacyObjectFallback ||
+    semantics.bakedSemanticsVerified !== true ||
+    semantics.fallbackTriangles !== 0 ||
+    semantics.ordinaryMaterialTriangles !== 0 ||
+    semantics.warnings.length !== 0
+  ) {
+    throw new Error(
+      "[NAV] complete artifact contains incomplete or legacy semantic provenance"
+    );
+  }
+  if (metadata.schemaVersion !== 2 || metadata.semanticMode !== "strict") {
+    throw new Error(
+      "[NAV] complete artifact requires strict semantic navigation metadata"
+    );
+  }
+  if (
+    typeof metadata.bakedDoorGeometryExcluded !== "boolean" ||
+    typeof semantics.dynamicDoorObstaclesAcknowledged !== "boolean"
+  ) {
+    throw new Error(
+      "[NAV] complete artifact is missing dynamic door semantic provenance"
+    );
+  }
+  if (
+    metadata.bakedDoorGeometryExcluded === true &&
+    semantics.dynamicDoorObstaclesAcknowledged !== true
+  ) {
+    throw new Error(
+      "[NAV] complete artifact excludes door geometry without acknowledged dynamic door obstacles"
+    );
+  }
+}
+
 export function assertCompleteNavigationArtifactProvenance(
   manifest: NavigationArtifactManifest
 ): void {
@@ -919,12 +1125,14 @@ export function assertCompleteNavigationArtifactProvenance(
       collision: manifest.runtime.collision,
       heightmap: manifest.runtime.heightmap,
       navigationMetadata: manifest.runtime.navigationMetadata,
+      semantics: manifest.runtime.semantics,
       transitions: manifest.runtime.transitions
     })) {
       if (!value) {
         throw new Error(`[NAV] composed complete artifact is missing ${name}`);
       }
     }
+    assertCompleteSemanticBakeProvenance(manifest);
     assertContiguousCacheParts(
       manifest.runtime.cache.parts,
       "composed artifact"
@@ -949,6 +1157,7 @@ export function assertCompleteNavigationArtifactProvenance(
       throw new Error(`[NAV] complete artifact provenance is missing ${name}`);
     }
   }
+  assertCompleteSemanticBakeProvenance(manifest);
   const sourceReport = manifest.provenance.sourceReport!;
   const { file: _file, ...sourceReportSnapshot } = sourceReport;
   if (
@@ -972,23 +1181,45 @@ export function assertCompleteNavigationArtifactProvenance(
       "[NAV] complete artifact source report does not match its sidecar, source world, or runtime inputs"
     );
   }
-  const semantics = manifest.runtime.semantics!;
   if (
-    semantics.semanticContract !== "h1emu-nav-semantics-v1" ||
-    !semantics.semanticInput ||
-    semantics.legacyObjectFallback ||
-    semantics.fallbackTriangles !== 0 ||
-    semantics.ordinaryMaterialTriangles !== 0 ||
-    semantics.warnings.length !== 0
+    sourceReport.sourceStrategy.includes(
+      "actor_default_pending_per_triangle_table"
+    ) ||
+    sourceReport.limitations.some((limitation) =>
+      limitation.includes("actor_default_pending_per_triangle_table")
+    )
   ) {
     throw new Error(
-      "[NAV] complete artifact contains incomplete or legacy semantic provenance"
+      "[NAV] complete artifact cannot use actor-default pending per-triangle semantics"
     );
   }
-  const metadata = manifest.runtime.navigationMetadata!;
-  if (metadata.schemaVersion !== 2 || metadata.semanticMode !== "strict") {
+  if (sourceReport.semanticMode === "legacy-actor-diagnostic") {
     throw new Error(
-      "[NAV] complete artifact requires strict semantic navigation metadata"
+      "[NAV] complete artifact cannot use diagnostic actor-default semantics"
+    );
+  }
+  if (
+    sourceReport.semanticMode !== "per-triangle-h1sem1" ||
+    sourceReport.inputs.collisionTriangleSemantics?.matched !== true ||
+    sourceReport.inputs.collisionTriangleSemantics.format !== "H1SEM1-u8le-v1"
+  ) {
+    throw new Error(
+      "[NAV] complete artifact requires matched per-triangle H1SEM1 source provenance"
+    );
+  }
+  if (
+    sourceReport.inputs.collisionSemanticPolicy?.matched !== true ||
+    sourceReport.inputs.collisionSemanticPolicy.schema !==
+      "h1emu-h1col2-semantic-policy-v1" ||
+    sourceReport.inputs.collisionSemanticPolicy.canonical !== true
+  ) {
+    throw new Error(
+      "[NAV] complete artifact requires a matched canonical semantic policy"
+    );
+  }
+  if (sourceReport.limitations.length !== 0) {
+    throw new Error(
+      "[NAV] complete artifact source report contains unresolved semantic limitations"
     );
   }
 }
@@ -1119,7 +1350,24 @@ export async function verifyNavigationArtifact(options: {
     const diskSnapshot = parseCollisionSemanticSourceReport(
       JSON.parse(readFileSync(reportPath, "utf8"))
     );
-    if (canonicalJson(diskSnapshot) !== canonicalJson(manifestSnapshot)) {
+    const comparableDiskSnapshot = structuredClone(diskSnapshot);
+    if (manifest.provenance.status === "runtime-only") {
+      if (!Object.hasOwn(manifestSnapshot, "semanticMode")) {
+        delete comparableDiskSnapshot.semanticMode;
+      }
+      for (const field of [
+        "collisionInstanceIds",
+        "collisionTriangleSemantics",
+        "collisionSemanticPolicy"
+      ] as const) {
+        if (!Object.hasOwn(manifestSnapshot.inputs, field)) {
+          delete comparableDiskSnapshot.inputs[field];
+        }
+      }
+    }
+    if (
+      canonicalJson(comparableDiskSnapshot) !== canonicalJson(manifestSnapshot)
+    ) {
       throw new Error(
         "[NAV] collision semantic source report does not match manifested provenance"
       );
@@ -1140,6 +1388,33 @@ export async function verifyNavigationArtifact(options: {
     ) {
       throw new Error(
         "[NAV] source report heightmap hash does not match runtime heightmap"
+      );
+    }
+  }
+
+  if (manifest.runtime.semantics) {
+    const report = manifest.runtime.semantics;
+    const { file: _file, ...manifestSnapshot } = report;
+    const reportPath = resolveArtifactFile(bundleRoot, report.file);
+    const diskSnapshot = parseNavigationSemanticBakeReport(
+      JSON.parse(readFileSync(reportPath, "utf8"))
+    );
+    const comparableDiskSnapshot = { ...diskSnapshot };
+    if (manifest.provenance.status === "runtime-only") {
+      for (const field of [
+        "dynamicDoorObstaclesAcknowledged",
+        "bakedSemanticsVerified"
+      ] as const) {
+        if (!Object.hasOwn(manifestSnapshot, field)) {
+          delete comparableDiskSnapshot[field];
+        }
+      }
+    }
+    if (
+      canonicalJson(comparableDiskSnapshot) !== canonicalJson(manifestSnapshot)
+    ) {
+      throw new Error(
+        "[NAV] semantic bake report does not match manifested provenance"
       );
     }
   }

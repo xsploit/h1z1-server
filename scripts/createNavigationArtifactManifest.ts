@@ -18,6 +18,7 @@ import {
   NavigationArtifactManifest,
   parseCollisionSemanticSourceReport,
   parseNavigationCacheMergeReport,
+  parseNavigationSemanticBakeReport,
   parseTsetHeader,
   sha256File,
   verifyNavigationArtifact
@@ -112,46 +113,6 @@ function parseTransitions(path: string): number {
   const value = JSON.parse(readFileSync(path, "utf8"));
   if (!Array.isArray(value)) throw new Error(`${path} must contain an array`);
   return value.length;
-}
-
-function parseSemanticReport(path: string) {
-  const value = JSON.parse(readFileSync(path, "utf8")) as Record<
-    string,
-    unknown
-  >;
-  const integerFields = [
-    "schemaVersion",
-    "sourceTriangles",
-    "keptTriangles",
-    "excludedTriangles",
-    "fallbackTriangles",
-    "ordinaryMaterialTriangles"
-  ] as const;
-  if (
-    value.semanticContract !== "h1emu-nav-semantics-v1" ||
-    typeof value.semanticInput !== "boolean" ||
-    typeof value.legacyObjectFallback !== "boolean" ||
-    !integerFields.every((field) => Number.isSafeInteger(value[field])) ||
-    !value.materials ||
-    typeof value.materials !== "object" ||
-    Array.isArray(value.materials) ||
-    !Array.isArray(value.warnings)
-  ) {
-    throw new Error(`${path} is not valid semantic provenance`);
-  }
-  return {
-    schemaVersion: value.schemaVersion as number,
-    semanticContract: "h1emu-nav-semantics-v1" as const,
-    semanticInput: value.semanticInput as boolean,
-    legacyObjectFallback: value.legacyObjectFallback as boolean,
-    sourceTriangles: value.sourceTriangles as number,
-    keptTriangles: value.keptTriangles as number,
-    excludedTriangles: value.excludedTriangles as number,
-    fallbackTriangles: value.fallbackTriangles as number,
-    ordinaryMaterialTriangles: value.ordinaryMaterialTriangles as number,
-    materials: value.materials as Record<string, number>,
-    warnings: value.warnings as string[]
-  };
 }
 
 function cachePartIndex(name: string): number {
@@ -351,7 +312,9 @@ async function main() {
   const semantics = semanticsPath
     ? {
         file: await fileRecord(bundleRoot, semanticsPath),
-        ...parseSemanticReport(semanticsPath)
+        ...parseNavigationSemanticBakeReport(
+          JSON.parse(readFileSync(semanticsPath, "utf8"))
+        )
       }
     : null;
   const sourceWorld = await sourceRecord(option("--source-world"));
@@ -404,6 +367,7 @@ async function main() {
     if (
       !semantics!.semanticInput ||
       semantics!.legacyObjectFallback ||
+      semantics!.bakedSemanticsVerified !== true ||
       semantics!.fallbackTriangles !== 0 ||
       semantics!.ordinaryMaterialTriangles !== 0 ||
       semantics!.warnings.length !== 0
@@ -421,6 +385,14 @@ async function main() {
       );
     }
     if (
+      typeof navigationMetadata!.bakedDoorGeometryExcluded !== "boolean" ||
+      typeof semantics!.dynamicDoorObstaclesAcknowledged !== "boolean"
+    ) {
+      throw new Error(
+        "complete provenance requires dynamic door semantic provenance"
+      );
+    }
+    if (
       !sourceReport!.collisionMetadataMatched ||
       sourceReport!.inputs.collision.sha256 !== collision!.file.sha256 ||
       sourceReport!.inputs.heightmap.sha256 !== heightmap!.file.sha256 ||
@@ -429,6 +401,56 @@ async function main() {
     ) {
       throw new Error(
         "complete provenance requires a matched collision sidecar and source-report output/input hashes to match the source world and runtime"
+      );
+    }
+    if (
+      sourceReport!.sourceStrategy.includes(
+        "actor_default_pending_per_triangle_table"
+      ) ||
+      sourceReport!.limitations.some((limitation) =>
+        limitation.includes("actor_default_pending_per_triangle_table")
+      )
+    ) {
+      throw new Error(
+        "complete provenance cannot use actor-default pending per-triangle semantics"
+      );
+    }
+    if (sourceReport!.semanticMode === "legacy-actor-diagnostic") {
+      throw new Error(
+        "complete provenance cannot use diagnostic actor-default semantics"
+      );
+    }
+    if (
+      sourceReport!.semanticMode !== "per-triangle-h1sem1" ||
+      sourceReport!.inputs.collisionTriangleSemantics?.matched !== true ||
+      sourceReport!.inputs.collisionTriangleSemantics.format !==
+        "H1SEM1-u8le-v1"
+    ) {
+      throw new Error(
+        "complete provenance requires matched per-triangle H1SEM1 source provenance"
+      );
+    }
+    if (
+      sourceReport!.inputs.collisionSemanticPolicy?.matched !== true ||
+      sourceReport!.inputs.collisionSemanticPolicy.schema !==
+        "h1emu-h1col2-semantic-policy-v1" ||
+      sourceReport!.inputs.collisionSemanticPolicy.canonical !== true
+    ) {
+      throw new Error(
+        "complete provenance requires a matched canonical semantic policy"
+      );
+    }
+    if (sourceReport!.limitations.length !== 0) {
+      throw new Error(
+        "complete provenance cannot contain unresolved semantic limitations"
+      );
+    }
+    if (
+      navigationMetadata!.bakedDoorGeometryExcluded === true &&
+      semantics!.dynamicDoorObstaclesAcknowledged !== true
+    ) {
+      throw new Error(
+        "complete provenance excludes door geometry without acknowledged dynamic door obstacles"
       );
     }
   }
