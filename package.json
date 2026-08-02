@@ -88,6 +88,7 @@
     "navmesh-regions-check": "tsx scripts/validateNavigationRegions.ts",
     "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
     "navmesh-islands-audit": "tsx scripts/auditNavigationIslands.ts",
+    "navmesh-islands-compare": "tsx scripts/compareNavigationIslandAudits.ts",
     "test-nav-deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testNavigationDeployment.ps1",
     "test-forgelight-nav-source": "node --test tools/forgelight/export_semantic_nav_obj.test.js",
     "navmesh-regional-source-compose": "node tools/forgelight/compose_regional_nav_source.js",
