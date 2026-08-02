@@ -42,6 +42,16 @@ async function main() {
           : null,
         navigationMetadata:
           verified.manifest.runtime.navigationMetadata?.instanceCount ?? null,
+        semantics: verified.manifest.runtime.semantics
+          ? {
+              contract: verified.manifest.runtime.semantics.semanticContract,
+              sourceTriangles:
+                verified.manifest.runtime.semantics.sourceTriangles,
+              fallbackTriangles:
+                verified.manifest.runtime.semantics.fallbackTriangles,
+              warnings: verified.manifest.runtime.semantics.warnings.length
+            }
+          : null,
         transitions: verified.manifest.runtime.transitions?.count ?? null
       },
       null,

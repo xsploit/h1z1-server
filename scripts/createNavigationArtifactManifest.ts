@@ -103,6 +103,46 @@ function parseTransitions(path: string): number {
   return value.length;
 }
 
+function parseSemanticReport(path: string) {
+  const value = JSON.parse(readFileSync(path, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  const integerFields = [
+    "schemaVersion",
+    "sourceTriangles",
+    "keptTriangles",
+    "excludedTriangles",
+    "fallbackTriangles",
+    "ordinaryMaterialTriangles"
+  ] as const;
+  if (
+    value.semanticContract !== "h1emu-nav-semantics-v1" ||
+    typeof value.semanticInput !== "boolean" ||
+    typeof value.legacyObjectFallback !== "boolean" ||
+    !integerFields.every((field) => Number.isSafeInteger(value[field])) ||
+    !value.materials ||
+    typeof value.materials !== "object" ||
+    Array.isArray(value.materials) ||
+    !Array.isArray(value.warnings)
+  ) {
+    throw new Error(`${path} is not valid semantic provenance`);
+  }
+  return {
+    schemaVersion: value.schemaVersion as number,
+    semanticContract: "h1emu-nav-semantics-v1" as const,
+    semanticInput: value.semanticInput as boolean,
+    legacyObjectFallback: value.legacyObjectFallback as boolean,
+    sourceTriangles: value.sourceTriangles as number,
+    keptTriangles: value.keptTriangles as number,
+    excludedTriangles: value.excludedTriangles as number,
+    fallbackTriangles: value.fallbackTriangles as number,
+    ordinaryMaterialTriangles: value.ordinaryMaterialTriangles as number,
+    materials: value.materials as Record<string, number>,
+    warnings: value.warnings as string[]
+  };
+}
+
 function cachePartIndex(name: string): number {
   const match = name.match(/^z1_cache_(\d+)\.bin$/);
   if (!match) throw new Error(`invalid cache part name: ${name}`);
@@ -138,6 +178,12 @@ async function main() {
     resolve(
       option("--transitions") ??
         resolve(bundleRoot, "navigationTransitions.json")
+    )
+  );
+  const semanticsPath = optionalPath(
+    resolve(
+      option("--semantic-report") ??
+        resolve(bundleRoot, "navigation-semantics.json")
     )
   );
   const partNames = readdirSync(cacheDirectory)
@@ -189,6 +235,12 @@ async function main() {
         count: parseTransitions(transitionsPath)
       }
     : null;
+  const semantics = semanticsPath
+    ? {
+        file: await fileRecord(bundleRoot, semanticsPath),
+        ...parseSemanticReport(semanticsPath)
+      }
+    : null;
   const sourceWorld = await sourceRecord(option("--source-world"));
   const classifierConfig = await sourceRecord(option("--classifier-config"));
   const status =
@@ -198,6 +250,34 @@ async function main() {
       : "runtime-only");
   if (status !== "complete" && status !== "runtime-only") {
     throw new Error(`invalid provenance status: ${status}`);
+  }
+  if (status === "complete") {
+    const required = {
+      sourceWorld,
+      classifierConfig,
+      extractorCommit: option("--extractor-commit"),
+      recastCommit: option("--recast-commit"),
+      recastNavigationCommit: option("--recast-navigation-commit"),
+      collision,
+      heightmap,
+      navigationMetadata,
+      semantics,
+      transitions
+    };
+    for (const [name, value] of Object.entries(required)) {
+      if (!value) throw new Error(`complete provenance requires ${name}`);
+    }
+    if (
+      !semantics!.semanticInput ||
+      semantics!.legacyObjectFallback ||
+      semantics!.fallbackTriangles !== 0 ||
+      semantics!.ordinaryMaterialTriangles !== 0 ||
+      semantics!.warnings.length !== 0
+    ) {
+      throw new Error(
+        "complete provenance requires strict, warning-free semantic input"
+      );
+    }
   }
 
   const payload: Omit<NavigationArtifactManifest, "artifactId"> = {
@@ -215,6 +295,7 @@ async function main() {
       collision,
       heightmap,
       navigationMetadata,
+      semantics,
       transitions
     }
   };
@@ -236,6 +317,7 @@ async function main() {
           collision?.file,
           heightmap?.file,
           navigationMetadata?.file,
+          semantics?.file,
           transitions?.file
         ]
           .filter(Boolean)

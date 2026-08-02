@@ -89,6 +89,20 @@ export interface NavigationArtifactManifest {
       instanceCount: number;
       kinds: Record<string, number>;
     } | null;
+    semantics: {
+      file: NavigationArtifactFile;
+      schemaVersion: number;
+      semanticContract: "h1emu-nav-semantics-v1";
+      semanticInput: boolean;
+      legacyObjectFallback: boolean;
+      sourceTriangles: number;
+      keptTriangles: number;
+      excludedTriangles: number;
+      fallbackTriangles: number;
+      ordinaryMaterialTriangles: number;
+      materials: Record<string, number>;
+      warnings: string[];
+    } | null;
     transitions: {
       file: NavigationArtifactFile;
       count: number;
@@ -265,11 +279,47 @@ function collectManifestFiles(
     manifest.runtime.collision,
     manifest.runtime.heightmap,
     manifest.runtime.navigationMetadata,
+    manifest.runtime.semantics,
     manifest.runtime.transitions
   ]) {
     if (entry) files.push(entry.file);
   }
   return files;
+}
+
+function validateCompleteProvenance(
+  manifest: NavigationArtifactManifest
+): void {
+  if (manifest.provenance.status !== "complete") return;
+  for (const [name, value] of Object.entries({
+    extractorCommit: manifest.provenance.extractorCommit,
+    recastCommit: manifest.provenance.recastCommit,
+    recastNavigationCommit: manifest.provenance.recastNavigationCommit,
+    sourceWorld: manifest.provenance.sourceWorld,
+    classifierConfig: manifest.provenance.classifierConfig,
+    collision: manifest.runtime.collision,
+    heightmap: manifest.runtime.heightmap,
+    navigationMetadata: manifest.runtime.navigationMetadata,
+    semantics: manifest.runtime.semantics,
+    transitions: manifest.runtime.transitions
+  })) {
+    if (!value) {
+      throw new Error(`[NAV] complete artifact provenance is missing ${name}`);
+    }
+  }
+  const semantics = manifest.runtime.semantics!;
+  if (
+    semantics.semanticContract !== "h1emu-nav-semantics-v1" ||
+    !semantics.semanticInput ||
+    semantics.legacyObjectFallback ||
+    semantics.fallbackTriangles !== 0 ||
+    semantics.ordinaryMaterialTriangles !== 0 ||
+    semantics.warnings.length !== 0
+  ) {
+    throw new Error(
+      "[NAV] complete artifact contains incomplete or legacy semantic provenance"
+    );
+  }
 }
 
 function cachePartIndex(path: string): number {
@@ -293,6 +343,7 @@ export async function verifyNavigationArtifact(options: {
   const manifest = parseNavigationArtifactManifest(
     JSON.parse(readFileSync(manifestPath, "utf8"))
   );
+  validateCompleteProvenance(manifest);
   const bundleRoot = dirname(manifestPath);
   if (options.requireRuntimeDependencies) {
     const required = [

@@ -78,6 +78,7 @@ function fixture() {
       collision: null,
       heightmap: null,
       navigationMetadata: null,
+      semantics: null,
       transitions: null
     }
   };
@@ -96,7 +97,7 @@ test("canonical JSON and artifact IDs ignore object key order", () => {
   assert.equal(calculateNavigationArtifactId(manifest), manifest.artifactId);
 });
 
-test("verifies a complete cache manifest", async () => {
+test("verifies a runtime-only cache manifest", async () => {
   const { cache, manifestPath, manifest } = fixture();
   const verified = await verifyNavigationArtifact({
     manifestPath,
@@ -104,6 +105,17 @@ test("verifies a complete cache manifest", async () => {
   });
   assert.equal(verified.manifest.artifactId, manifest.artifactId);
   assert.equal(verified.filesVerified, 1);
+});
+
+test("rejects a false complete-provenance claim", async () => {
+  const { cache, manifestPath, manifest } = fixture();
+  manifest.provenance.status = "complete";
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /complete artifact provenance is missing extractorCommit/
+  );
 });
 
 test("rejects a cache part whose bytes changed", async () => {

@@ -30,9 +30,9 @@ to the C++ Recast bake, but they must describe the same world revision.
 
 Every streamed runtime must contain
 `data/2016/navigation-artifact-manifest.json`. The manifest binds the ordered
-cache parts, H1COL2 collision mesh, heightmap, navigation metadata, and reviewed
-transitions by size and SHA-256. Its deterministic `artifactId` identifies the
-complete runtime bundle.
+cache parts, H1COL2 collision mesh, heightmap, navigation metadata, semantic
+bake report, and reviewed transitions by size and SHA-256. Its deterministic
+`artifactId` identifies the complete runtime bundle.
 
 Generate and verify a staged bundle with:
 
@@ -40,15 +40,19 @@ Generate and verify a staged bundle with:
 npm run navmesh-artifact-create -- --bundle-root data/2016 `
   --source-world C:\path\to\world.obj `
   --classifier-config C:\path\to\config.yml `
+  --semantic-report C:\path\to\navigation-semantics.json `
   --extractor-commit <sha> `
   --recast-commit <sha> `
   --recast-navigation-commit <sha>
 npm run navmesh-artifact-check -- --bundle-root data/2016
 ```
 
-New builds must use `provenance.status=complete`. A pre-contract rollback can
-be recorded honestly as `runtime-only`; it still receives full runtime hashes
-but does not pretend that its original `world.obj` or tool commits are known.
+New builds must use `provenance.status=complete`. Complete provenance requires
+all three tool commits, source/classifier hashes, navigation metadata, and a
+strict `h1emu-nav-semantics-v1` report with zero fallback triangles, ordinary
+materials, or warnings. A pre-contract rollback can be recorded honestly as
+`runtime-only`; it still receives full runtime hashes but does not pretend that
+its original `world.obj` or tool commits are known.
 When `NAV_STREAMING=1`, a missing, altered, mixed, or incomplete cache bundle
 is a startup error. The server does not silently fall back to another navmesh.
 
