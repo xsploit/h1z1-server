@@ -140,6 +140,11 @@ export interface CollisionSemanticSourceReport {
 
 export interface NavigationSemanticBakeReport {
   schemaVersion: number;
+  /** Artifact-bound source/output evidence, mandatory in schema v2. */
+  inputName?: string;
+  inputBytes?: number;
+  inputSha256?: string;
+  artifacts?: NavigationSemanticBakeArtifact[];
   semanticContract: "h1emu-nav-semantics-v1";
   semanticInput: boolean;
   legacyObjectFallback: boolean;
@@ -154,6 +159,15 @@ export interface NavigationSemanticBakeReport {
   ordinaryMaterialTriangles: number;
   materials: Record<string, number>;
   warnings: string[];
+}
+
+export interface NavigationSemanticBakeArtifact {
+  role: "navmesh" | "tilecache";
+  file: string;
+  bytes: number;
+  sha256: string;
+  /** Legacy FNV identity retained as diagnostic evidence when emitted. */
+  identity?: string;
 }
 
 export interface NavigationTsetHeader {
@@ -186,6 +200,8 @@ export interface NavigationArtifactManifest {
     recastNavigationCommit: string | null;
     sourceWorld: NavigationArtifactSourceFile | null;
     classifierConfig: NavigationArtifactSourceFile | null;
+    /** Direct Recast navmesh outputs retained as verified bake evidence. */
+    bakeNavmeshParts?: NavigationArtifactFile[] | null;
     /** Optional for backward-compatible runtime-only manifests; mandatory for complete provenance. */
     sourceReport?: CollisionSemanticSourceReport | null;
     /** Complete provenance for a full cache assembled from verified full and regional artifacts. */
@@ -647,8 +663,83 @@ export function parseNavigationSemanticBakeReport(
   ) {
     throw new Error("[NAV] semantic bake report is invalid");
   }
+  let artifactEvidence:
+    | Pick<
+        NavigationSemanticBakeReport,
+        "inputName" | "inputBytes" | "inputSha256" | "artifacts"
+      >
+    | undefined;
+  if (value.schemaVersion === 2) {
+    if (
+      typeof value.inputName !== "string" ||
+      value.inputName.length === 0 ||
+      /[\\/]/.test(value.inputName) ||
+      !Number.isSafeInteger(value.inputBytes) ||
+      (value.inputBytes as number) < 0 ||
+      !isSha256(value.inputSha256) ||
+      !Array.isArray(value.artifacts) ||
+      value.artifacts.length === 0
+    ) {
+      throw new Error(
+        "[NAV] schema-v2 semantic bake report has invalid artifact evidence"
+      );
+    }
+    const seenFiles = new Set<string>();
+    const artifacts = value.artifacts.map((entry, index) => {
+      if (
+        !isRecord(entry) ||
+        (entry.role !== "navmesh" && entry.role !== "tilecache") ||
+        typeof entry.file !== "string" ||
+        entry.file.length === 0 ||
+        /[\\/]/.test(entry.file) ||
+        !Number.isSafeInteger(entry.bytes) ||
+        (entry.bytes as number) < 0 ||
+        !isSha256(entry.sha256) ||
+        (entry.identity !== undefined &&
+          (typeof entry.identity !== "string" ||
+            !/^fnv1a64:[a-f0-9]{16}$/.test(entry.identity)))
+      ) {
+        throw new Error(
+          `[NAV] schema-v2 semantic bake report artifact ${index} is invalid`
+        );
+      }
+      const foldedFile = entry.file.toLowerCase();
+      if (seenFiles.has(foldedFile)) {
+        throw new Error(
+          `[NAV] schema-v2 semantic bake report has duplicate artifact ${entry.file}`
+        );
+      }
+      seenFiles.add(foldedFile);
+      return {
+        role: entry.role as NavigationSemanticBakeArtifact["role"],
+        file: entry.file,
+        bytes: entry.bytes as number,
+        sha256: entry.sha256,
+        ...(entry.identity === undefined ? {} : { identity: entry.identity })
+      };
+    });
+    artifactEvidence = {
+      inputName: value.inputName,
+      inputBytes: value.inputBytes as number,
+      inputSha256: value.inputSha256,
+      artifacts
+    };
+  } else if (value.schemaVersion !== 1) {
+    throw new Error(
+      `[NAV] unsupported semantic bake report schema ${String(value.schemaVersion)}`
+    );
+  } else if (
+    ["inputName", "inputBytes", "inputSha256", "artifacts"].some((field) =>
+      Object.hasOwn(value, field)
+    )
+  ) {
+    throw new Error(
+      "[NAV] schema-v1 semantic bake report cannot contain schema-v2 artifact evidence"
+    );
+  }
   return {
     schemaVersion: value.schemaVersion as number,
+    ...artifactEvidence,
     semanticContract: "h1emu-nav-semantics-v1",
     semanticInput: value.semanticInput,
     legacyObjectFallback: value.legacyObjectFallback,
@@ -795,6 +886,20 @@ export function parseNavigationArtifactManifest(
       "classifier config"
     );
   }
+  if (
+    value.provenance.bakeNavmeshParts !== null &&
+    value.provenance.bakeNavmeshParts !== undefined
+  ) {
+    if (
+      !Array.isArray(value.provenance.bakeNavmeshParts) ||
+      value.provenance.bakeNavmeshParts.length === 0
+    ) {
+      throw new Error("[NAV] artifact manifest has invalid bake navmesh parts");
+    }
+    value.provenance.bakeNavmeshParts.forEach((part, index) =>
+      parseArtifactFileRecord(part, `bake navmesh part ${index}`)
+    );
+  }
   const runtime = value.runtime;
   if (!isRecord(runtime.cache) || !Array.isArray(runtime.cache.parts)) {
     throw new Error("[NAV] artifact manifest is missing cache parts");
@@ -845,6 +950,9 @@ function collectManifestFiles(
   manifest: NavigationArtifactManifest
 ): NavigationArtifactFile[] {
   const files = [...manifest.runtime.cache.parts];
+  if (manifest.provenance.bakeNavmeshParts) {
+    files.push(...manifest.provenance.bakeNavmeshParts);
+  }
   if (manifest.provenance.sourceReport) {
     files.push(manifest.provenance.sourceReport.file);
   }
@@ -1066,6 +1174,15 @@ function assertCompleteSemanticBakeProvenance(
       "[NAV] complete artifact provenance is missing navigationMetadata"
     );
   }
+  const { file: _file, ...semanticSnapshot } = semantics;
+  if (
+    canonicalJson(parseNavigationSemanticBakeReport(semanticSnapshot)) !==
+    canonicalJson(semanticSnapshot)
+  ) {
+    throw new Error(
+      "[NAV] complete artifact contains invalid semantic bake provenance"
+    );
+  }
   if (
     semantics.semanticContract !== "h1emu-nav-semantics-v1" ||
     !semantics.semanticInput ||
@@ -1077,6 +1194,82 @@ function assertCompleteSemanticBakeProvenance(
   ) {
     throw new Error(
       "[NAV] complete artifact contains incomplete or legacy semantic provenance"
+    );
+  }
+  if (
+    semantics.schemaVersion !== 2 ||
+    !semantics.inputName ||
+    semantics.inputBytes === undefined ||
+    !semantics.inputSha256 ||
+    !semantics.artifacts
+  ) {
+    throw new Error(
+      "[NAV] complete artifact requires schema-v2 semantic artifact evidence"
+    );
+  }
+  const directArtifacts = semantics.artifacts.filter(
+    (artifact) => artifact.role === "navmesh"
+  );
+  const cacheArtifacts = semantics.artifacts.filter(
+    (artifact) => artifact.role === "tilecache"
+  );
+  if (directArtifacts.length === 0 || cacheArtifacts.length === 0) {
+    throw new Error(
+      "[NAV] complete artifact requires verified navmesh and TileCache outputs"
+    );
+  }
+  if (
+    semantics.inputBytes <= 0 ||
+    semantics.artifacts.some((artifact) => artifact.bytes <= 0)
+  ) {
+    throw new Error(
+      "[NAV] complete artifact semantic evidence contains empty inputs or outputs"
+    );
+  }
+  const sourceWorld = manifest.provenance.sourceWorld;
+  if (
+    !sourceWorld ||
+    semantics.inputName !== sourceWorld.name ||
+    semantics.inputBytes !== sourceWorld.size ||
+    semantics.inputSha256 !== sourceWorld.sha256
+  ) {
+    throw new Error(
+      "[NAV] semantic bake input does not match complete artifact sourceWorld"
+    );
+  }
+  const bakeNavmeshParts = manifest.provenance.bakeNavmeshParts;
+  if (!bakeNavmeshParts?.length) {
+    throw new Error(
+      "[NAV] complete artifact is missing manifested bake navmesh parts"
+    );
+  }
+  assertContiguousNavmeshParts(bakeNavmeshParts, "complete artifact");
+  const reportBinding = (artifacts: NavigationSemanticBakeArtifact[]) =>
+    artifacts
+      .map(({ file, bytes, sha256 }) => ({ file, bytes, sha256 }))
+      .sort((left, right) => left.file.localeCompare(right.file));
+  const manifestBinding = (parts: NavigationArtifactFile[]) =>
+    parts
+      .map((part) => ({
+        file: part.path.split(/[\\/]/).at(-1)!,
+        bytes: part.size,
+        sha256: part.sha256
+      }))
+      .sort((left, right) => left.file.localeCompare(right.file));
+  if (
+    canonicalJson(reportBinding(cacheArtifacts)) !==
+    canonicalJson(manifestBinding(manifest.runtime.cache.parts))
+  ) {
+    throw new Error(
+      "[NAV] semantic bake TileCache artifacts do not match runtime cache parts"
+    );
+  }
+  if (
+    canonicalJson(reportBinding(directArtifacts)) !==
+    canonicalJson(manifestBinding(bakeNavmeshParts))
+  ) {
+    throw new Error(
+      "[NAV] semantic bake navmesh artifacts do not match manifested bake outputs"
     );
   }
   if (metadata.schemaVersion !== 2 || metadata.semanticMode !== "strict") {
@@ -1113,7 +1306,8 @@ export function assertCompleteNavigationArtifactProvenance(
       recastNavigationCommit: manifest.provenance.recastNavigationCommit,
       sourceWorld: manifest.provenance.sourceWorld,
       classifierConfig: manifest.provenance.classifierConfig,
-      sourceReport: manifest.provenance.sourceReport
+      sourceReport: manifest.provenance.sourceReport,
+      bakeNavmeshParts: manifest.provenance.bakeNavmeshParts
     })) {
       if (value !== null && value !== undefined) {
         throw new Error(
@@ -1125,14 +1319,17 @@ export function assertCompleteNavigationArtifactProvenance(
       collision: manifest.runtime.collision,
       heightmap: manifest.runtime.heightmap,
       navigationMetadata: manifest.runtime.navigationMetadata,
-      semantics: manifest.runtime.semantics,
       transitions: manifest.runtime.transitions
     })) {
       if (!value) {
         throw new Error(`[NAV] composed complete artifact is missing ${name}`);
       }
     }
-    assertCompleteSemanticBakeProvenance(manifest);
+    if (manifest.runtime.semantics) {
+      throw new Error(
+        "[NAV] composed complete artifact cannot claim a direct semantic bake report"
+      );
+    }
     assertContiguousCacheParts(
       manifest.runtime.cache.parts,
       "composed artifact"
@@ -1146,6 +1343,7 @@ export function assertCompleteNavigationArtifactProvenance(
     recastNavigationCommit: manifest.provenance.recastNavigationCommit,
     sourceWorld: manifest.provenance.sourceWorld,
     classifierConfig: manifest.provenance.classifierConfig,
+    bakeNavmeshParts: manifest.provenance.bakeNavmeshParts,
     sourceReport: manifest.provenance.sourceReport,
     collision: manifest.runtime.collision,
     heightmap: manifest.runtime.heightmap,
@@ -1229,6 +1427,29 @@ function cachePartIndex(path: string): number {
   const match = name.match(/^z1_cache_(\d+)\.bin$/);
   if (!match) throw new Error(`[NAV] invalid artifact cache part ${path}`);
   return Number(match[1]);
+}
+
+function navmeshPartIndex(path: string): number {
+  const name = path.replaceAll("\\", "/").split("/").pop() ?? "";
+  const match = name.match(/^z1_(\d+)\.bin$/);
+  if (!match) throw new Error(`[NAV] invalid bake navmesh part ${path}`);
+  return Number(match[1]);
+}
+
+function assertContiguousNavmeshParts(
+  parts: NavigationArtifactFile[],
+  label: string
+): void {
+  const orderedParts = [...parts].sort(
+    (left, right) => navmeshPartIndex(left.path) - navmeshPartIndex(right.path)
+  );
+  orderedParts.forEach((part, index) => {
+    if (navmeshPartIndex(part.path) !== index) {
+      throw new Error(
+        `[NAV] ${label} bake navmesh parts are not contiguous at index ${index}`
+      );
+    }
+  });
 }
 
 export async function verifyNavigationArtifact(options: {
@@ -1318,6 +1539,39 @@ export async function verifyNavigationArtifact(options: {
     throw new Error(
       `[NAV] artifact cache part count mismatch: manifest=${expectedCachePaths.size} disk=${discoveredCachePaths.length}`
     );
+  }
+
+  if (manifest.provenance.bakeNavmeshParts?.length) {
+    const expectedNavmeshPaths = new Set(
+      manifest.provenance.bakeNavmeshParts.map((part) =>
+        resolveArtifactFile(bundleRoot, part)
+      )
+    );
+    const navmeshDirectories = new Set(
+      [...expectedNavmeshPaths].map((path) => dirname(path))
+    );
+    if (navmeshDirectories.size !== 1) {
+      throw new Error(
+        "[NAV] manifested bake navmesh parts must share one directory"
+      );
+    }
+    const navmeshDirectory = [...navmeshDirectories][0];
+    const discoveredNavmeshPaths = readdirSync(navmeshDirectory)
+      .filter((name) => /^z1_\d+\.bin$/.test(name))
+      .map((name) => resolve(navmeshDirectory, name));
+    const unexpectedNavmesh = discoveredNavmeshPaths.filter(
+      (path) => !expectedNavmeshPaths.has(path)
+    );
+    if (unexpectedNavmesh.length) {
+      throw new Error(
+        `[NAV] artifact contains unmanifested bake navmesh part(s): ${unexpectedNavmesh.join(", ")}`
+      );
+    }
+    if (discoveredNavmeshPaths.length !== expectedNavmeshPaths.size) {
+      throw new Error(
+        `[NAV] bake navmesh part count mismatch: manifest=${expectedNavmeshPaths.size} disk=${discoveredNavmeshPaths.length}`
+      );
+    }
   }
 
   let filesVerified = 0;
@@ -1434,6 +1688,19 @@ export async function verifyNavigationArtifact(options: {
           `[NAV] ${label} component manifest does not match manifested snapshot`
         );
       }
+      const componentRoot = dirname(componentPath);
+      const componentCacheDirectory = dirname(
+        resolveArtifactFile(
+          componentRoot,
+          component.snapshot.runtime.cache.parts[0]
+        )
+      );
+      const verifiedComponent = await verifyNavigationArtifact({
+        manifestPath: componentPath,
+        cacheDirectory: componentCacheDirectory
+      });
+      filesVerified += verifiedComponent.filesVerified;
+      bytesVerified += verifiedComponent.bytesVerified;
     }
 
     const report = composition.mergeReport;

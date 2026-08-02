@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -90,9 +96,42 @@ function collisionSemanticSourceReport() {
   };
 }
 
-function semanticBakeReport() {
+function fixtureSourceWorld() {
+  const bytes = Buffer.from("fixture semantic world source");
+  return { name: "world.obj", size: bytes.length, sha256: sha256(bytes) };
+}
+
+function semanticBakeReport(
+  cachePart?: NavigationArtifactFile,
+  navmeshPart?: NavigationArtifactFile
+) {
+  const input = cachePart ?? {
+    path: "collision/z1_cache_0.bin",
+    size: tsetBuffer().length,
+    sha256: sha256(tsetBuffer())
+  };
+  const direct = navmeshPart ?? record("z1_0.bin", Buffer.alloc(64, 0x5a));
+  const sourceWorld = fixtureSourceWorld();
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    inputName: sourceWorld.name,
+    inputBytes: sourceWorld.size,
+    inputSha256: sourceWorld.sha256,
+    artifacts: [
+      {
+        role: "navmesh" as const,
+        file: direct.path.split(/[\\/]/).at(-1)!,
+        bytes: direct.size,
+        sha256: direct.sha256,
+        identity: "fnv1a64:0123456789abcdef"
+      },
+      {
+        role: "tilecache" as const,
+        file: input.path.split(/[\\/]/).at(-1)!,
+        bytes: input.size,
+        sha256: input.sha256
+      }
+    ],
     semanticContract: "h1emu-nav-semantics-v1" as const,
     semanticInput: true,
     legacyObjectFallback: false,
@@ -114,7 +153,17 @@ function fixture() {
   mkdirSync(cache);
   const part = tsetBuffer();
   writeFileSync(join(cache, "z1_cache_0.bin"), part);
-  const semanticBytes = Buffer.from(JSON.stringify(semanticBakeReport()));
+  const navmeshBytes = Buffer.alloc(64, 0x5a);
+  writeFileSync(join(root, "z1_0.bin"), navmeshBytes);
+  const navmeshPart = record("z1_0.bin", navmeshBytes);
+  const cachePart = {
+    path: "collision/z1_cache_0.bin",
+    size: part.length,
+    sha256: sha256(part)
+  };
+  const semanticBytes = Buffer.from(
+    JSON.stringify(semanticBakeReport(cachePart, navmeshPart))
+  );
   writeFileSync(join(root, "navigation-semantics.json"), semanticBytes);
   const semanticFile = record("navigation-semantics.json", semanticBytes);
   const payload: Omit<NavigationArtifactManifest, "artifactId"> = {
@@ -124,19 +173,14 @@ function fixture() {
       extractorCommit: null,
       recastCommit: null,
       recastNavigationCommit: null,
-      sourceWorld: null,
-      classifierConfig: null
+      sourceWorld: fixtureSourceWorld(),
+      classifierConfig: null,
+      bakeNavmeshParts: [navmeshPart]
     },
     runtime: {
       cache: {
         format: "TSET",
-        parts: [
-          {
-            path: "collision/z1_cache_0.bin",
-            size: part.length,
-            sha256: sha256(part)
-          }
-        ],
+        parts: [cachePart],
         header: parseTsetHeader(part)
       },
       collision: null,
@@ -152,7 +196,14 @@ function fixture() {
   };
   const manifestPath = join(root, "navigation-artifact-manifest.json");
   writeFileSync(manifestPath, JSON.stringify(manifest));
-  return { root, cache, manifestPath, manifest, semanticFile };
+  return {
+    root,
+    cache,
+    manifestPath,
+    manifest,
+    semanticFile,
+    navmeshPart
+  };
 }
 
 function claimCompleteProvenance(
@@ -160,17 +211,20 @@ function claimCompleteProvenance(
   semanticFile: NavigationArtifactFile
 ): void {
   const file = manifest.runtime.cache.parts[0];
+  const sourceWorld = manifest.provenance.sourceWorld ?? fixtureSourceWorld();
+  const bakeNavmeshParts = manifest.provenance.bakeNavmeshParts ?? null;
   manifest.provenance = {
     status: "complete",
     extractorCommit: "extractor",
     recastCommit: "recast",
     recastNavigationCommit: "recast-navigation",
-    sourceWorld: { name: "world.obj", size: file.size, sha256: file.sha256 },
+    sourceWorld,
     classifierConfig: {
       name: "navigation.yml",
       size: file.size,
       sha256: file.sha256
-    }
+    },
+    bakeNavmeshParts
   };
   manifest.runtime.collision = {
     file,
@@ -195,7 +249,7 @@ function claimCompleteProvenance(
   };
   manifest.runtime.semantics = {
     file: semanticFile,
-    ...semanticBakeReport()
+    ...semanticBakeReport(file, bakeNavmeshParts?.[0])
   };
   manifest.runtime.transitions = { file, count: 0 };
 }
@@ -224,7 +278,10 @@ function bindCompleteSourceReport(manifest: NavigationArtifactManifest): void {
     file,
     ...parseCollisionSemanticSourceReport({
       ...base,
-      output: { ...base.output, sha256: file.sha256 },
+      output: {
+        ...base.output,
+        sha256: manifest.provenance.sourceWorld!.sha256
+      },
       inputs: {
         ...base.inputs,
         heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
@@ -237,23 +294,32 @@ function bindCompleteSourceReport(manifest: NavigationArtifactManifest): void {
 function makeCompleteSnapshot(
   source: NavigationArtifactManifest,
   coverage: "full" | "regional",
-  semanticFile: NavigationArtifactFile
+  semanticFile: NavigationArtifactFile,
+  root: string,
+  label: "base" | "regional"
 ): NavigationArtifactManifest {
   const manifest = structuredClone(source);
   claimCompleteProvenance(manifest, semanticFile);
   const file = manifest.runtime.cache.parts[0];
   const base = collisionSemanticSourceReport();
+  const report = {
+    ...base,
+    output: {
+      ...base.output,
+      sha256: manifest.provenance.sourceWorld!.sha256
+    },
+    inputs: {
+      ...base.inputs,
+      heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
+      collision: { ...base.inputs.collision, sha256: file.sha256 }
+    }
+  };
+  const reportBytes = Buffer.from(JSON.stringify(report));
+  const reportName = `${label}-navigation-source-report.json`;
+  writeFileSync(join(root, reportName), reportBytes);
   manifest.provenance.sourceReport = {
-    file,
-    ...parseCollisionSemanticSourceReport({
-      ...base,
-      output: { ...base.output, sha256: file.sha256 },
-      inputs: {
-        ...base.inputs,
-        heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
-        collision: { ...base.inputs.collision, sha256: file.sha256 }
-      }
-    })
+    file: record(reportName, reportBytes),
+    ...parseCollisionSemanticSourceReport(report)
   };
   manifest.runtime.cache.coverage =
     coverage === "full"
@@ -275,12 +341,16 @@ function compositeFixture() {
   const base = makeCompleteSnapshot(
     result.manifest,
     "full",
-    result.semanticFile
+    result.semanticFile,
+    result.root,
+    "base"
   );
   const regional = makeCompleteSnapshot(
     result.manifest,
     "regional",
-    result.semanticFile
+    result.semanticFile,
+    result.root,
+    "regional"
   );
   const baseBytes = Buffer.from(JSON.stringify(base));
   const regionalBytes = Buffer.from(JSON.stringify(regional));
@@ -289,6 +359,7 @@ function compositeFixture() {
 
   result.manifest.runtime = structuredClone(base.runtime);
   result.manifest.runtime.cache.coverage = { kind: "full" };
+  result.manifest.runtime.semantics = null;
   const mergeReport = {
     schema: "h1emu-navigation-cache-merge-v1" as const,
     schemaVersion: 1 as const,
@@ -311,7 +382,7 @@ function compositeFixture() {
       navigationMetadata: structuredClone(
         result.manifest.runtime.navigationMetadata!.file
       ),
-      semantics: structuredClone(result.manifest.runtime.semantics!.file),
+      semantics: null,
       transitions: structuredClone(result.manifest.runtime.transitions!.file)
     }
   };
@@ -324,6 +395,7 @@ function compositeFixture() {
     recastNavigationCommit: null,
     sourceWorld: null,
     classifierConfig: null,
+    bakeNavmeshParts: null,
     sourceReport: null,
     composition: {
       schema: "h1emu-navigation-cache-composition-v1",
@@ -383,6 +455,19 @@ test("verifies a runtime-only cache manifest", async () => {
     cacheDirectory: cache
   });
   assert.equal(verified.manifest.artifactId, manifest.artifactId);
+  assert.equal(verified.filesVerified, 2);
+});
+
+test("verifies a legacy runtime-only cache without direct bake outputs", async () => {
+  const { cache, manifestPath, manifest } = fixture();
+  manifest.provenance.bakeNavmeshParts = null;
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  const verified = await verifyNavigationArtifact({
+    manifestPath,
+    cacheDirectory: cache
+  });
   assert.equal(verified.filesVerified, 1);
 });
 
@@ -401,13 +486,24 @@ test("verifies a complete full plus regional cache composition", async () => {
   );
 });
 
-test("composed complete artifacts cannot downgrade output semantic evidence", async () => {
+test("composed complete artifacts cannot claim copied direct bake evidence", async () => {
   const { cache, manifestPath, manifest } = compositeFixture();
-  manifest.runtime.semantics!.bakedSemanticsVerified = false;
+  manifest.runtime.semantics = structuredClone(
+    manifest.provenance.composition!.base.snapshot.runtime.semantics
+  );
   persistCompositeManifest(manifestPath, manifest);
   await assert.rejects(
     verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
-    /incomplete or legacy semantic provenance/
+    /cannot claim a direct semantic bake report/
+  );
+});
+
+test("composed verification audits component bake evidence", async () => {
+  const { root, cache, manifestPath } = compositeFixture();
+  rmSync(join(root, "z1_0.bin"));
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /bake navmesh part count mismatch/
   );
 });
 
@@ -543,7 +639,7 @@ test("binds and verifies a collision-first semantic source report", async () => 
     manifestPath,
     cacheDirectory: cache
   });
-  assert.equal(verified.filesVerified, 2);
+  assert.equal(verified.filesVerified, 3);
   assert.equal(
     verified.manifest.provenance.sourceReport?.collisionMetadataMatched,
     true
@@ -712,7 +808,14 @@ test("runtime-only semantic reports preserve optional verification evidence", as
     verifyNavigationArtifact({ manifestPath, cacheDirectory: cache })
   );
 
-  const legacy = semanticBakeReport();
+  const legacy = {
+    ...semanticBakeReport(),
+    schemaVersion: 1
+  };
+  delete (legacy as { inputName?: string }).inputName;
+  delete (legacy as { inputBytes?: number }).inputBytes;
+  delete (legacy as { inputSha256?: string }).inputSha256;
+  delete (legacy as { artifacts?: unknown[] }).artifacts;
   delete (legacy as { dynamicDoorObstaclesAcknowledged?: boolean })
     .dynamicDoorObstaclesAcknowledged;
   delete (legacy as { bakedSemanticsVerified?: boolean })
@@ -746,6 +849,130 @@ test("complete provenance requires verified baked semantics", () => {
   assert.throws(
     () => assertCompleteNavigationArtifactProvenance(manifest),
     /incomplete or legacy semantic provenance/
+  );
+});
+
+test("complete provenance binds semantic input to sourceWorld", () => {
+  for (const [field, value] of [
+    ["inputName", "different.obj"],
+    ["inputBytes", 99],
+    ["inputSha256", "f".repeat(64)]
+  ] as const) {
+    const { manifest, semanticFile } = fixture();
+    claimCompleteProvenance(manifest, semanticFile);
+    bindCompleteSourceReport(manifest);
+    Object.assign(manifest.runtime.semantics!, { [field]: value });
+
+    assert.throws(
+      () => assertCompleteNavigationArtifactProvenance(manifest),
+      /semantic bake input does not match complete artifact sourceWorld/
+    );
+  }
+});
+
+test("complete provenance binds semantic TileCache outputs to runtime parts", () => {
+  const { manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  bindCompleteSourceReport(manifest);
+  const cacheArtifact = manifest.runtime.semantics!.artifacts!.find(
+    (artifact) => artifact.role === "tilecache"
+  )!;
+  cacheArtifact.sha256 = "f".repeat(64);
+
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /semantic bake TileCache artifacts do not match runtime cache parts/
+  );
+});
+
+test("complete provenance binds semantic navmesh outputs to manifested files", () => {
+  const { manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  bindCompleteSourceReport(manifest);
+  manifest.provenance.bakeNavmeshParts![0].sha256 = "f".repeat(64);
+
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /semantic bake navmesh artifacts do not match manifested bake outputs/
+  );
+});
+
+test("verification rejects a missing manifested navmesh output", async () => {
+  const { root, cache, manifestPath, manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  const file = manifest.runtime.cache.parts[0];
+  const base = collisionSemanticSourceReport();
+  bindSourceReport(root, manifest, {
+    ...base,
+    output: {
+      ...base.output,
+      sha256: manifest.provenance.sourceWorld!.sha256
+    },
+    inputs: {
+      ...base.inputs,
+      heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
+      collision: { ...base.inputs.collision, sha256: file.sha256 }
+    }
+  });
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  await assert.doesNotReject(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache })
+  );
+  writeFileSync(join(root, "z1_1.bin"), Buffer.alloc(64, 0x5b));
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /unmanifested bake navmesh part/
+  );
+  rmSync(join(root, "z1_1.bin"));
+  rmSync(join(root, "z1_0.bin"));
+
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /bake navmesh part count mismatch/
+  );
+});
+
+test("complete provenance requires both verified output families", () => {
+  const { manifest, semanticFile } = fixture();
+  claimCompleteProvenance(manifest, semanticFile);
+  bindCompleteSourceReport(manifest);
+  manifest.runtime.semantics!.artifacts =
+    manifest.runtime.semantics!.artifacts!.filter(
+      (artifact) => artifact.role !== "navmesh"
+    );
+
+  assert.throws(
+    () => assertCompleteNavigationArtifactProvenance(manifest),
+    /requires verified navmesh and TileCache outputs/
+  );
+});
+
+test("schema-v2 semantic evidence rejects paths and casefold aliases", () => {
+  const report = semanticBakeReport();
+  report.artifacts[0].file = "nested/z1_0.bin";
+  assert.throws(
+    () => parseNavigationSemanticBakeReport(report),
+    /artifact 0 is invalid/
+  );
+
+  const aliased = semanticBakeReport();
+  aliased.artifacts.push({
+    ...aliased.artifacts[0],
+    file: aliased.artifacts[0].file.toUpperCase()
+  });
+  assert.throws(
+    () => parseNavigationSemanticBakeReport(aliased),
+    /duplicate artifact/
+  );
+});
+
+test("schema-v1 semantic reports reject schema-v2 fields", () => {
+  const report = { ...semanticBakeReport(), schemaVersion: 1 };
+  assert.throws(
+    () => parseNavigationSemanticBakeReport(report),
+    /schema-v1 semantic bake report cannot contain schema-v2 artifact evidence/
   );
 });
 

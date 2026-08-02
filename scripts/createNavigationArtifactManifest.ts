@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -7,7 +8,7 @@ import {
   statSync,
   writeFileSync
 } from "node:fs";
-import { basename, relative, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import {
   assertCompleteNavigationArtifactProvenance,
   calculateNavigationArtifactId,
@@ -20,6 +21,7 @@ import {
   parseNavigationCacheMergeReport,
   parseNavigationSemanticBakeReport,
   parseTsetHeader,
+  resolveArtifactFile,
   sha256File,
   verifyNavigationArtifact
 } from "../src/utils/navigationartifacts";
@@ -121,6 +123,12 @@ function cachePartIndex(name: string): number {
   return Number(match[1]);
 }
 
+function navmeshPartIndex(name: string): number {
+  const match = name.match(/^z1_(\d+)\.bin$/);
+  if (!match) throw new Error(`invalid navmesh part name: ${name}`);
+  return Number(match[1]);
+}
+
 function parseCacheCoverage(): NavigationCacheCoverage | undefined {
   const kind = option("--cache-coverage");
   const rawBounds = option("--cache-bounds");
@@ -188,20 +196,57 @@ async function createComposition(
   );
   const provenanceDirectory = resolve(bundleRoot, "provenance");
   mkdirSync(provenanceDirectory, { recursive: true });
-  const stagedBaseManifest = resolve(
-    provenanceDirectory,
-    "base-navigation-artifact-manifest.json"
+  const stageComponent = (
+    label: "base" | "regional",
+    manifestPath: string,
+    manifest: NavigationArtifactManifest
+  ) => {
+    const sourceRoot = dirname(manifestPath);
+    const stagedRoot = resolve(provenanceDirectory, label);
+    const records: NavigationArtifactFile[] = [
+      ...manifest.runtime.cache.parts,
+      ...(manifest.provenance.bakeNavmeshParts ?? [])
+    ];
+    if (manifest.provenance.sourceReport) {
+      records.push(manifest.provenance.sourceReport.file);
+    }
+    for (const entry of [
+      manifest.runtime.collision,
+      manifest.runtime.heightmap,
+      manifest.runtime.navigationMetadata,
+      manifest.runtime.semantics,
+      manifest.runtime.transitions
+    ]) {
+      if (entry) records.push(entry.file);
+    }
+    const copied = new Set<string>();
+    for (const record of records) {
+      if (copied.has(record.path)) continue;
+      copied.add(record.path);
+      const source = resolveArtifactFile(sourceRoot, record);
+      const destination = resolve(stagedRoot, record.path);
+      mkdirSync(dirname(destination), { recursive: true });
+      copyFileSync(source, destination);
+    }
+    mkdirSync(stagedRoot, { recursive: true });
+    const stagedManifest = resolve(stagedRoot, basename(manifestPath));
+    copyFileSync(manifestPath, stagedManifest);
+    return stagedManifest;
+  };
+  const stagedBaseManifest = stageComponent(
+    "base",
+    baseManifestPath,
+    base.manifest
   );
-  const stagedRegionalManifest = resolve(
-    provenanceDirectory,
-    "regional-navigation-artifact-manifest.json"
+  const stagedRegionalManifest = stageComponent(
+    "regional",
+    regionalManifestPath,
+    regional.manifest
   );
   const stagedMergeReport = resolve(
     provenanceDirectory,
     "cache-merge-report.json"
   );
-  writeFileSync(stagedBaseManifest, readFileSync(baseManifestPath));
-  writeFileSync(stagedRegionalManifest, readFileSync(regionalManifestPath));
   writeFileSync(stagedMergeReport, readFileSync(mergeReportPath));
   return {
     schema: "h1emu-navigation-cache-composition-v1",
@@ -225,6 +270,7 @@ async function main() {
   const cacheDirectory = resolve(
     option("--cache-dir") ?? resolve(bundleRoot, "collision")
   );
+  const navmeshDirectory = resolve(option("--navmesh-dir") ?? cacheDirectory);
   const output = resolve(
     option("--output") ??
       resolve(bundleRoot, "navigation-artifact-manifest.json")
@@ -282,6 +328,22 @@ async function main() {
   const cacheHeader = parseTsetHeader(
     readFileSync(resolve(cacheDirectory, partNames[0])).subarray(0, 92)
   );
+  const navmeshPartNames = readdirSync(navmeshDirectory)
+    .filter((name) => /^z1_\d+\.bin$/.test(name))
+    .sort((left, right) => navmeshPartIndex(left) - navmeshPartIndex(right));
+  navmeshPartNames.forEach((name, index) => {
+    if (name !== `z1_${index}.bin`) {
+      throw new Error(
+        `navmesh parts are not contiguous at index ${index}: ${name}`
+      );
+    }
+  });
+  const discoveredNavmeshParts: NavigationArtifactFile[] = [];
+  for (const name of navmeshPartNames) {
+    discoveredNavmeshParts.push(
+      await fileRecord(bundleRoot, resolve(navmeshDirectory, name))
+    );
+  }
 
   const collision = collisionPath
     ? {
@@ -328,6 +390,10 @@ async function main() {
       }
     : null;
   const composition = await createComposition(bundleRoot);
+  const bakeNavmeshParts =
+    composition || discoveredNavmeshParts.length === 0
+      ? null
+      : discoveredNavmeshParts;
   const requestedCacheCoverage = parseCacheCoverage();
   if (composition && requestedCacheCoverage?.kind === "regional") {
     throw new Error("cache composition output must have full coverage");
@@ -351,6 +417,7 @@ async function main() {
     const required = {
       sourceWorld,
       classifierConfig,
+      bakeNavmeshParts,
       sourceReport,
       extractorCommit: option("--extractor-commit"),
       recastCommit: option("--recast-commit"),
@@ -358,7 +425,7 @@ async function main() {
       collision,
       heightmap,
       navigationMetadata,
-      semantics,
+      semantics: composition ? null : semantics,
       transitions
     };
     for (const [name, value] of Object.entries(required)) {
@@ -464,6 +531,7 @@ async function main() {
       recastNavigationCommit: option("--recast-navigation-commit") ?? null,
       sourceWorld,
       classifierConfig,
+      bakeNavmeshParts,
       sourceReport,
       composition
     },
@@ -477,7 +545,7 @@ async function main() {
       collision,
       heightmap,
       navigationMetadata,
-      semantics,
+      semantics: composition ? null : semantics,
       transitions
     }
   };
@@ -498,10 +566,11 @@ async function main() {
         cacheLayers: cacheHeader.layers,
         runtimeBytes: [
           ...cacheParts,
+          ...(bakeNavmeshParts ?? []),
           collision?.file,
           heightmap?.file,
           navigationMetadata?.file,
-          semantics?.file,
+          (composition ? null : semantics)?.file,
           transitions?.file,
           sourceReport?.file,
           composition?.base.manifest,
