@@ -87,6 +87,7 @@
     "test-navmesh-cache-identity": "tsx --test src/utils/tilecacheidentity.test.ts",
     "navmesh-regions-check": "tsx scripts/validateNavigationRegions.ts",
     "navmesh-pv-seams-check": "tsx scripts/validateNavigationRegions.ts --config data/2016/navigationValidationRegions.pvOverlaySeams.json",
+    "navmesh-pv-police-check": "node tools/forgelight/validate_pv_police_nav.js",
     "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
     "navmesh-islands-audit": "tsx scripts/auditNavigationIslands.ts",
     "navmesh-islands-compare": "tsx scripts/compareNavigationIslandAudits.ts",
