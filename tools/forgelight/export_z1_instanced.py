@@ -16,7 +16,11 @@ Run from inside a pydmod checkout (see tools/forgelight/README.md). Env vars:
   Z1_ZONE       optional path to a pre-extracted Z1.zone (else pulled from packs)
   COLLISION_OUT output .bin path (default: ./z1_collision.bin) -> copy into
                 <h1z1-server>/data/2016/collision/z1_collision.bin
-  COLLISION_METADATA_OUT optional deterministic mesh/actor semantic sidecar
+  COLLISION_METADATA_OUT deterministic v4 metadata path (defaults beside H1COL2)
+  COLLISION_INSTANCE_IDS_OUT H1CID1 path (must share the H1COL2 directory)
+  COLLISION_SEMANTICS_OUT H1SEM1 path (must share the H1COL2 directory)
+  COLLISION_SEMANTIC_POLICY exact canonical policy path
+  COLLISION_SEMANTIC_MODE diagnostic (default) or strict-production
 """
 
 import os
@@ -26,31 +30,52 @@ import json
 import logging
 import warnings
 import xml.etree.ElementTree as ET
+from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from collision_classification import classify, semantic_material
+from artifact_bundle import publish_artifact_bundle
+from collision_classification import classify
+from collision_semantic_policy import (
+    POLICY_SCHEMA,
+    SEMANTIC_CONTRACT,
+    SEMANTIC_SCHEMA_VERSION,
+    SEMANTIC_TO_MATERIAL,
+    classify_mesh_triangles,
+    decode_semantic_policy,
+    load_semantic_policy,
+)
 from cdta import UnsupportedCDTA, merge_meshes, parse_cdta
+from h1sem import SemanticId, decode_h1sem1, encode_h1sem1
 
 logging.disable(logging.WARNING)  # silence dme_loader layout spam
 warnings.filterwarnings(
     "ignore", category=RuntimeWarning, module=r"dme_loader\.jenkins"
 )
 
-import export_z1_collision as exp  # applies all pack1 patches on import
-
-zc = exp.zone_converter
-from zone_loader import Zone  # noqa: E402
-
 MAGIC = b"H1COL2\x00\x00"
 INSTANCE_IDS_MAGIC = b"H1CID1\x00\x00"
+METADATA_SCHEMA = "h1emu-h1col2-metadata-v4"
+H1CID1_FORMAT = "H1CID1-u32le-v1"
+H1SEM1_FORMAT = "H1SEM1-u8le-v1"
+COORDINATE_SPACE = "h1z1-world-y-up-meters"
 BIN = Path(os.environ.get("COLLISION_OUT", "z1_collision.bin"))
 METADATA_OUT = os.environ.get("COLLISION_METADATA_OUT")
 FAILURES_OUT = os.environ.get("COLLISION_FAILURES_OUT")
 INSTANCE_IDS_OUT = os.environ.get("COLLISION_INSTANCE_IDS_OUT")
+SEMANTICS_OUT = os.environ.get("COLLISION_SEMANTICS_OUT")
+SEMANTIC_POLICY_PATH = Path(
+    os.environ.get(
+        "COLLISION_SEMANTIC_POLICY",
+        Path(__file__).resolve().parent
+        / "policies"
+        / "z1_collision.semantic_policy.json",
+    )
+)
+SEMANTIC_MODE = os.environ.get("COLLISION_SEMANTIC_MODE", "diagnostic")
 
 # This is the only non-CDTA CollisionData reference among the 980 actor types
 # in Z1's previous runtime collision inventory.  It is a destroyed decorative
@@ -66,6 +91,8 @@ REVIEWED_COLLISION_SKIPS = {
 
 def load_zone(mgr):
     """Load Z1.zone from Z1_ZONE if set/exists, else straight from the packs."""
+    from zone_loader import Zone
+
     zpath = os.environ.get("Z1_ZONE")
     if zpath and Path(zpath).exists():
         with open(zpath, "rb") as f:
@@ -153,7 +180,287 @@ def zone_instance_id(instance):
     raise ValueError("zone instance has no decodable stable ID")
 
 
+def _sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def _canonical_json_bytes(value):
+    return (
+        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        + "\n"
+    ).encode("utf-8")
+
+
+def encode_h1cid1(instance_ids):
+    """Encode the deterministic stable-instance-ID sidecar."""
+
+    resolved = []
+    for index, value in enumerate(instance_ids):
+        integer = int(value)
+        if integer != value or integer < 0 or integer > 0xFFFFFFFF:
+            raise ValueError(f"instance ID {index} must fit uint32")
+        resolved.append(integer)
+    if len(set(resolved)) != len(resolved):
+        raise ValueError("collision instances contain duplicate zone IDs")
+    return (
+        INSTANCE_IDS_MAGIC
+        + struct.pack("<II", 1, len(resolved))
+        + b"".join(struct.pack("<I", value) for value in resolved)
+    )
+
+
+def decode_h1cid1(data, *, expected_count=None):
+    """Decode H1CID1 exactly; truncation and trailing bytes fail closed."""
+
+    raw = bytes(data)
+    if len(raw) < 16:
+        raise ValueError("truncated H1CID1 header")
+    magic, version, count = struct.unpack_from("<8sII", raw)
+    if magic != INSTANCE_IDS_MAGIC:
+        raise ValueError("invalid H1CID1 magic")
+    if version != 1:
+        raise ValueError(f"unsupported H1CID1 version {version}")
+    required = 16 + count * 4
+    if len(raw) < required:
+        raise ValueError(
+            f"truncated H1CID1 artifact: expected {required} bytes, got {len(raw)}"
+        )
+    if len(raw) > required:
+        raise ValueError(
+            f"trailing H1CID1 data: expected {required} bytes, got {len(raw)}"
+        )
+    if expected_count is not None and count != expected_count:
+        raise ValueError(
+            f"H1CID1 count mismatch: expected {expected_count}, got {count}"
+        )
+    values = tuple(struct.unpack_from(f"<{count}I", raw, 16)) if count else ()
+    if len(set(values)) != len(values):
+        raise ValueError("H1CID1 contains duplicate zone IDs")
+    return values
+
+
+def encode_h1col2(meshes, mesh_kinds, instance_mesh_indices, instance_data):
+    """Encode the unchanged runtime H1COL2 v2 wire format."""
+
+    if len(meshes) != len(mesh_kinds):
+        raise ValueError("H1COL2 mesh/kind cardinality mismatch")
+    instance_mesh = np.asarray(instance_mesh_indices, dtype="<u4")
+    transforms = np.asarray(instance_data, dtype="<f4")
+    if transforms.shape != (len(instance_mesh), 16):
+        raise ValueError("H1COL2 instance data must contain 16 floats per instance")
+    if len(instance_mesh) and int(instance_mesh.max()) >= len(meshes):
+        raise ValueError("H1COL2 instance references an invalid mesh")
+
+    output = BytesIO()
+    output.write(MAGIC)
+    output.write(struct.pack("<III", 2, len(meshes), len(instance_mesh)))
+    for mesh_index, ((positions, indices), raw_kind) in enumerate(
+        zip(meshes, mesh_kinds)
+    ):
+        kind = int(raw_kind)
+        if kind != raw_kind or kind not in range(4):
+            raise ValueError(f"H1COL2 mesh {mesh_index} has invalid kind {raw_kind}")
+        pos = np.asarray(positions, dtype="<f4")
+        idx = np.asarray(indices, dtype="<u4")
+        if pos.ndim != 2 or pos.shape[1] != 3:
+            raise ValueError(f"H1COL2 mesh {mesh_index} positions must be Nx3")
+        if idx.ndim != 1 or len(idx) % 3:
+            raise ValueError(f"H1COL2 mesh {mesh_index} indices must be triangles")
+        if len(idx) and int(idx.max()) >= len(pos):
+            raise ValueError(f"H1COL2 mesh {mesh_index} has an invalid index")
+        output.write(struct.pack("<BII", kind, len(pos), len(idx)))
+        output.write(pos.tobytes())
+        output.write(idx.tobytes())
+    output.write(instance_mesh.tobytes())
+    output.write(transforms.tobytes())
+    return output.getvalue()
+
+
+def _semantic_histogram(values):
+    counts = Counter(int(value) for value in values)
+    return {
+        SEMANTIC_TO_MATERIAL[SemanticId(semantic_id)]: counts[semantic_id]
+        for semantic_id in sorted(counts)
+    }
+
+
+def build_collision_artifact_bundle(
+    *,
+    collision_name,
+    instance_ids_name,
+    semantics_name,
+    policy_name,
+    meshes,
+    mesh_actors,
+    mesh_sources,
+    mesh_kinds,
+    instance_mesh_indices,
+    instance_data,
+    instance_ids,
+    inventory,
+    policy_bytes,
+    strict_production=False,
+):
+    """Build and validate one same-directory H1COL2 v4 artifact bundle."""
+
+    mesh_count = len(meshes)
+    if not (
+        len(mesh_actors)
+        == len(mesh_sources)
+        == len(mesh_kinds)
+        == mesh_count
+    ):
+        raise ValueError("collision mesh metadata cardinality mismatch")
+    policy = decode_semantic_policy(policy_bytes)
+    collision_bytes = encode_h1col2(
+        meshes, mesh_kinds, instance_mesh_indices, instance_data
+    )
+    collision_digest = hashlib.sha256(collision_bytes).digest()
+    collision_sha256 = collision_digest.hex()
+    triangle_counts = tuple(len(indices) // 3 for _, indices in meshes)
+
+    mesh_semantics = []
+    for actor_file, source, kind, (positions, indices) in zip(
+        mesh_actors, mesh_sources, mesh_kinds, meshes
+    ):
+        mesh_semantics.append(
+            classify_mesh_triangles(
+                policy,
+                actor_file=actor_file,
+                collision_asset_sha256=source["collisionSha256"],
+                kind=int(kind),
+                positions=positions,
+                indices=indices,
+                strict_production=strict_production,
+            )
+        )
+
+    semantics_bytes = encode_h1sem1(
+        collision_digest,
+        mesh_semantics,
+        mesh_triangle_counts=triangle_counts,
+        strict_production=strict_production,
+    )
+    decoded_semantics = decode_h1sem1(
+        semantics_bytes,
+        expected_h1col2_sha256=collision_digest,
+        expected_mesh_triangle_counts=triangle_counts,
+        strict_production=strict_production,
+    )
+    if (
+        encode_h1sem1(
+            decoded_semantics.h1col2_sha256,
+            [
+                decoded_semantics.semantics_for_mesh(index)
+                for index in range(decoded_semantics.mesh_count)
+            ],
+            mesh_triangle_counts=triangle_counts,
+            strict_production=strict_production,
+        )
+        != semantics_bytes
+    ):
+        raise RuntimeError("H1SEM1 roundtrip changed encoded bytes")
+
+    instance_ids_bytes = encode_h1cid1(instance_ids)
+    decoded_instance_ids = decode_h1cid1(
+        instance_ids_bytes, expected_count=len(instance_mesh_indices)
+    )
+    if encode_h1cid1(decoded_instance_ids) != instance_ids_bytes:
+        raise RuntimeError("H1CID1 roundtrip changed encoded bytes")
+
+    flattened_semantics = decoded_semantics.semantic_ids
+    semantic_histogram = _semantic_histogram(flattened_semantics)
+    unknown_count = flattened_semantics.count(SemanticId.UNKNOWN)
+    instance_mesh = np.asarray(instance_mesh_indices, dtype=np.uint32)
+    instance_counts = np.bincount(instance_mesh, minlength=mesh_count)
+    per_mesh_histograms = [
+        _semantic_histogram(decoded_semantics.semantics_for_mesh(index))
+        for index in range(mesh_count)
+    ]
+    policy_sha256 = _sha256(policy.canonical_bytes)
+    if policy.canonical_bytes != bytes(policy_bytes):
+        raise ValueError("semantic policy payload differs from canonical bytes")
+
+    metadata = {
+        "schema": METADATA_SCHEMA,
+        "formatVersion": 2,
+        "coordinateSpace": COORDINATE_SPACE,
+        "geometrySource": "adr_collision_cdta",
+        "renderFallbackCount": 0,
+        "semanticMode": "strict-production" if strict_production else "diagnostic",
+        "limitations": [
+            "Only exact actor, collision hash, kind, and triangle-count policy bindings may classify kind-0 or kind-2 geometry.",
+            "Diagnostic bundles may contain nav_unknown and must not be consumed as production navigation.",
+            "H1COL2 remains runtime format v2; H1SEM1 and H1CID1 are build-time sidecars.",
+        ],
+        "dynamicDoorObstaclesAcknowledged": True,
+        "collisionFile": collision_name,
+        "collisionSha256": collision_sha256,
+        "meshCount": mesh_count,
+        "instanceCount": len(instance_mesh_indices),
+        "totalTriangleCount": sum(triangle_counts),
+        "semanticHistogram": semantic_histogram,
+        "unknownCount": unknown_count,
+        "instanceIds": {
+            "file": instance_ids_name,
+            "sha256": _sha256(instance_ids_bytes),
+            "format": H1CID1_FORMAT,
+            "count": len(decoded_instance_ids),
+        },
+        "triangleSemantics": {
+            "file": semantics_name,
+            "sha256": _sha256(semantics_bytes),
+            "format": H1SEM1_FORMAT,
+            "semanticContract": SEMANTIC_CONTRACT,
+            "semanticSchemaVersion": SEMANTIC_SCHEMA_VERSION,
+            "collisionSha256": collision_sha256,
+            "meshCount": mesh_count,
+            "totalTriangleCount": len(flattened_semantics),
+            "histogram": semantic_histogram,
+            "unknownCount": unknown_count,
+        },
+        "semanticPolicy": {
+            "schema": POLICY_SCHEMA,
+            "file": policy_name,
+            "sha256": policy_sha256,
+        },
+        "noCollisionActorCount": int(inventory["noCollisionActorTypes"]),
+        "reviewedSkips": inventory["reviewedSkips"],
+        "meshes": [
+            {
+                "meshIndex": index,
+                "actorFile": mesh_actors[index],
+                "collisionAsset": mesh_sources[index]["collisionAsset"],
+                "collisionAssetSha256": mesh_sources[index]["collisionSha256"],
+                "cdtaVersion": mesh_sources[index]["cdtaVersion"],
+                "cdtaCollisionType": mesh_sources[index]["cdtaCollisionType"],
+                "shapeCount": mesh_sources[index]["shapeCount"],
+                "triangleCount": triangle_counts[index],
+                "kind": int(mesh_kinds[index]),
+                "semanticSource": "per_triangle_sidecar_v1",
+                "semanticHistogram": per_mesh_histograms[index],
+                "instanceCount": int(instance_counts[index]),
+            }
+            for index in range(mesh_count)
+        ],
+    }
+    if strict_production and unknown_count:
+        raise RuntimeError("strict production metadata cannot contain unknown semantics")
+
+    artifacts = {
+        collision_name: collision_bytes,
+        instance_ids_name: instance_ids_bytes,
+        semantics_name: semantics_bytes,
+        policy_name: policy.canonical_bytes,
+    }
+    metadata_bytes = _canonical_json_bytes(metadata)
+    return artifacts, metadata_bytes
+
+
 def main():
+    import export_z1_collision as exp  # applies all pack1 patches on import
+
+    zc = exp.zone_converter
     mgr = exp._patched_get_manager(None)
     zone = load_zone(mgr)
     print(
@@ -320,93 +627,66 @@ def main():
         f"{instance_kinds[3]} door"
     )
 
-    # 3) write binary (format H1COL2: per-mesh kind byte before its geometry)
-    BIN.parent.mkdir(parents=True, exist_ok=True)
-    with open(BIN, "wb") as f:
-        f.write(MAGIC)
-        f.write(struct.pack("<III", 2, len(meshes), len(inst_mesh)))
-        for (pos, idx), kind in zip(meshes, mesh_kind):
-            f.write(struct.pack("<BII", kind, len(pos), len(idx)))
-            f.write(pos.astype(np.float32).tobytes())
-            f.write(idx.astype(np.uint32).tobytes())
-        f.write(inst_mesh.tobytes())
-        f.write(inst_data.tobytes())
-    print(f"[inst] wrote {BIN}  ({BIN.stat().st_size / 1e6:.1f} MB)")
-
+    # 3) build, decode/roundtrip, then atomically publish the hash-bound bundle.
+    metadata_path = Path(METADATA_OUT) if METADATA_OUT else BIN.with_suffix(
+        ".metadata.json"
+    )
     instance_ids_path = (
         Path(INSTANCE_IDS_OUT)
         if INSTANCE_IDS_OUT
         else BIN.with_name(f"{BIN.stem}.instance_ids.bin")
     )
-    instance_ids_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(instance_ids_path, "wb") as f:
-        f.write(INSTANCE_IDS_MAGIC)
-        f.write(struct.pack("<II", 1, len(inst_ids)))
-        f.write(inst_ids.tobytes())
-    with open(instance_ids_path, "rb") as instance_ids_file:
-        instance_ids_sha256 = hashlib.file_digest(
-            instance_ids_file, "sha256"
-        ).hexdigest()
-    print(
-        f"[inst] wrote stable instance IDs {instance_ids_path} "
-        f"({len(inst_ids)} IDs)"
+    semantics_path = (
+        Path(SEMANTICS_OUT)
+        if SEMANTICS_OUT
+        else BIN.with_name(f"{BIN.stem}.semantics.bin")
     )
-
-    # Optional deterministic build-time sidecar.  The H1COL2 runtime format is
-    # intentionally compact and does not store actor names, so without this
-    # file a later semantic OBJ export can only distinguish the four numeric
-    # kinds.  The sidecar is not needed by the server and can be regenerated.
-    if METADATA_OUT:
-        metadata_path = Path(METADATA_OUT)
-        metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        instance_counts = np.bincount(inst_mesh, minlength=len(meshes))
-        with open(BIN, "rb") as collision_file:
-            collision_sha256 = hashlib.file_digest(
-                collision_file, "sha256"
-            ).hexdigest()
-        metadata = {
-            "schema": "h1emu-h1col2-metadata-v3",
-            "formatVersion": 2,
-            "coordinateSpace": "h1z1-world-y-up-meters",
-            "geometrySource": "adr_collision_cdta",
-            "renderFallbackCount": 0,
-            "collisionFile": BIN.name,
-            "collisionSha256": collision_sha256,
-            "meshCount": len(meshes),
-            "instanceCount": len(inst_mesh),
-            "instanceIds": {
-                "file": instance_ids_path.name,
-                "sha256": instance_ids_sha256,
-                "format": "H1CID1-u32le-v1",
-                "count": len(inst_ids),
-            },
-            "noCollisionActorCount": len(no_collision),
-            "reviewedSkips": inventory["reviewedSkips"],
-            "meshes": [
-                {
-                    "meshIndex": index,
-                    "actorFile": actor_file,
-                    "collisionAsset": mesh_sources[index]["collisionAsset"],
-                    "collisionAssetSha256": mesh_sources[index]["collisionSha256"],
-                    "cdtaVersion": mesh_sources[index]["cdtaVersion"],
-                    "cdtaCollisionType": mesh_sources[index]["cdtaCollisionType"],
-                    "shapeCount": mesh_sources[index]["shapeCount"],
-                    "triangleCount": mesh_sources[index]["triangleCount"],
-                    "kind": mesh_kind[index],
-                    "semanticMaterial": semantic_material(
-                        actor_file, mesh_kind[index]
-                    ),
-                    "semanticSource": "actor_default_pending_per_triangle_table",
-                    "instanceCount": int(instance_counts[index]),
-                }
-                for index, actor_file in enumerate(mesh_actors)
-            ],
-        }
-        metadata_path.write_text(
-            json.dumps(metadata, sort_keys=True, separators=(",", ":")) + "\n",
-            encoding="utf-8",
+    bundle_root = BIN.parent.resolve()
+    for label, path in (
+        ("metadata", metadata_path),
+        ("instance IDs", instance_ids_path),
+        ("triangle semantics", semantics_path),
+    ):
+        if path.parent.resolve() != bundle_root:
+            raise RuntimeError(
+                f"{label} output must share the H1COL2 directory {bundle_root}"
+            )
+    if SEMANTIC_MODE not in ("diagnostic", "strict-production"):
+        raise RuntimeError(
+            "COLLISION_SEMANTIC_MODE must be diagnostic or strict-production"
         )
-        print(f"[inst] wrote semantic metadata {metadata_path}")
+    policy = load_semantic_policy(SEMANTIC_POLICY_PATH)
+    BIN.parent.mkdir(parents=True, exist_ok=True)
+    artifacts, metadata_bytes = build_collision_artifact_bundle(
+        collision_name=BIN.name,
+        instance_ids_name=instance_ids_path.name,
+        semantics_name=semantics_path.name,
+        policy_name=SEMANTIC_POLICY_PATH.name,
+        meshes=meshes,
+        mesh_actors=mesh_actors,
+        mesh_sources=mesh_sources,
+        mesh_kinds=mesh_kind,
+        instance_mesh_indices=inst_mesh,
+        instance_data=inst_data,
+        instance_ids=inst_ids,
+        inventory=inventory,
+        policy_bytes=policy.canonical_bytes,
+        strict_production=SEMANTIC_MODE == "strict-production",
+    )
+    destinations = publish_artifact_bundle(
+        BIN.parent,
+        artifacts,
+        metadata_path.name,
+        metadata_bytes,
+    )
+    print(
+        f"[inst] published {len(destinations) - 1} payloads + metadata last "
+        f"in {BIN.parent} ({SEMANTIC_MODE})"
+    )
+    print(f"[inst] wrote {BIN} ({BIN.stat().st_size / 1e6:.1f} MB)")
+    print(f"[inst] wrote stable instance IDs {instance_ids_path} ({len(inst_ids)} IDs)")
+    print(f"[inst] wrote triangle semantics {semantics_path}")
+    print(f"[inst] wrote semantic metadata {metadata_path}")
 
     # 4) sanity: flat surfaces should have small AABB Y span (correct orientation)
     if flat_check:
