@@ -15,6 +15,7 @@ import {
   NavigationIslandAuditConfig,
   resolveNavigationAuditAnchors
 } from "../src/utils/navigationislandaudit";
+import { createNavigationIslandAuditScope } from "../src/utils/navigationislandcomparison";
 
 function option(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -193,11 +194,20 @@ async function main() {
     topology
   );
   const report = evaluateNavigationIslandAudit(config, topology, anchors);
+  const topologyOnly = !allowTransitions;
+  const scope = createNavigationIslandAuditScope(config, {
+    topologyOnly,
+    streamSpacing,
+    streamSamples: samples.length,
+    polygonSelection: "centroid-inside-3d-bounds"
+  });
   report.provenance = {
     configSha256: createHash("sha256").update(canonical(config)).digest("hex"),
     configSource: "command-line-v1",
+    scopeSchema: scope.schema,
+    scopeSha256: scope.sha256,
     cache: await cacheProvenance(resolve(cacheDirectory)),
-    topologyOnly: !allowTransitions,
+    topologyOnly,
     streamSpacing,
     streamSamples: samples.length,
     polygonSelection: "centroid-inside-3d-bounds"
