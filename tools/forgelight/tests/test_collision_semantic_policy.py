@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "2b7c6ee10745b00f74928dc2dc6fd4a27b0df1293bb999c13cf33a74a57aea57"
+POLICY_SHA256 = "39532cbad557300c36ab8101b1d0269badd062bfde0ad8426de2badba9a36b89"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
