@@ -40,8 +40,18 @@ async function main() {
               height: verified.manifest.runtime.heightmap.height
             }
           : null,
-        navigationMetadata:
-          verified.manifest.runtime.navigationMetadata?.instanceCount ?? null,
+        navigationMetadata: verified.manifest.runtime.navigationMetadata
+          ? {
+              instanceCount:
+                verified.manifest.runtime.navigationMetadata.instanceCount,
+              semanticMode:
+                verified.manifest.runtime.navigationMetadata.semanticMode ??
+                null,
+              bakedDoorGeometryExcluded:
+                verified.manifest.runtime.navigationMetadata
+                  .bakedDoorGeometryExcluded ?? null
+            }
+          : null,
         semantics: verified.manifest.runtime.semantics
           ? {
               contract: verified.manifest.runtime.semantics.semanticContract,

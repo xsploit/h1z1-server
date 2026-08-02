@@ -69,6 +69,7 @@ import { NavMeshQuery } from "recast-navigation";
 import { Crowd } from "recast-navigation";
 import { runRuntimePhase } from "./runtimewatchdog";
 import {
+  assertNavigationRuntimeConfiguration,
   NAVIGATION_ARTIFACT_MANIFEST,
   verifyNavigationArtifact
 } from "./navigationartifacts";
@@ -654,6 +655,7 @@ export class NavManager {
         cacheDirectory: STREAM_CACHE_DIR,
         requireRuntimeDependencies: true
       });
+      assertNavigationRuntimeConfiguration(verified.manifest);
       console.log(
         `[NAV] artifact verified: ${verified.manifest.artifactId} ` +
           `(${verified.filesVerified} files, ${(

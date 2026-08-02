@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
+  assertNavigationRuntimeConfiguration,
   calculateNavigationArtifactId,
   canonicalJson,
   NavigationArtifactManifest,
@@ -158,5 +159,25 @@ test("requires collision, heightmap, and transitions for a runtime bundle", asyn
       requireRuntimeDependencies: true
     }),
     /runtime artifact dependency is not manifested/
+  );
+});
+
+test("complete artifacts cannot exclude doors without runtime obstacles", () => {
+  const { manifest } = fixture();
+  manifest.provenance.status = "complete";
+  manifest.runtime.navigationMetadata = {
+    file: manifest.runtime.cache.parts[0],
+    schemaVersion: 2,
+    instanceCount: 1,
+    kinds: { door: 1 },
+    semanticMode: "strict",
+    bakedDoorGeometryExcluded: true
+  };
+  assert.throws(
+    () => assertNavigationRuntimeConfiguration(manifest, undefined),
+    /H1EMU_DYNAMIC_DOOR_OBSTACLES=1/
+  );
+  assert.doesNotThrow(() =>
+    assertNavigationRuntimeConfiguration(manifest, "1")
   );
 });

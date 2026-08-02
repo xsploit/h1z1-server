@@ -80,6 +80,8 @@ function parsePng(path: string) {
 function parseMetadata(path: string) {
   const value = JSON.parse(readFileSync(path, "utf8")) as {
     version?: number;
+    semanticMode?: "strict" | "legacy";
+    bakedDoorGeometryExcluded?: boolean;
     instances?: Array<{ kind?: string }>;
   };
   if (!Number.isInteger(value.version) || !Array.isArray(value.instances)) {
@@ -93,7 +95,9 @@ function parseMetadata(path: string) {
   return {
     schemaVersion: value.version as number,
     instanceCount: value.instances.length,
-    kinds
+    kinds,
+    semanticMode: value.semanticMode,
+    bakedDoorGeometryExcluded: value.bakedDoorGeometryExcluded
   };
 }
 
@@ -276,6 +280,14 @@ async function main() {
     ) {
       throw new Error(
         "complete provenance requires strict, warning-free semantic input"
+      );
+    }
+    if (
+      navigationMetadata!.schemaVersion !== 2 ||
+      navigationMetadata!.semanticMode !== "strict"
+    ) {
+      throw new Error(
+        "complete provenance requires strict semantic navigation metadata"
       );
     }
   }

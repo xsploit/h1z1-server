@@ -88,6 +88,8 @@ export interface NavigationArtifactManifest {
       schemaVersion: number;
       instanceCount: number;
       kinds: Record<string, number>;
+      semanticMode?: "strict" | "legacy";
+      bakedDoorGeometryExcluded?: boolean;
     } | null;
     semantics: {
       file: NavigationArtifactFile;
@@ -115,6 +117,21 @@ export interface VerifiedNavigationArtifact {
   manifestPath: string;
   filesVerified: number;
   bytesVerified: number;
+}
+
+export function assertNavigationRuntimeConfiguration(
+  manifest: NavigationArtifactManifest,
+  dynamicDoorObstacles = process.env.H1EMU_DYNAMIC_DOOR_OBSTACLES
+): void {
+  if (
+    manifest.provenance.status === "complete" &&
+    manifest.runtime.navigationMetadata?.bakedDoorGeometryExcluded === true &&
+    dynamicDoorObstacles !== "1"
+  ) {
+    throw new Error(
+      "[NAV] complete artifact excludes door panels but H1EMU_DYNAMIC_DOOR_OBSTACLES=1 is not set"
+    );
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -318,6 +335,12 @@ function validateCompleteProvenance(
   ) {
     throw new Error(
       "[NAV] complete artifact contains incomplete or legacy semantic provenance"
+    );
+  }
+  const metadata = manifest.runtime.navigationMetadata!;
+  if (metadata.schemaVersion !== 2 || metadata.semanticMode !== "strict") {
+    throw new Error(
+      "[NAV] complete artifact requires strict semantic navigation metadata"
     );
   }
 }
