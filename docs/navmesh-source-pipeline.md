@@ -80,6 +80,45 @@ state, output identity, and known limitations are all bound by the manifest. A
 pre-contract rollback can be recorded honestly as
 `runtime-only`; it still receives full runtime hashes but does not pretend that
 its original `world.obj` or tool commits are known.
+
+### Composed full-cache provenance
+
+A verified regional cache may overlay a verified full cache without falsely
+claiming that the result came from one source OBJ. Create the base input with
+`--cache-coverage full` and the regional input with both
+`--cache-coverage regional` and
+`--cache-bounds minX,minZ,maxX,maxZ`. Both input manifests must already have
+complete direct provenance and must be staged inside the final bundle.
+The manifest creator verifies them against their original cache directories,
+then copies their exact bytes and the exact merge report into the final
+bundle's `provenance` directory.
+
+The merge tool must emit `h1emu-navigation-cache-merge-v1` JSON with its name,
+version, Git commit, `regional-overlay` mode, the artifact ID, manifest SHA-256,
+and ordered cache records for each input, plus the exact output cache,
+collision, heightmap, navigation metadata, semantic report, and transition
+records. Create the final manifest with:
+
+```powershell
+npm run navmesh-artifact-create -- --bundle-root C:\staging\data\2016 `
+  --cache-coverage full `
+  --base-artifact-manifest C:\base\data\2016\navigation-artifact-manifest.json `
+  --base-cache-dir C:\base\data\2016\collision `
+  --regional-artifact-manifest C:\regional\data\2016\navigation-artifact-manifest.json `
+  --regional-cache-dir C:\regional\data\2016\collision `
+  --cache-merge-report C:\merge-output\cache-merge-report.json
+npm run navmesh-artifact-check -- --bundle-root C:\staging\data\2016
+```
+
+Composition verification fails closed unless the base coverage is full, the
+overlay coverage is regional, the result coverage is full, both staged input
+manifests exactly match their embedded snapshots and hashes, every input and
+output cache record matches the merge report, and collision, heightmap,
+navigation metadata, and transitions describe the same runtime revision in
+the base, regional, and output artifacts. Nested compositions are rejected so
+the proof remains bounded and auditable. A `runtime-only` input cannot promote
+the result to complete provenance.
+
 When `NAV_STREAMING=1`, a missing, altered, mixed, or incomplete cache bundle
 is a startup error. The server does not silently fall back to another navmesh.
 

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  mkdirSync,
   readFileSync,
   readdirSync,
   statSync,
@@ -8,13 +9,18 @@ import {
 } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import {
+  assertCompleteNavigationArtifactProvenance,
   calculateNavigationArtifactId,
   canonicalJson,
+  NavigationCacheCompositionProvenance,
+  NavigationCacheCoverage,
   NavigationArtifactFile,
   NavigationArtifactManifest,
   parseCollisionSemanticSourceReport,
+  parseNavigationCacheMergeReport,
   parseTsetHeader,
-  sha256File
+  sha256File,
+  verifyNavigationArtifact
 } from "../src/utils/navigationartifacts";
 
 function option(name: string): string | undefined {
@@ -154,6 +160,105 @@ function cachePartIndex(name: string): number {
   return Number(match[1]);
 }
 
+function parseCacheCoverage(): NavigationCacheCoverage | undefined {
+  const kind = option("--cache-coverage");
+  const rawBounds = option("--cache-bounds");
+  if (!kind && !rawBounds) return undefined;
+  if (kind === "full") {
+    if (rawBounds) throw new Error("full cache coverage cannot include bounds");
+    return { kind: "full" };
+  }
+  if (kind !== "regional" || !rawBounds) {
+    throw new Error(
+      "regional cache coverage requires --cache-bounds minX,minZ,maxX,maxZ"
+    );
+  }
+  const [minX, minZ, maxX, maxZ, ...extra] = rawBounds.split(",").map(Number);
+  if (
+    extra.length ||
+    ![minX, minZ, maxX, maxZ].every(Number.isFinite) ||
+    minX >= maxX ||
+    minZ >= maxZ
+  ) {
+    throw new Error(`invalid regional cache bounds: ${rawBounds}`);
+  }
+  return { kind: "regional", bounds: { minX, minZ, maxX, maxZ } };
+}
+
+async function createComposition(
+  bundleRoot: string
+): Promise<NavigationCacheCompositionProvenance | null> {
+  const raw = {
+    baseManifest: option("--base-artifact-manifest"),
+    baseCacheDirectory: option("--base-cache-dir"),
+    regionalManifest: option("--regional-artifact-manifest"),
+    regionalCacheDirectory: option("--regional-cache-dir"),
+    mergeReport: option("--cache-merge-report")
+  };
+  const configured = Object.values(raw).filter(Boolean).length;
+  if (!configured) return null;
+  if (configured !== Object.keys(raw).length) {
+    throw new Error(
+      "cache composition requires base/regional manifest and cache paths plus --cache-merge-report"
+    );
+  }
+
+  const baseManifestPath = resolve(raw.baseManifest!);
+  const regionalManifestPath = resolve(raw.regionalManifest!);
+  const mergeReportPath = resolve(raw.mergeReport!);
+  const [base, regional] = await Promise.all([
+    verifyNavigationArtifact({
+      manifestPath: baseManifestPath,
+      cacheDirectory: resolve(raw.baseCacheDirectory!)
+    }),
+    verifyNavigationArtifact({
+      manifestPath: regionalManifestPath,
+      cacheDirectory: resolve(raw.regionalCacheDirectory!)
+    })
+  ]);
+  if (
+    base.manifest.provenance.status !== "complete" ||
+    regional.manifest.provenance.status !== "complete"
+  ) {
+    throw new Error("cache composition inputs must have complete provenance");
+  }
+  const mergeReport = parseNavigationCacheMergeReport(
+    JSON.parse(readFileSync(mergeReportPath, "utf8"))
+  );
+  const provenanceDirectory = resolve(bundleRoot, "provenance");
+  mkdirSync(provenanceDirectory, { recursive: true });
+  const stagedBaseManifest = resolve(
+    provenanceDirectory,
+    "base-navigation-artifact-manifest.json"
+  );
+  const stagedRegionalManifest = resolve(
+    provenanceDirectory,
+    "regional-navigation-artifact-manifest.json"
+  );
+  const stagedMergeReport = resolve(
+    provenanceDirectory,
+    "cache-merge-report.json"
+  );
+  writeFileSync(stagedBaseManifest, readFileSync(baseManifestPath));
+  writeFileSync(stagedRegionalManifest, readFileSync(regionalManifestPath));
+  writeFileSync(stagedMergeReport, readFileSync(mergeReportPath));
+  return {
+    schema: "h1emu-navigation-cache-composition-v1",
+    base: {
+      manifest: await fileRecord(bundleRoot, stagedBaseManifest),
+      snapshot: base.manifest
+    },
+    regional: {
+      manifest: await fileRecord(bundleRoot, stagedRegionalManifest),
+      snapshot: regional.manifest
+    },
+    mergeReport: {
+      ...(await fileRecord(bundleRoot, stagedMergeReport)),
+      ...mergeReport
+    }
+  };
+}
+
 async function main() {
   const bundleRoot = resolve(option("--bundle-root") ?? "data/2016");
   const cacheDirectory = resolve(
@@ -259,15 +364,27 @@ async function main() {
         )
       }
     : null;
+  const composition = await createComposition(bundleRoot);
+  const requestedCacheCoverage = parseCacheCoverage();
+  if (composition && requestedCacheCoverage?.kind === "regional") {
+    throw new Error("cache composition output must have full coverage");
+  }
+  const cacheCoverage = composition
+    ? { kind: "full" as const }
+    : requestedCacheCoverage;
   const status =
     option("--provenance-status") ??
-    (sourceWorld && option("--extractor-commit") && option("--recast-commit")
+    (composition ||
+    (sourceWorld && option("--extractor-commit") && option("--recast-commit"))
       ? "complete"
       : "runtime-only");
   if (status !== "complete" && status !== "runtime-only") {
     throw new Error(`invalid provenance status: ${status}`);
   }
-  if (status === "complete") {
+  if (composition && status !== "complete") {
+    throw new Error("cache composition requires complete provenance status");
+  }
+  if (status === "complete" && !composition) {
     const required = {
       sourceWorld,
       classifierConfig,
@@ -325,10 +442,16 @@ async function main() {
       recastNavigationCommit: option("--recast-navigation-commit") ?? null,
       sourceWorld,
       classifierConfig,
-      sourceReport
+      sourceReport,
+      composition
     },
     runtime: {
-      cache: { format: "TSET", parts: cacheParts, header: cacheHeader },
+      cache: {
+        format: "TSET",
+        parts: cacheParts,
+        header: cacheHeader,
+        coverage: cacheCoverage
+      },
       collision,
       heightmap,
       navigationMetadata,
@@ -340,6 +463,7 @@ async function main() {
     ...payload,
     artifactId: calculateNavigationArtifactId(payload)
   };
+  assertCompleteNavigationArtifactProvenance(manifest);
   writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(
     JSON.stringify(
@@ -347,6 +471,7 @@ async function main() {
         output,
         artifactId: manifest.artifactId,
         provenance: manifest.provenance.status,
+        composition: Boolean(composition),
         cacheParts: cacheParts.length,
         cacheLayers: cacheHeader.layers,
         runtimeBytes: [
@@ -356,7 +481,10 @@ async function main() {
           navigationMetadata?.file,
           semantics?.file,
           transitions?.file,
-          sourceReport?.file
+          sourceReport?.file,
+          composition?.base.manifest,
+          composition?.regional.manifest,
+          composition?.mergeReport
         ]
           .filter(Boolean)
           .reduce((sum, file) => sum + (file?.size ?? 0), 0),
