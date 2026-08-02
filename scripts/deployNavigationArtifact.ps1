@@ -2,10 +2,16 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$QuickStartRoot,
 
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+
+    [Alias('DryRun', 'List')]
+    [switch]$Plan
 )
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+Import-Module (Join-Path $PSScriptRoot 'NavigationDeployment.psm1') -Force
 
 $sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $quickStart = (Resolve-Path -LiteralPath $QuickStartRoot).Path
@@ -20,17 +26,28 @@ if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
     throw "Navigation artifact manifest was not found: $manifest"
 }
 
-$inUse = Get-CimInstance Win32_Process |
-    Where-Object { $_.CommandLine -like "*$installed*" }
-if ($inUse) {
-    throw "The installed server is in use by PID(s): $($inUse.ProcessId -join ', ')"
+if (-not $Plan) {
+    $inUse = Get-CimInstance Win32_Process |
+        Where-Object { $_.CommandLine -like "*$installed*" }
+    if ($inUse) {
+        throw "The installed server is in use by PID(s): $($inUse.ProcessId -join ', ')"
+    }
 }
 
-if (-not $SkipBuild) {
+if (-not $SkipBuild -and -not $Plan) {
     & npm run build --prefix $sourceRoot
     if ($LASTEXITCODE -ne 0) {
         throw "Server build failed with exit code $LASTEXITCODE"
     }
+}
+
+$runtimeFiles = @(
+    Get-NavigationRuntimeClosure `
+        -SourceRoot $sourceRoot `
+        -EntryRelativePath 'out\utils\recast.js'
+)
+if ('out\utils\navigationareas.js' -notin $runtimeFiles) {
+    throw 'Navigation runtime closure is incomplete: navigationareas.js is absent.'
 }
 
 & npm run navmesh-artifact-check --prefix $sourceRoot -- --bundle-root $bundleRoot
@@ -38,39 +55,64 @@ if ($LASTEXITCODE -ne 0) {
     throw "Artifact verification failed before deployment"
 }
 
-$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$backupRoot = Join-Path $quickStart "backups\nav-artifact-contract-$stamp"
-New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
-
-$runtimeFiles = @(
-    'out\utils\recast.js',
-    'out\utils\recast.js.map',
-    'out\utils\recast.d.ts',
-    'out\utils\navigationartifacts.js',
-    'out\utils\navigationartifacts.js.map',
-    'out\utils\navigationartifacts.d.ts'
+$deploymentPlan = @(
+    foreach ($relativePath in $runtimeFiles) {
+        $sourcePath = Join-Path $sourceRoot $relativePath
+        $destinationPath = Join-Path $installed $relativePath
+        [pscustomobject]@{
+            RelativePath = $relativePath
+            Action       = if (Test-Path -LiteralPath $destinationPath -PathType Leaf) {
+                'Replace'
+            } else {
+                'Create'
+            }
+            Bytes        = (Get-Item -LiteralPath $sourcePath).Length
+            Sha256       = Get-NavigationFileSha256 -Path $sourcePath
+        }
+    }
 )
 
-foreach ($relativePath in $runtimeFiles) {
-    $sourcePath = Join-Path $sourceRoot $relativePath
-    $destinationPath = Join-Path $installed $relativePath
-    if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
-        throw "Built runtime file is missing: $sourcePath"
+if ($Plan) {
+    $deploymentPlan
+    [pscustomobject]@{
+        Status      = 'Navigation runtime deployment plan; no files changed'
+        Installed   = $installed
+        RuntimeFileCount = $runtimeFiles.Count
+        IncludesNavigationAreas = 'out\utils\navigationareas.js' -in $runtimeFiles
     }
-    if (Test-Path -LiteralPath $destinationPath -PathType Leaf) {
-        $backupPath = Join-Path $backupRoot $relativePath
-        New-Item -ItemType Directory -Path (Split-Path $backupPath) -Force |
-            Out-Null
-        Copy-Item -LiteralPath $destinationPath -Destination $backupPath -Force
-    }
-    New-Item -ItemType Directory -Path (Split-Path $destinationPath) -Force |
-        Out-Null
-    Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
+    return
 }
 
-& npm run navmesh-artifact-check --prefix $sourceRoot -- --bundle-root $bundleRoot
-if ($LASTEXITCODE -ne 0) {
-    throw "Artifact verification failed after deployment"
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$backupRoot = Join-Path $quickStart "backups\nav-artifact-contract-$stamp"
+$stageRoot = Join-Path $quickStart (
+    "backups\.nav-artifact-stage-$stamp-$([guid]::NewGuid().ToString('N'))"
+)
+
+try {
+    New-NavigationDeploymentStage `
+        -SourceRoot $sourceRoot `
+        -StageRoot $stageRoot `
+        -RelativePaths $runtimeFiles
+
+    $postReplaceValidation = {
+        & npm run navmesh-artifact-check --prefix $sourceRoot -- --bundle-root $bundleRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "Artifact verification failed after deployment"
+        }
+    }.GetNewClosure()
+
+    $null = Invoke-NavigationRuntimeReplacement `
+        -SourceRoot $sourceRoot `
+        -StageRoot $stageRoot `
+        -DestinationRoot $installed `
+        -BackupRoot $backupRoot `
+        -RelativePaths $runtimeFiles `
+        -PostReplaceValidation $postReplaceValidation
+} finally {
+    if (Test-Path -LiteralPath $stageRoot -PathType Container) {
+        Remove-Item -LiteralPath $stageRoot -Recurse -Force
+    }
 }
 
 $manifestValue = Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json
@@ -79,4 +121,5 @@ $manifestValue = Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json
     ArtifactId = $manifestValue.artifactId
     Installed  = $installed
     Backup     = $backupRoot
+    RuntimeFileCount = $runtimeFiles.Count
 } | Format-List

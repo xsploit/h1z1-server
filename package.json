@@ -85,6 +85,7 @@
     "navmesh-artifact-check": "tsx scripts/verifyNavigationArtifact.ts",
     "navmesh-regions-check": "tsx scripts/validateNavigationRegions.ts",
     "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
+    "test-nav-deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testNavigationDeployment.ps1",
     "crash-capture": "node tools/crash-capture/soe-crash-server.mjs",
     "test-crash-capture": "node --test tools/crash-capture/soe-crash-server.test.mjs"
   },
