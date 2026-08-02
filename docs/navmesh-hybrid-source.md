@@ -121,9 +121,10 @@ full-world collision-first source. Both policies replace the same exact actor
 objects; only the base-source bounds differ.
 
 `data/2016/navigationHybridOwnership.pvPoliceOverlay.json` keeps that same
-ownership seam inside whole global tile columns plus a two-column evidence
-apron. Use it when producing a bounded cache overlay: the apron prevents the
-replacement columns from inheriting clipped geometry at their tile borders.
+ownership seam inside whole global tile columns plus at least one complete
+halo column on every side. Use it when producing a bounded cache overlay: the
+halo prevents the replacement columns from inheriting clipped geometry at
+their tile borders and is discarded before promotion.
 
 ```powershell
 npm run navmesh-regional-source-compose -- `
