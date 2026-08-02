@@ -21,12 +21,17 @@ const { loadHeightmap, readBin } = require("./gen_navmesh");
 
 const SEMANTIC_SCHEMA = "h1emu-nav-semantics-v1";
 const SOURCE_SCHEMA = "h1emu-collision-semantic-obj-v1";
-const COLLISION_METADATA_SCHEMA = "h1emu-h1col2-metadata-v1";
-const COLLISION_METADATA_SCHEMAS = new Set([
-  COLLISION_METADATA_SCHEMA,
+const COLLISION_METADATA_SCHEMA = "h1emu-h1col2-metadata-v4";
+const LEGACY_COLLISION_METADATA_SCHEMAS = new Set([
+  "h1emu-h1col2-metadata-v1",
   "h1emu-h1col2-metadata-v2",
   "h1emu-h1col2-metadata-v3"
 ]);
+const H1SEM1_FORMAT = "H1SEM1-u8le-v1";
+const H1SEM1_MAGIC = "H1SEM1\0\0";
+const H1SEM1_VERSION = 1;
+const H1SEM1_HEADER_BYTES = 64;
+const H1SEM1_SEMANTIC_SCHEMA_VERSION = 1;
 const KIND_NAMES = ["walkable", "solid", "thin", "door"];
 const DEFAULT_KIND_MATERIALS = [
   "nav_floor_exterior",
@@ -42,6 +47,25 @@ const WALKABLE_MATERIALS = new Set([
   "nav_ramp",
   "nav_threshold"
 ]);
+const SEMANTIC_MATERIALS = [
+  null,
+  "nav_terrain",
+  "nav_road",
+  "nav_floor_exterior",
+  "nav_floor_interior",
+  "nav_stair",
+  "nav_ramp",
+  "nav_threshold",
+  "nav_obstacle_static",
+  "nav_door_panel_dynamic",
+  "nav_exclude",
+  "nav_unknown"
+];
+const FIRST_WALKABLE_SEMANTIC_ID = 2;
+const LAST_WALKABLE_SEMANTIC_ID = 7;
+const TERRAIN_SEMANTIC_ID = 1;
+const DOOR_PANEL_SEMANTIC_ID = 9;
+const UNKNOWN_SEMANTIC_ID = 11;
 
 function sha256File(path) {
   const hash = createHash("sha256");
@@ -120,11 +144,73 @@ function allowedMaterial(kind, material) {
   return kind === 3 && material === "nav_door_panel_dynamic";
 }
 
-function loadCollisionMetadata(path, collisionHash, collision) {
+function semanticCompatibleWithKind(kind, semanticId) {
+  if (semanticId === DOOR_PANEL_SEMANTIC_ID) return kind === 3;
+  if (
+    kind !== 0 &&
+    semanticId >= FIRST_WALKABLE_SEMANTIC_ID &&
+    semanticId <= LAST_WALKABLE_SEMANTIC_ID
+  )
+    return false;
+  return true;
+}
+
+function isSha256(value) {
+  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+}
+
+function normalizedHistogram(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error(`${label} must be an object`);
+  const normalized = {};
+  for (const [material, count] of Object.entries(value)) {
+    if (!SEMANTIC_MATERIALS.includes(material) || material === null)
+      throw new Error(`${label} contains invalid semantic ${material}`);
+    if (!Number.isInteger(count) || count <= 0)
+      throw new Error(`${label}.${material} must be a positive integer`);
+    normalized[material] = count;
+  }
+  return Object.fromEntries(
+    Object.entries(normalized).sort(([left], [right]) =>
+      left.localeCompare(right)
+    )
+  );
+}
+
+function assertHistogram(expected, actual, label) {
+  const normalized = normalizedHistogram(expected, label);
+  if (JSON.stringify(normalized) !== JSON.stringify(actual))
+    throw new Error(`${label} does not match H1SEM1 triangle semantics`);
+}
+
+function validateInstanceIdContract(value, collision) {
+  if (
+    value?.format !== "H1CID1-u32le-v1" ||
+    value?.count !== collision.instCount ||
+    typeof value?.file !== "string" ||
+    !value.file ||
+    !isSha256(value?.sha256)
+  )
+    throw new Error("invalid H1COL2 metadata instance-ID contract");
+}
+
+function loadCollisionMetadata(
+  path,
+  collisionHash,
+  collision,
+  { allowLegacyActorSemantics = false } = {}
+) {
   if (!path) return null;
   const value = JSON.parse(readFileSync(path, "utf8"));
+  const isProduction = value.schema === COLLISION_METADATA_SCHEMA;
+  const isLegacy = LEGACY_COLLISION_METADATA_SCHEMAS.has(value.schema);
+  if (!isProduction && !(isLegacy && allowLegacyActorSemantics))
+    throw new Error(
+      `production export requires ${COLLISION_METADATA_SCHEMA} metadata with H1SEM1; ` +
+        "legacy v1-v3 metadata requires --allow-legacy-actor-semantics"
+    );
   if (
-    !COLLISION_METADATA_SCHEMAS.has(value.schema) ||
+    (!isProduction && !isLegacy) ||
     value.formatVersion !== 2 ||
     value.coordinateSpace !== "h1z1-world-y-up-meters" ||
     value.collisionSha256 !== collisionHash ||
@@ -135,9 +221,7 @@ function loadCollisionMetadata(path, collisionHash, collision) {
   )
     throw new Error("H1COL2 metadata does not match the collision artifact");
 
-  const collisionFirst =
-    value.schema === "h1emu-h1col2-metadata-v2" ||
-    value.schema === "h1emu-h1col2-metadata-v3";
+  const collisionFirst = value.schema !== "h1emu-h1col2-metadata-v1";
   if (
     collisionFirst &&
     (value.geometrySource !== "adr_collision_cdta" ||
@@ -162,26 +246,189 @@ function loadCollisionMetadata(path, collisionHash, collision) {
         (typeof entry.collisionAsset !== "string" ||
           !entry.collisionAsset.toLowerCase().endsWith(".cdt") ||
           !Number.isInteger(entry.triangleCount) ||
-          entry.triangleCount !== collision.meshes[index].idx.length / 3 ||
-          entry.semanticSource !==
-            "actor_default_pending_per_triangle_table")) ||
-      !allowedMaterial(entry.kind, entry.semanticMaterial)
+          entry.triangleCount !== collision.meshes[index].idx.length / 3)) ||
+      (isProduction
+        ? entry.semanticSource !== "per_triangle_sidecar_v1" ||
+          !entry.semanticHistogram ||
+          typeof entry.semanticHistogram !== "object" ||
+          Array.isArray(entry.semanticHistogram)
+        : entry.semanticSource === undefined
+          ? false
+          : collisionFirst &&
+            entry.semanticSource !==
+              "actor_default_pending_per_triangle_table") ||
+      (!isProduction && !allowedMaterial(entry.kind, entry.semanticMaterial))
     )
       throw new Error(`invalid H1COL2 metadata mesh entry ${index}`);
     byMesh[index] = entry;
   }
   if (byMesh.some((entry) => !entry))
     throw new Error("H1COL2 metadata mesh indices are incomplete");
+  if (isProduction || value.schema === "h1emu-h1col2-metadata-v3")
+    validateInstanceIdContract(value.instanceIds, collision);
+
+  if (isProduction) {
+    const semantics = value.triangleSemantics;
+    if (
+      !semantics ||
+      typeof semantics.file !== "string" ||
+      !semantics.file ||
+      !isSha256(semantics.sha256) ||
+      semantics.format !== H1SEM1_FORMAT ||
+      semantics.semanticContract !== SEMANTIC_SCHEMA ||
+      semantics.semanticSchemaVersion !== H1SEM1_SEMANTIC_SCHEMA_VERSION ||
+      semantics.collisionSha256 !== collisionHash ||
+      semantics.meshCount !== collision.meshes.length ||
+      semantics.totalTriangleCount !==
+        collision.meshes.reduce((sum, mesh) => sum + mesh.idx.length / 3, 0) ||
+      semantics.unknownCount !== 0
+    )
+      throw new Error("invalid H1COL2 metadata v4 triangle-semantics contract");
+    normalizedHistogram(
+      semantics.histogram,
+      "H1COL2 metadata triangleSemantics.histogram"
+    );
+    if (
+      !value.semanticPolicy ||
+      typeof value.semanticPolicy.schema !== "string" ||
+      !value.semanticPolicy.schema ||
+      typeof value.semanticPolicy.file !== "string" ||
+      !value.semanticPolicy.file ||
+      !isSha256(value.semanticPolicy.sha256)
+    )
+      throw new Error("invalid H1COL2 metadata v4 semantic-policy contract");
+  }
+  return { value, byMesh, isProduction };
+}
+
+function loadTriangleSemantics(path, expected, collisionHash, collision) {
+  const data = readFileSync(path);
+  if (data.length < H1SEM1_HEADER_BYTES)
+    throw new Error(
+      `truncated H1SEM1 header: expected ${H1SEM1_HEADER_BYTES} bytes, got ${data.length}`
+    );
+  if (data.subarray(0, 8).toString("latin1") !== H1SEM1_MAGIC)
+    throw new Error("invalid H1SEM1 magic");
+  const version = data.readUInt32LE(8);
+  const headerBytes = data.readUInt32LE(12);
+  const semanticSchemaVersion = data.readUInt32LE(16);
+  const meshCount = data.readUInt32LE(20);
+  const totalTriangleCount = data.readUInt32LE(24);
+  const reserved = data.readUInt32LE(28);
+  const boundCollisionHash = data.subarray(32, 64).toString("hex");
+  if (version !== H1SEM1_VERSION)
+    throw new Error(`unsupported H1SEM1 version ${version}`);
+  if (headerBytes !== H1SEM1_HEADER_BYTES)
+    throw new Error(
+      `invalid H1SEM1 header size ${headerBytes}, expected ${H1SEM1_HEADER_BYTES}`
+    );
+  if (semanticSchemaVersion !== H1SEM1_SEMANTIC_SCHEMA_VERSION)
+    throw new Error(
+      `unsupported H1SEM1 semantic schema version ${semanticSchemaVersion}`
+    );
+  if (reserved !== 0)
+    throw new Error(`H1SEM1 reserved field must be zero, got ${reserved}`);
   if (
-    value.schema === "h1emu-h1col2-metadata-v3" &&
-    (value.instanceIds?.format !== "H1CID1-u32le-v1" ||
-      value.instanceIds?.count !== collision.instCount ||
-      typeof value.instanceIds?.file !== "string" ||
-      !value.instanceIds.file ||
-      !/^[a-f0-9]{64}$/i.test(value.instanceIds?.sha256 ?? ""))
+    meshCount !== collision.meshes.length ||
+    meshCount !== expected.meshCount ||
+    totalTriangleCount !== expected.totalTriangleCount
   )
-    throw new Error("invalid H1COL2 metadata v3 instance-ID contract");
-  return { value, byMesh };
+    throw new Error("H1SEM1 mesh/triangle cardinality does not match metadata");
+  const expectedLength =
+    H1SEM1_HEADER_BYTES + (meshCount + 1) * 4 + totalTriangleCount;
+  if (data.length < expectedLength)
+    throw new Error(
+      `truncated H1SEM1 artifact: expected ${expectedLength} bytes, got ${data.length}`
+    );
+  if (data.length > expectedLength)
+    throw new Error(
+      `trailing H1SEM1 data: expected ${expectedLength} bytes, got ${data.length}`
+    );
+  if (
+    boundCollisionHash !== collisionHash ||
+    expected.collisionSha256 !== collisionHash
+  )
+    throw new Error("H1SEM1 H1COL2 SHA256 mismatch");
+  if (sha256File(path) !== expected.sha256)
+    throw new Error("H1SEM1 SHA256 does not match H1COL2 metadata");
+
+  const offsets = new Uint32Array(meshCount + 1);
+  for (let index = 0; index <= meshCount; index++)
+    offsets[index] = data.readUInt32LE(H1SEM1_HEADER_BYTES + index * 4);
+  if (offsets[0] !== 0)
+    throw new Error(`H1SEM1 first mesh offset must be zero, got ${offsets[0]}`);
+  for (let meshIndex = 0; meshIndex < meshCount; meshIndex++) {
+    if (offsets[meshIndex + 1] < offsets[meshIndex])
+      throw new Error(
+        `H1SEM1 mesh offsets are not monotonic at mesh ${meshIndex}`
+      );
+    const actualCount = offsets[meshIndex + 1] - offsets[meshIndex];
+    const requiredCount = collision.meshes[meshIndex].idx.length / 3;
+    if (actualCount !== requiredCount)
+      throw new Error(
+        `H1SEM1 mesh ${meshIndex} triangle count mismatch: expected ${requiredCount}, artifact has ${actualCount}`
+      );
+  }
+  if (offsets[meshCount] !== totalTriangleCount)
+    throw new Error(
+      `H1SEM1 final mesh offset ${offsets[meshCount]} does not equal total triangle count ${totalTriangleCount}`
+    );
+
+  const semanticsStart = H1SEM1_HEADER_BYTES + (meshCount + 1) * 4;
+  const semanticIds = data.subarray(semanticsStart);
+  const histogram = {};
+  const meshHistograms = [];
+  for (let meshIndex = 0; meshIndex < meshCount; meshIndex++) {
+    const meshHistogram = {};
+    for (
+      let ordinal = offsets[meshIndex];
+      ordinal < offsets[meshIndex + 1];
+      ordinal++
+    ) {
+      const semanticId = semanticIds[ordinal];
+      const material = SEMANTIC_MATERIALS[semanticId];
+      if (!material)
+        throw new Error(
+          `invalid H1SEM1 semantic id ${semanticId} at triangle ${ordinal}`
+        );
+      if (
+        semanticId === TERRAIN_SEMANTIC_ID ||
+        semanticId === UNKNOWN_SEMANTIC_ID
+      )
+        throw new Error(
+          `production H1SEM1 cannot contain ${material.slice(4)} semantic id at triangle ${ordinal}`
+        );
+      if (
+        !semanticCompatibleWithKind(
+          collision.meshes[meshIndex].kind,
+          semanticId
+        )
+      )
+        throw new Error(
+          `H1SEM1 mesh ${meshIndex} kind ${collision.meshes[meshIndex].kind} has unsafe semantic ${material}`
+        );
+      histogram[material] = (histogram[material] ?? 0) + 1;
+      meshHistogram[material] = (meshHistogram[material] ?? 0) + 1;
+    }
+    meshHistograms.push(
+      Object.fromEntries(
+        Object.entries(meshHistogram).sort(([left], [right]) =>
+          left.localeCompare(right)
+        )
+      )
+    );
+  }
+  const sortedHistogram = Object.fromEntries(
+    Object.entries(histogram).sort(([left], [right]) =>
+      left.localeCompare(right)
+    )
+  );
+  assertHistogram(
+    expected.histogram,
+    sortedHistogram,
+    "H1COL2 metadata triangleSemantics.histogram"
+  );
+  return { offsets, semanticIds, histogram: sortedHistogram, meshHistograms };
 }
 
 function loadInstanceIds(path, expected, collision) {
@@ -292,11 +539,44 @@ async function exportSemanticRegion(options, dependencies = {}) {
   const metadata = loadCollisionMetadata(
     metadataPath,
     collisionHash,
-    collision
+    collision,
+    {
+      allowLegacyActorSemantics: options.allowLegacyActorSemantics === true
+    }
   );
+  if (!metadata && options.allowLegacyActorSemantics !== true)
+    throw new Error(
+      `production export requires ${COLLISION_METADATA_SCHEMA} metadata with H1SEM1`
+    );
+  let triangleSemanticsPath = null;
+  let triangleSemantics = null;
+  if (metadata?.isProduction) {
+    triangleSemanticsPath = options.triangleSemanticsPath
+      ? resolve(options.triangleSemanticsPath)
+      : resolve(dirname(metadataPath), metadata.value.triangleSemantics.file);
+    triangleSemantics = loadTriangleSemantics(
+      triangleSemanticsPath,
+      metadata.value.triangleSemantics,
+      collisionHash,
+      collision
+    );
+    for (let meshIndex = 0; meshIndex < collision.meshes.length; meshIndex++)
+      assertHistogram(
+        metadata.byMesh[meshIndex].semanticHistogram,
+        triangleSemantics.meshHistograms[meshIndex],
+        `H1COL2 metadata mesh ${meshIndex} semanticHistogram`
+      );
+  } else if (options.triangleSemanticsPath) {
+    throw new Error(
+      "--collision-triangle-semantics requires production metadata schema v4"
+    );
+  }
   let instanceIdsPath = null;
   let instanceIds = null;
-  if (metadata?.value.schema === "h1emu-h1col2-metadata-v3") {
+  if (
+    metadata?.isProduction ||
+    metadata?.value.schema === "h1emu-h1col2-metadata-v3"
+  ) {
     instanceIdsPath = options.instanceIdsPath
       ? resolve(options.instanceIdsPath)
       : resolve(dirname(metadataPath), metadata.value.instanceIds.file);
@@ -316,6 +596,7 @@ async function exportSemanticRegion(options, dependencies = {}) {
   const instanceKinds = [0, 0, 0, 0];
   let includedInstances = 0;
   let droppedTriangles = 0;
+  let normalizedWalkableWindingTriangles = 0;
   let vertexBase = 1;
   const writer = createLineWriter(outputPath);
   try {
@@ -365,10 +646,13 @@ async function exportSemanticRegion(options, dependencies = {}) {
       const meshIndex = collision.instMesh[instanceIndex];
       const mesh = collision.meshes[meshIndex];
       const meshMetadata = metadata?.byMesh[meshIndex];
-      const material =
-        meshMetadata?.semanticMaterial ?? DEFAULT_KIND_MATERIALS[mesh.kind];
-      if (!allowedMaterial(mesh.kind, material))
-        throw new Error(`mesh ${meshIndex} has unsafe semantic ${material}`);
+      const legacyMaterial = triangleSemantics
+        ? null
+        : (meshMetadata?.semanticMaterial ?? DEFAULT_KIND_MATERIALS[mesh.kind]);
+      if (legacyMaterial && !allowedMaterial(mesh.kind, legacyMaterial))
+        throw new Error(
+          `mesh ${meshIndex} has unsafe semantic ${legacyMaterial}`
+        );
 
       translation.set(
         collision.instData[offset],
@@ -393,7 +677,6 @@ async function exportSemanticRegion(options, dependencies = {}) {
       writer.line(
         `o ${actorName}__instance_${instanceIds?.[instanceIndex] ?? instanceIndex}`
       );
-      writer.line(`usemtl ${material}`);
       const worldPositions = [];
       for (let position = 0; position < mesh.pos.length; position += 3) {
         vertex
@@ -412,7 +695,17 @@ async function exportSemanticRegion(options, dependencies = {}) {
           `v ${formatNumber(vertex.x)} ${formatNumber(vertex.y)} ${formatNumber(vertex.z)}`
         );
       }
+      let activeMaterial = null;
       for (let index = 0; index < mesh.idx.length; index += 3) {
+        const triangleOrdinal = index / 3;
+        const semanticId = triangleSemantics
+          ? triangleSemantics.semanticIds[
+              triangleSemantics.offsets[meshIndex] + triangleOrdinal
+            ]
+          : null;
+        const material = triangleSemantics
+          ? SEMANTIC_MATERIALS[semanticId]
+          : legacyMaterial;
         const a = mesh.idx[index];
         const b = mesh.idx[index + 1];
         const c = mesh.idx[index + 2];
@@ -429,16 +722,24 @@ async function exportSemanticRegion(options, dependencies = {}) {
           worldPositions[cOffset + 1] - worldPositions[aOffset + 1],
           worldPositions[cOffset + 2] - worldPositions[aOffset + 2]
         );
-        if (
-          a === b ||
-          b === c ||
-          a === c ||
-          edge1.cross(edge2).lengthSq() < 1e-12
-        ) {
+        const normalLengthSquared = edge1.cross(edge2).lengthSq();
+        if (a === b || b === c || a === c || normalLengthSquared < 1e-12) {
           droppedTriangles++;
           continue;
         }
-        writer.line(`f ${vertexBase + a} ${vertexBase + b} ${vertexBase + c}`);
+        if (material !== activeMaterial) {
+          writer.line(`usemtl ${material}`);
+          activeMaterial = material;
+        }
+        const normalizeWalkableWinding =
+          triangleSemantics &&
+          semanticId >= FIRST_WALKABLE_SEMANTIC_ID &&
+          semanticId <= LAST_WALKABLE_SEMANTIC_ID &&
+          edge1.y < 0;
+        if (normalizeWalkableWinding) normalizedWalkableWindingTriangles++;
+        writer.line(
+          `f ${vertexBase + a} ${vertexBase + (normalizeWalkableWinding ? c : b)} ${vertexBase + (normalizeWalkableWinding ? b : c)}`
+        );
         materials[material] = (materials[material] ?? 0) + 1;
       }
       vertexBase += mesh.pos.length / 3;
@@ -457,17 +758,19 @@ async function exportSemanticRegion(options, dependencies = {}) {
   }
 
   const limitations = [
-    "H1COL2 classifies merged actor meshes, not connected components; composite roofs and floors cannot be separated here.",
     "Terrain remains underneath intersecting structures because H1COL2 has no footprint/portal ownership contract.",
     "Intersecting instances are emitted whole and are clipped by the bounded Recast bake, preserving actor topology."
   ];
-  if (!metadata)
+  if (!triangleSemantics)
     limitations.unshift(
-      "No matching H1COL2 metadata sidecar was available; walkable structures use nav_floor_exterior and lose road/stair/interior area identity."
+      "Diagnostic legacy actor semantics are enabled; composite meshes do not have per-triangle surface identity."
     );
   const report = {
     schema: SOURCE_SCHEMA,
     semanticContract: SEMANTIC_SCHEMA,
+    semanticMode: triangleSemantics
+      ? "per-triangle-h1sem1"
+      : "legacy-actor-diagnostic",
     coordinateSpace: "h1z1-world-y-up-meters",
     sourceStrategy: "heightmap-plus-h1col2-only",
     renderGeometryMerged: false,
@@ -498,6 +801,14 @@ async function exportSemanticRegion(options, dependencies = {}) {
             sha256: sha256File(instanceIdsPath),
             matched: true
           }
+        : null,
+      collisionTriangleSemantics: triangleSemanticsPath
+        ? {
+            file: basename(triangleSemanticsPath),
+            sha256: sha256File(triangleSemanticsPath),
+            matched: true,
+            format: H1SEM1_FORMAT
+          }
         : null
     },
     counts: {
@@ -512,7 +823,8 @@ async function exportSemanticRegion(options, dependencies = {}) {
           left.localeCompare(right)
         )
       ),
-      droppedDegenerateTriangles: droppedTriangles
+      droppedDegenerateTriangles: droppedTriangles,
+      normalizedWalkableWindingTriangles
     },
     limitations
   };
@@ -541,6 +853,10 @@ function parseArgs(argv) {
       result.metadataPath = argv[++index];
     else if (name === "--collision-instance-ids")
       result.instanceIdsPath = argv[++index];
+    else if (name === "--collision-triangle-semantics")
+      result.triangleSemanticsPath = argv[++index];
+    else if (name === "--allow-legacy-actor-semantics")
+      result.allowLegacyActorSemantics = true;
     else if (name === "--output") result.outputPath = argv[++index];
     else if (name === "--report") result.reportPath = argv[++index];
     else if (name === "--terrain-step")
@@ -570,10 +886,12 @@ async function main() {
 
 module.exports = {
   COLLISION_METADATA_SCHEMA,
+  H1SEM1_FORMAT,
   SOURCE_SCHEMA,
   exportSemanticRegion,
   loadInstanceIds,
   loadCollisionMetadata,
+  loadTriangleSemantics,
   parseArgs,
   validateH1Col2
 };
