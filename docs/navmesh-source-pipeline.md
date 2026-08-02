@@ -68,6 +68,22 @@ npm run navmesh-artifact-create -- --bundle-root data/2016 `
 npm run navmesh-artifact-check -- --bundle-root data/2016
 ```
 
+When comparing a reconstructed cache with a preserved runtime, compare their
+logical contents as well as their serialized files:
+
+```powershell
+npm run navmesh-cache-identity -- C:\preserved\collision C:\rebuilt\collision
+```
+
+The logical identity sorts layers by stable `(tx,ty,tlayer)`, hashes each
+compressed payload, and deliberately excludes serialized tile references,
+record order, and part boundaries. The command reports separate header,
+logical-payload, and complete canonical hashes, along with every missing,
+extra, or payload-mismatched layer. A mismatch exits with status 2. Passing one
+cache directory prints its identity without comparing it. The ordered physical
+part hashes and raw concatenated hash remain in the report so byte-exact
+reproduction can be distinguished from logically identical reserialization.
+
 New builds must use `provenance.status=complete`. Complete provenance requires
 all three tool commits, source/classifier hashes, navigation metadata, and a
 valid `h1emu-collision-semantic-obj-v1` source report whose input hashes match
