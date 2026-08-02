@@ -4,11 +4,12 @@ Navigation artifacts are not eligible for a full-world deployment merely
 because they load. They must pass deterministic regional topology gates before
 the expensive bake is allowed to replace the installed baseline.
 
-The versioned gate definitions live in
-`data/2016/navigationValidationRegions.json`. Each region declares named world
-anchors, accepted semantic area IDs, snap tolerances, and required route
-segments. Segment rules can constrain detour distance, vertical corner steps,
-and monotonic stair travel. This catches the failure modes visible in game:
+The default evidence-backed gate definitions live in
+`data/2016/navigationValidationRegions.pvEvidence.json`. Each region declares
+named world anchors, accepted semantic area IDs, snap tolerances, and required
+route segments. Segment rules can constrain detour distance, vertical corner
+steps, and monotonic stair travel. This catches the failure modes visible in
+game:
 
 - missing interior polygons;
 - road, landing, threshold, and interior islands that do not connect;
@@ -45,6 +46,36 @@ report proves that roads, thresholds, floors, and stairs are connected by the
 baked polygons themselves. A manual transition may remain as a runtime safety
 net, but it cannot make an otherwise disconnected candidate eligible for a
 full bake or deployment.
+
+## Regional overlay seam contract
+
+A regional tile-cache replacement must also pass
+`data/2016/navigationValidationRegions.pvOverlaySeams.json`. Its
+`cardinalSeamGate` records the global tile origin, tile size, and half-open
+replacement rectangle. Exactly one required segment must be tagged for each of
+`west`, `east`, `south`, and `north`; a missing or duplicate direction makes the
+configuration invalid. Both the declared anchors and the polygons returned by
+Detour must straddle the matching replacement edge. This prevents a broad snap
+from making two same-side polygons look like a valid seam crossing.
+
+Run the four PV seam routes in both runtime modes:
+
+```powershell
+npm run navmesh-pv-seams-check -- `
+  --cache-dir "C:\path\to\data\2016\collision" `
+  --report "$env:TEMP\pv-seams.json"
+
+npm run navmesh-pv-seams-check -- `
+  --cache-dir "C:\path\to\data\2016\collision" `
+  --topology-only `
+  --report "$env:TEMP\pv-seams-topology-only.json"
+```
+
+The PV replacement rectangle is tile coverage `[148,112,152,118)` at global
+origin `(-4096.5,-4096.5)` and tile size `25.6`, so its world-space edges are
+`x=-307.7`, `x=-205.3`, `z=-1229.3`, and `z=-1075.7`. The configured anchors
+were selected from actual V13 Detour snap and corridor evidence, not estimated
+from the map image.
 
 Compare a candidate with the preserved baseline report:
 

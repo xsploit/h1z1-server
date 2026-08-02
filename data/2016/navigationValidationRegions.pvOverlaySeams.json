@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "coordinateSpace": "h1z1-world-y-up-meters",
+  "cardinalSeamGate": {
+    "tileOrigin": [-4096.5, -4096.5],
+    "tileSize": 25.6,
+    "replacementTiles": {
+      "minX": 148,
+      "minZ": 112,
+      "maxXExclusive": 152,
+      "maxZExclusive": 118
+    }
+  },
+  "regions": [
+    {
+      "name": "pleasant-valley-overlay-west-seam",
+      "description": "Evidence-backed terrain route across the west replacement edge x=-307.7 at z=-1120.",
+      "anchors": [
+        {
+          "name": "outside",
+          "position": [-309.7, 23.45, -1120],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        },
+        {
+          "name": "inside",
+          "position": [-305.7, 23.37, -1120],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        }
+      ],
+      "segments": [
+        {
+          "name": "cross-west-replacement-edge",
+          "from": "outside",
+          "to": "inside",
+          "seamDirection": "west",
+          "maxDetourRatio": 1.1,
+          "maxCornerVerticalStep": 0.2,
+          "maxSegmentSlopeDegrees": 5
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-overlay-east-seam",
+      "description": "Evidence-backed terrain route across the east replacement edge x=-205.3 at z=-1160.",
+      "anchors": [
+        {
+          "name": "inside",
+          "position": [-207.3, 23.46, -1160],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        },
+        {
+          "name": "outside",
+          "position": [-203.3, 23.45, -1160.1],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        }
+      ],
+      "segments": [
+        {
+          "name": "cross-east-replacement-edge",
+          "from": "inside",
+          "to": "outside",
+          "seamDirection": "east",
+          "maxDetourRatio": 1.1,
+          "maxCornerVerticalStep": 0.2,
+          "maxSegmentSlopeDegrees": 5
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-overlay-south-seam",
+      "description": "Evidence-backed road-to-terrain route across the south replacement edge z=-1229.3 at x=-220.",
+      "anchors": [
+        {
+          "name": "outside",
+          "position": [-220, 23.46, -1231.3],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        },
+        {
+          "name": "inside",
+          "position": [-220, 23.47, -1227.3],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [3],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        }
+      ],
+      "segments": [
+        {
+          "name": "cross-south-replacement-edge",
+          "from": "outside",
+          "to": "inside",
+          "seamDirection": "south",
+          "maxDetourRatio": 1.3,
+          "maxCornerVerticalStep": 0.2,
+          "maxSegmentSlopeDegrees": 20
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-overlay-north-seam",
+      "description": "Evidence-backed terrain route across the north replacement edge z=-1075.7 at x=-280.",
+      "anchors": [
+        {
+          "name": "inside",
+          "position": [-280, 23.45, -1077.7],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        },
+        {
+          "name": "outside",
+          "position": [-280, 23.45, -1073.7],
+          "halfExtents": [0.5, 0.5, 0.5],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.15,
+          "maxVerticalSnap": 0.15
+        }
+      ],
+      "segments": [
+        {
+          "name": "cross-north-replacement-edge",
+          "from": "inside",
+          "to": "outside",
+          "seamDirection": "north",
+          "maxDetourRatio": 1.1,
+          "maxCornerVerticalStep": 0.2,
+          "maxSegmentSlopeDegrees": 5
+        }
+      ]
+    }
+  ]
+}
