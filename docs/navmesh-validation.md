@@ -1,5 +1,35 @@
 # Navigation regional gates
 
+## Recoverable runtime and bundle deployment
+
+`scripts/deployNavigationArtifact.ps1` deploys a compiled navigation runtime
+and an already-staged navigation bundle as one recoverable transaction. The
+bundle source is mandatory and may not be the installed `data/2016` directory.
+The script verifies its manifest before changing QuickStart, refuses to deploy
+while an H1Emu Node process is running, copies every source into a same-volume
+stage, and backs up every installed file it will replace or remove.
+
+Only runtime closure files, files named by the staged manifest, the manifest
+itself, and obsolete `collision/z1_cache_*.bin` parts are in scope. Other
+QuickStart data is neither copied nor removed. Installed manifest verification
+runs after replacement; a partial operation or failed post-check restores the
+whole runtime-and-bundle set from the backup.
+
+Inspect the exact transaction without changing files:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/deployNavigationArtifact.ps1 `
+  -QuickStartRoot "C:\path\to\h1z1-server-QuickStart-master" `
+  -NavigationBundleSourceRoot "C:\path\to\staged\data\2016" `
+  -Plan
+```
+
+After reviewing the plan and stopping the server, omit `-Plan` to deploy. Use
+`-SkipBuild` only when the current checkout's `out` runtime was already built
+and verified. Backups are retained under `QuickStartRoot/backups`; temporary
+staging is removed after success or rollback.
+
 Navigation artifacts are not eligible for a full-world deployment merely
 because they load. They must pass deterministic regional topology gates before
 the expensive bake is allowed to replace the installed baseline.
