@@ -22,6 +22,16 @@ type Triangle = {
   maxZ: number;
 };
 
+type Point = { x: number; y: number; z: number };
+
+function roundPoint(point: Point) {
+  return {
+    x: Number(point.x.toFixed(6)),
+    y: Number(point.y.toFixed(6)),
+    z: Number(point.z.toFixed(6))
+  };
+}
+
 async function main() {
   const { NavManager } = await import("../src/utils/recast");
   const nav = new NavManager();
@@ -61,8 +71,8 @@ async function main() {
       centerX <= -223 &&
       centerZ >= -1168 &&
       centerZ <= -1133 &&
-      triangle.maxY >= 24 &&
-      triangle.minY <= 30.5 &&
+      triangle.maxY >= 21.5 &&
+      triangle.minY <= 32.5 &&
       triangle.maxY - triangle.minY > 0.06
     ) {
       triangles.push(triangle);
@@ -120,7 +130,76 @@ async function main() {
     .filter((component) => component.maxY - component.minY > 0.15)
     .sort((a, b) => b.maxY - b.minY - (a.maxY - a.minY));
 
-  console.log(JSON.stringify(report, null, 2));
+  const crossingPath = (from: Point, to: Point) => {
+    const halfExtents = { x: 1, y: 0.75, z: 1 };
+    const start = nav.navMeshQuery.findNearestPoly(from, { halfExtents });
+    const end = nav.navMeshQuery.findNearestPoly(to, { halfExtents });
+    if (!start.nearestRef || !end.nearestRef) return [];
+    const corridor = nav.navMeshQuery.findPath(
+      start.nearestRef,
+      end.nearestRef,
+      start.nearestPoint,
+      end.nearestPoint,
+      { maxPathPolys: 2048 }
+    );
+    try {
+      if (!corridor.success || corridor.polys.size === 0) return [];
+      const straight = nav.navMeshQuery.findStraightPath(
+        start.nearestPoint,
+        end.nearestPoint,
+        corridor.polys,
+        { maxStraightPathPoints: 2048, straightPathOptions: 2 }
+      );
+      try {
+        if (!straight.success) return [];
+        const points: Point[] = [];
+        for (let index = 0; index < straight.straightPathCount; index++) {
+          points.push(
+            roundPoint({
+              x: straight.straightPath.get(index * 3),
+              y: straight.straightPath.get(index * 3 + 1),
+              z: straight.straightPath.get(index * 3 + 2)
+            })
+          );
+        }
+        return points;
+      } finally {
+        straight.straightPath.destroy();
+        straight.straightPathFlags.destroy();
+        straight.straightPathRefs.destroy();
+      }
+    } finally {
+      corridor.polys.destroy();
+    }
+  };
+
+  console.log(
+    JSON.stringify(
+      {
+        slopedComponents: report,
+        crossingPaths: {
+          exteriorToInterior: crossingPath(
+            { x: -233.5, y: 23.730623, z: -1133.800049 },
+            { x: -233.5, y: 25.458641, z: -1142.400024 }
+          ),
+          basementToGround: crossingPath(
+            { x: -234.0, y: 22.2154, z: -1165.5 },
+            { x: -227.15, y: 25.4418, z: -1165.5 }
+          ),
+          groundToFirst: crossingPath(
+            { x: -227.145905, y: 25.458641, z: -1163.195068 },
+            { x: -232.600006, y: 28.75864, z: -1163.300049 }
+          ),
+          firstToTop: crossingPath(
+            { x: -233.5, y: 28.6682, z: -1165.5 },
+            { x: -227.15, y: 31.8946, z: -1165.5 }
+          )
+        }
+      },
+      null,
+      2
+    )
+  );
 }
 
 main().catch((error) => {

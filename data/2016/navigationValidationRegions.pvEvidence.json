@@ -8,7 +8,7 @@
       "anchors": [
         {
           "name": "road",
-          "position": [-255.0, 23.05, -1140.0],
+          "position": [-260.0, 23.05, -1140.0],
           "halfExtents": [1, 0.75, 1],
           "expectedAreas": [2],
           "maxHorizontalSnap": 0.75,
@@ -98,7 +98,8 @@
           "to": "interior",
           "maxDetourRatio": 3.0,
           "maxSegmentSlopeDegrees": 45,
-          "monotonicVertical": "ascending"
+          "monotonicVertical": "ascending",
+          "monotonicVerticalTolerance": 0.11
         }
       ]
     },
@@ -129,8 +130,76 @@
           "from": "lower",
           "to": "upper",
           "maxDetourRatio": 2.5,
-          "maxSegmentSlopeDegrees": 45,
+          "maxSegmentSlopeDegrees": 46,
           "monotonicVertical": "ascending"
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-police-basement-flight",
+      "description": "Evidence-backed basement-to-ground-floor stair flight, including its exact detailed tread shell and authored smooth ramp.",
+      "anchors": [
+        {
+          "name": "basement-floor",
+          "position": [-234.0, 22.2154, -1165.5],
+          "halfExtents": [1, 0.5, 1],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 0.65,
+          "maxVerticalSnap": 0.35
+        },
+        {
+          "name": "ground-landing",
+          "position": [-227.15, 25.4418, -1165.5],
+          "halfExtents": [1, 0.5, 1],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 0.65,
+          "maxVerticalSnap": 0.35
+        }
+      ],
+      "segments": [
+        {
+          "name": "basement-to-ground",
+          "from": "basement-floor",
+          "to": "ground-landing",
+          "maxDetourRatio": 1.25,
+          "maxSegmentSlopeDegrees": 46,
+          "monotonicVertical": "ascending",
+          "monotonicVerticalTolerance": 0.11,
+          "requiredAreas": [5]
+        }
+      ]
+    },
+    {
+      "name": "pleasant-valley-police-top-flight",
+      "description": "Evidence-backed first-floor-to-top-landing stair flight, including its exact detailed tread shell and authored smooth ramp.",
+      "anchors": [
+        {
+          "name": "first-floor",
+          "position": [-233.5, 28.6682, -1165.5],
+          "halfExtents": [1, 0.5, 1],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 0.65,
+          "maxVerticalSnap": 0.35
+        },
+        {
+          "name": "top-landing",
+          "position": [-227.15, 31.8946, -1165.5],
+          "halfExtents": [1, 0.5, 1],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 0.65,
+          "maxVerticalSnap": 0.35
+        }
+      ],
+      "segments": [
+        {
+          "name": "first-floor-to-top",
+          "from": "first-floor",
+          "to": "top-landing",
+          "maxDetourRatio": 1.25,
+          "maxSegmentSlopeDegrees": 46,
+          "monotonicVertical": "ascending",
+          "monotonicVerticalTolerance": 0.11,
+          "requiredAreas": [5]
         }
       ]
     },

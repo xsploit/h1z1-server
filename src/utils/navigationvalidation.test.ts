@@ -56,6 +56,60 @@ describe("navigation regional validation", () => {
     assert.equal(report.regions[0].segments[0].maxCornerVerticalStep, 0.5);
   });
 
+  it("passes the exact resolved anchor polygon refs into path queries", () => {
+    let observedRefs: [number, number] | null = null;
+    const adapter: NavigationProbeAdapter = {
+      snap(position) {
+        return {
+          ref: position.x === 0 ? 101 : 202,
+          point: position,
+          area: 5
+        };
+      },
+      path(from, to, _halfExtents, fromRef, toRef) {
+        observedRefs = [fromRef, toRef];
+        return [from, { x: 1, y: 0.5, z: 0 }, to];
+      }
+    };
+
+    const report = evaluateNavigationValidation(config, adapter);
+    assert.equal(report.passed, true);
+    assert.deepEqual(observedRefs, [101, 202]);
+  });
+
+  it("requires a corridor to traverse declared semantic areas", () => {
+    const areaConfig = structuredClone(config);
+    areaConfig.regions[0].segments[0].requiredAreas = [5];
+    const adapter = (areas: number[]): NavigationProbeAdapter => ({
+      snap(position) {
+        return { ref: 1, point: position, area: 5 };
+      },
+      path(from, to) {
+        return {
+          points: [from, { x: 1, y: 0.5, z: 0 }, to],
+          areas
+        };
+      }
+    });
+
+    const accepted = evaluateNavigationValidation(areaConfig, adapter([4, 5]));
+    assert.equal(accepted.passed, true);
+    assert.deepEqual(accepted.regions[0].segments[0].traversedAreas, [4, 5]);
+
+    const rejected = evaluateNavigationValidation(areaConfig, adapter([4]));
+    assert.equal(rejected.passed, false);
+    assert.deepEqual(rejected.regions[0].segments[0].failures, [
+      "missing-required-area:5"
+    ]);
+
+    const invalid = structuredClone(areaConfig);
+    invalid.regions[0].segments[0].requiredAreas = [];
+    assert.throws(
+      () => parseNavigationValidationConfig(invalid),
+      /segment 0 is invalid/
+    );
+  });
+
   it("fails an elevator-like stair path", () => {
     const adapter: NavigationProbeAdapter = {
       snap(position) {
@@ -116,6 +170,30 @@ describe("navigation regional validation", () => {
   it("rejects an invalid segment slope limit", () => {
     const invalid = structuredClone(config);
     invalid.regions[0].segments[0].maxSegmentSlopeDegrees = 91;
+    assert.throws(
+      () => parseNavigationValidationConfig(invalid),
+      /segment 0 is invalid/
+    );
+  });
+
+  it("allows an explicit voxel-scale monotonic tolerance", () => {
+    const tolerant = structuredClone(config);
+    const segment = tolerant.regions[0].segments[0];
+    delete segment.maxCornerVerticalStep;
+    segment.monotonicVerticalTolerance = 0.11;
+    const adapter: NavigationProbeAdapter = {
+      snap(position) {
+        return { ref: 1, point: position, area: 5 };
+      },
+      path(from, to) {
+        return [from, { x: 1, y: 1.08, z: 0 }, to];
+      }
+    };
+    assert.equal(evaluateNavigationValidation(config, adapter).passed, false);
+    assert.equal(evaluateNavigationValidation(tolerant, adapter).passed, true);
+
+    const invalid = structuredClone(tolerant);
+    invalid.regions[0].segments[0].monotonicVerticalTolerance = 1.01;
     assert.throws(
       () => parseNavigationValidationConfig(invalid),
       /segment 0 is invalid/

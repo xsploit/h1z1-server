@@ -9,7 +9,7 @@ import {
 } from "../src/utils/navigationvalidation";
 
 const DT_STRAIGHTPATH_ALL_CROSSINGS = 2;
-const ADAPTER_VERSION = "detour-all-crossings-v1";
+const ADAPTER_VERSION = "detour-all-crossings-snap-refs-areas-v3";
 const MAX_PATH_POLYS = 2048;
 const MAX_STRAIGHT_PATH_POINTS = 2048;
 
@@ -64,27 +64,23 @@ async function main() {
         area
       };
     },
-    path(from, to, halfExtents) {
-      const start = nav.navMeshQuery.findNearestPoly(from, { halfExtents });
-      const end = nav.navMeshQuery.findNearestPoly(to, { halfExtents });
-      if (!start.nearestRef || !end.nearestRef) return [];
+    path(from, to, _halfExtents, fromRef, toRef) {
+      if (!fromRef || !toRef) return [];
 
-      const corridor = nav.navMeshQuery.findPath(
-        start.nearestRef,
-        end.nearestRef,
-        start.nearestPoint,
-        end.nearestPoint,
-        { maxPathPolys: MAX_PATH_POLYS }
-      );
+      const corridor = nav.navMeshQuery.findPath(fromRef, toRef, from, to, {
+        maxPathPolys: MAX_PATH_POLYS
+      });
       try {
         if (!corridor.success || corridor.polys.size === 0) return [];
+        const areas: number[] = [];
+        for (let index = 0; index < corridor.polys.size; index++) {
+          const area = nav.navmesh.getPolyArea(corridor.polys.get(index));
+          if (hasDetourSuccess(area.status)) areas.push(area.area);
+        }
         const lastRef = corridor.polys.get(corridor.polys.size - 1);
-        let closestEnd: NavigationProbePoint = end.nearestPoint;
-        if (lastRef !== end.nearestRef) {
-          const closest = nav.navMeshQuery.closestPointOnPoly(
-            lastRef,
-            end.nearestPoint
-          );
+        let closestEnd: NavigationProbePoint = to;
+        if (lastRef !== toRef) {
+          const closest = nav.navMeshQuery.closestPointOnPoly(lastRef, to);
           if (!closest.success) return [];
           closestEnd = closest.closestPoint;
         }
@@ -95,7 +91,7 @@ async function main() {
         // every polygon crossing so the topology gate measures the actual
         // baked corridor rather than its string-pulled presentation.
         const straight = nav.navMeshQuery.findStraightPath(
-          start.nearestPoint,
+          from,
           closestEnd,
           corridor.polys,
           {
@@ -113,7 +109,7 @@ async function main() {
               z: straight.straightPath.get(index * 3 + 2)
             });
           }
-          return points;
+          return { points, areas };
         } finally {
           straight.straightPath.destroy();
           straight.straightPathFlags.destroy();

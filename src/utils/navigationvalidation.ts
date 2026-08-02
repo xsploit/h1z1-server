@@ -31,6 +31,8 @@ export interface NavigationValidationSegment {
   maxCornerVerticalStep?: number;
   maxSegmentSlopeDegrees?: number;
   monotonicVertical?: "ascending" | "descending" | "either";
+  monotonicVerticalTolerance?: number;
+  requiredAreas?: number[];
 }
 
 export interface NavigationValidationRegion {
@@ -60,8 +62,15 @@ export interface NavigationProbeAdapter {
   path(
     from: NavigationProbePoint,
     to: NavigationProbePoint,
-    halfExtents: NavigationProbePoint
-  ): NavigationProbePoint[];
+    halfExtents: NavigationProbePoint,
+    fromRef: number,
+    toRef: number
+  ): NavigationProbePoint[] | NavigationProbePath;
+}
+
+export interface NavigationProbePath {
+  points: NavigationProbePoint[];
+  areas: number[];
 }
 
 export interface NavigationValidationReport {
@@ -98,6 +107,7 @@ export interface NavigationValidationReport {
       detourRatio: number | null;
       maxCornerVerticalStep: number;
       maxSegmentSlopeDegrees: number;
+      traversedAreas: number[];
       failures: string[];
     }>;
   }>;
@@ -210,7 +220,15 @@ export function parseNavigationValidationConfig(
         (segment.maxSegmentSlopeDegrees !== undefined &&
           (!Number.isFinite(segment.maxSegmentSlopeDegrees as number) ||
             (segment.maxSegmentSlopeDegrees as number) < 0 ||
-            (segment.maxSegmentSlopeDegrees as number) > 90))
+            (segment.maxSegmentSlopeDegrees as number) > 90)) ||
+        (segment.monotonicVerticalTolerance !== undefined &&
+          (!Number.isFinite(segment.monotonicVerticalTolerance as number) ||
+            (segment.monotonicVerticalTolerance as number) < 0 ||
+            (segment.monotonicVerticalTolerance as number) > 1)) ||
+        (segment.requiredAreas !== undefined &&
+          (!Array.isArray(segment.requiredAreas) ||
+            segment.requiredAreas.length === 0 ||
+            segment.requiredAreas.some((area) => !Number.isInteger(area))))
       ) {
         throw new Error(`${region.name} segment ${segmentIndex} is invalid`);
       }
@@ -298,8 +316,14 @@ export function evaluateNavigationValidation(
       const to = snaps.get(segment.to)!;
       const fromConfig = anchorConfig.get(segment.from)!;
       const extents = point(fromConfig.halfExtents ?? [1, 1, 1]);
-      const path =
-        from.ref && to.ref ? adapter.path(from.point, to.point, extents) : [];
+      const pathResult =
+        from.ref && to.ref
+          ? adapter.path(from.point, to.point, extents, from.ref, to.ref)
+          : [];
+      const path = Array.isArray(pathResult) ? pathResult : pathResult.points;
+      const traversedAreas = Array.isArray(pathResult)
+        ? []
+        : [...new Set(pathResult.areas)].sort((left, right) => left - right);
       const last = path[path.length - 1];
       const reachTolerance = segment.reachTolerance ?? 0.75;
       const reached = Boolean(
@@ -362,7 +386,7 @@ export function evaluateNavigationValidation(
         failures.push(`slope-degrees:${maxSegmentSlopeDegrees.toFixed(3)}`);
       }
       if (reached && segment.monotonicVertical) {
-        const epsilon = 0.05;
+        const epsilon = segment.monotonicVerticalTolerance ?? 0.05;
         const ascending = verticalSteps.every((step) => step >= -epsilon);
         const descending = verticalSteps.every((step) => step <= epsilon);
         const monotonic =
@@ -372,6 +396,13 @@ export function evaluateNavigationValidation(
               ? descending
               : ascending || descending;
         if (!monotonic) failures.push("non-monotonic-vertical-path");
+      }
+      if (reached && segment.requiredAreas) {
+        for (const area of segment.requiredAreas) {
+          if (!traversedAreas.includes(area)) {
+            failures.push(`missing-required-area:${area}`);
+          }
+        }
       }
       return {
         name: segment.name,
@@ -384,6 +415,7 @@ export function evaluateNavigationValidation(
         detourRatio,
         maxCornerVerticalStep,
         maxSegmentSlopeDegrees,
+        traversedAreas,
         failures
       };
     });
