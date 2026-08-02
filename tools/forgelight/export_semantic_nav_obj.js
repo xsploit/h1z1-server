@@ -389,6 +389,10 @@ async function exportSemanticRegion(options, dependencies = {}) {
     coordinateSpace: "h1z1-world-y-up-meters",
     sourceStrategy: "heightmap-plus-h1col2-only",
     renderGeometryMerged: false,
+    output: {
+      file: basename(outputPath),
+      sha256: sha256File(outputPath)
+    },
     bounds: {
       minX: bounds[0],
       minZ: bounds[1],

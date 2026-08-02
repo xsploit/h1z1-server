@@ -117,7 +117,12 @@ test("exports deterministic canonical semantics from heightmap plus H1COL2", asy
     readFileSync(firstOutput, "utf8"),
     readFileSync(secondOutput, "utf8")
   );
-  assert.deepEqual(first, second);
+  assert.equal(first.output.sha256, second.output.sha256);
+  assert.deepEqual(
+    { ...first, output: { ...first.output, file: "output.obj" } },
+    { ...second, output: { ...second.output, file: "output.obj" } }
+  );
+  assert.equal(first.output.file, "first.obj");
   assert.deepEqual(first.counts.materialTriangles, {
     nav_door_panel_dynamic: 1,
     nav_exclude: 1,
