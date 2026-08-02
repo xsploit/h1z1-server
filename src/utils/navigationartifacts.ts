@@ -25,6 +25,39 @@ export interface NavigationArtifactFile {
   sha256: string;
 }
 
+export interface CollisionSemanticSourceInput {
+  file: string;
+  sha256: string;
+}
+
+export interface CollisionSemanticSourceReport {
+  file: NavigationArtifactFile;
+  schema: "h1emu-collision-semantic-obj-v1";
+  semanticContract: "h1emu-nav-semantics-v1";
+  coordinateSpace: "h1z1-world-y-up-meters";
+  sourceStrategy: string;
+  renderGeometryMerged: boolean;
+  bounds: {
+    minX: number;
+    minZ: number;
+    maxX: number;
+    maxZ: number;
+  };
+  terrainStep: number;
+  output: CollisionSemanticSourceInput;
+  inputs: {
+    heightmap: CollisionSemanticSourceInput;
+    collision: CollisionSemanticSourceInput;
+    collisionMetadata:
+      | (CollisionSemanticSourceInput & {
+          matched: boolean;
+        })
+      | null;
+  };
+  collisionMetadataMatched: boolean;
+  limitations: string[];
+}
+
 export interface NavigationTsetHeader {
   version: number;
   layers: number;
@@ -63,6 +96,8 @@ export interface NavigationArtifactManifest {
       size: number;
       sha256: string;
     } | null;
+    /** Optional for backward-compatible runtime-only manifests; mandatory for complete provenance. */
+    sourceReport?: CollisionSemanticSourceReport | null;
   };
   runtime: {
     cache: {
@@ -136,6 +171,114 @@ export function assertNavigationRuntimeConfiguration(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+function parseSourceInput(
+  value: unknown,
+  label: string
+): CollisionSemanticSourceInput {
+  if (
+    !isRecord(value) ||
+    typeof value.file !== "string" ||
+    value.file.length === 0 ||
+    !isSha256(value.sha256)
+  ) {
+    throw new Error(`[NAV] source report has invalid ${label} input`);
+  }
+  return { file: value.file, sha256: value.sha256 };
+}
+
+export function parseCollisionSemanticSourceReport(
+  value: unknown
+): Omit<CollisionSemanticSourceReport, "file"> {
+  if (!isRecord(value)) {
+    throw new Error("[NAV] collision semantic source report must be an object");
+  }
+  if (value.schema !== "h1emu-collision-semantic-obj-v1") {
+    throw new Error(
+      `[NAV] unsupported collision semantic source report ${String(value.schema)}`
+    );
+  }
+  const bounds = value.bounds;
+  const inputs = value.inputs;
+  if (
+    value.semanticContract !== "h1emu-nav-semantics-v1" ||
+    value.coordinateSpace !== "h1z1-world-y-up-meters" ||
+    typeof value.sourceStrategy !== "string" ||
+    value.sourceStrategy.length === 0 ||
+    typeof value.renderGeometryMerged !== "boolean" ||
+    !isRecord(bounds) ||
+    !["minX", "minZ", "maxX", "maxZ"].every(
+      (field) =>
+        typeof bounds[field] === "number" && Number.isFinite(bounds[field])
+    ) ||
+    (bounds.minX as number) >= (bounds.maxX as number) ||
+    (bounds.minZ as number) >= (bounds.maxZ as number) ||
+    typeof value.terrainStep !== "number" ||
+    !Number.isFinite(value.terrainStep) ||
+    value.terrainStep <= 0 ||
+    !isRecord(inputs) ||
+    !Array.isArray(value.limitations) ||
+    !value.limitations.every(
+      (limitation) => typeof limitation === "string" && limitation.length > 0
+    )
+  ) {
+    throw new Error("[NAV] collision semantic source report is invalid");
+  }
+  const heightmap = parseSourceInput(inputs.heightmap, "heightmap");
+  const collision = parseSourceInput(inputs.collision, "collision");
+  const output = parseSourceInput(value.output, "output");
+  let collisionMetadata: CollisionSemanticSourceReport["inputs"]["collisionMetadata"] =
+    null;
+  if (inputs.collisionMetadata !== null) {
+    const input = parseSourceInput(
+      inputs.collisionMetadata,
+      "collisionMetadata"
+    );
+    if (
+      !isRecord(inputs.collisionMetadata) ||
+      typeof inputs.collisionMetadata.matched !== "boolean"
+    ) {
+      throw new Error(
+        "[NAV] source report has invalid collisionMetadata matched state"
+      );
+    }
+    collisionMetadata = {
+      ...input,
+      matched: inputs.collisionMetadata.matched
+    };
+  }
+  const collisionMetadataMatched = collisionMetadata?.matched === true;
+  if (
+    value.collisionMetadataMatched !== undefined &&
+    value.collisionMetadataMatched !== collisionMetadataMatched
+  ) {
+    throw new Error(
+      "[NAV] source report collisionMetadata matched state is inconsistent"
+    );
+  }
+  return {
+    schema: "h1emu-collision-semantic-obj-v1",
+    semanticContract: "h1emu-nav-semantics-v1",
+    coordinateSpace: "h1z1-world-y-up-meters",
+    sourceStrategy: value.sourceStrategy,
+    renderGeometryMerged: value.renderGeometryMerged,
+    bounds: {
+      minX: bounds.minX as number,
+      minZ: bounds.minZ as number,
+      maxX: bounds.maxX as number,
+      maxZ: bounds.maxZ as number
+    },
+    terrainStep: value.terrainStep,
+    output,
+    inputs: { heightmap, collision, collisionMetadata },
+    collisionMetadataMatched,
+    limitations: [...value.limitations]
+  };
 }
 
 export function canonicalJson(value: unknown): string {
@@ -292,6 +435,9 @@ function collectManifestFiles(
   manifest: NavigationArtifactManifest
 ): NavigationArtifactFile[] {
   const files = [...manifest.runtime.cache.parts];
+  if (manifest.provenance.sourceReport) {
+    files.push(manifest.provenance.sourceReport.file);
+  }
   for (const entry of [
     manifest.runtime.collision,
     manifest.runtime.heightmap,
@@ -314,6 +460,7 @@ function validateCompleteProvenance(
     recastNavigationCommit: manifest.provenance.recastNavigationCommit,
     sourceWorld: manifest.provenance.sourceWorld,
     classifierConfig: manifest.provenance.classifierConfig,
+    sourceReport: manifest.provenance.sourceReport,
     collision: manifest.runtime.collision,
     heightmap: manifest.runtime.heightmap,
     navigationMetadata: manifest.runtime.navigationMetadata,
@@ -323,6 +470,29 @@ function validateCompleteProvenance(
     if (!value) {
       throw new Error(`[NAV] complete artifact provenance is missing ${name}`);
     }
+  }
+  const sourceReport = manifest.provenance.sourceReport!;
+  const { file: _file, ...sourceReportSnapshot } = sourceReport;
+  if (
+    canonicalJson(parseCollisionSemanticSourceReport(sourceReportSnapshot)) !==
+    canonicalJson(sourceReportSnapshot)
+  ) {
+    throw new Error(
+      "[NAV] complete artifact contains invalid source report provenance"
+    );
+  }
+  if (
+    !sourceReport.collisionMetadataMatched ||
+    sourceReport.inputs.collision.sha256 !==
+      manifest.runtime.collision!.file.sha256 ||
+    sourceReport.inputs.heightmap.sha256 !==
+      manifest.runtime.heightmap!.file.sha256 ||
+    sourceReport.output.file !== manifest.provenance.sourceWorld!.name ||
+    sourceReport.output.sha256 !== manifest.provenance.sourceWorld!.sha256
+  ) {
+    throw new Error(
+      "[NAV] complete artifact source report does not match its sidecar, source world, or runtime inputs"
+    );
   }
   const semantics = manifest.runtime.semantics!;
   if (
@@ -468,6 +638,38 @@ export async function verifyNavigationArtifact(options: {
     }
     filesVerified++;
     bytesVerified += size;
+  }
+
+  if (manifest.provenance.sourceReport) {
+    const report = manifest.provenance.sourceReport;
+    const { file: _file, ...manifestSnapshot } = report;
+    const reportPath = resolveArtifactFile(bundleRoot, report.file);
+    const diskSnapshot = parseCollisionSemanticSourceReport(
+      JSON.parse(readFileSync(reportPath, "utf8"))
+    );
+    if (canonicalJson(diskSnapshot) !== canonicalJson(manifestSnapshot)) {
+      throw new Error(
+        "[NAV] collision semantic source report does not match manifested provenance"
+      );
+    }
+    if (
+      manifest.runtime.collision &&
+      diskSnapshot.inputs.collision.sha256 !==
+        manifest.runtime.collision.file.sha256
+    ) {
+      throw new Error(
+        "[NAV] source report collision hash does not match runtime collision"
+      );
+    }
+    if (
+      manifest.runtime.heightmap &&
+      diskSnapshot.inputs.heightmap.sha256 !==
+        manifest.runtime.heightmap.file.sha256
+    ) {
+      throw new Error(
+        "[NAV] source report heightmap hash does not match runtime heightmap"
+      );
+    }
   }
 
   const firstPart = resolveArtifactFile(bundleRoot, orderedParts[0]);

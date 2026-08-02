@@ -12,6 +12,7 @@ import {
   canonicalJson,
   NavigationArtifactFile,
   NavigationArtifactManifest,
+  parseCollisionSemanticSourceReport,
   parseTsetHeader,
   sha256File
 } from "../src/utils/navigationartifacts";
@@ -190,6 +191,9 @@ async function main() {
         resolve(bundleRoot, "navigation-semantics.json")
     )
   );
+  const sourceReportPath = option("--source-report")
+    ? resolve(option("--source-report")!)
+    : null;
   const partNames = readdirSync(cacheDirectory)
     .filter((name) => /^z1_cache_\d+\.bin$/.test(name))
     .sort((left, right) => cachePartIndex(left) - cachePartIndex(right));
@@ -247,6 +251,14 @@ async function main() {
     : null;
   const sourceWorld = await sourceRecord(option("--source-world"));
   const classifierConfig = await sourceRecord(option("--classifier-config"));
+  const sourceReport = sourceReportPath
+    ? {
+        file: await fileRecord(bundleRoot, sourceReportPath),
+        ...parseCollisionSemanticSourceReport(
+          JSON.parse(readFileSync(sourceReportPath, "utf8"))
+        )
+      }
+    : null;
   const status =
     option("--provenance-status") ??
     (sourceWorld && option("--extractor-commit") && option("--recast-commit")
@@ -259,6 +271,7 @@ async function main() {
     const required = {
       sourceWorld,
       classifierConfig,
+      sourceReport,
       extractorCommit: option("--extractor-commit"),
       recastCommit: option("--recast-commit"),
       recastNavigationCommit: option("--recast-navigation-commit"),
@@ -290,6 +303,17 @@ async function main() {
         "complete provenance requires strict semantic navigation metadata"
       );
     }
+    if (
+      !sourceReport!.collisionMetadataMatched ||
+      sourceReport!.inputs.collision.sha256 !== collision!.file.sha256 ||
+      sourceReport!.inputs.heightmap.sha256 !== heightmap!.file.sha256 ||
+      sourceReport!.output.file !== sourceWorld!.name ||
+      sourceReport!.output.sha256 !== sourceWorld!.sha256
+    ) {
+      throw new Error(
+        "complete provenance requires a matched collision sidecar and source-report output/input hashes to match the source world and runtime"
+      );
+    }
   }
 
   const payload: Omit<NavigationArtifactManifest, "artifactId"> = {
@@ -300,7 +324,8 @@ async function main() {
       recastCommit: option("--recast-commit") ?? null,
       recastNavigationCommit: option("--recast-navigation-commit") ?? null,
       sourceWorld,
-      classifierConfig
+      classifierConfig,
+      sourceReport
     },
     runtime: {
       cache: { format: "TSET", parts: cacheParts, header: cacheHeader },
@@ -330,7 +355,8 @@ async function main() {
           heightmap?.file,
           navigationMetadata?.file,
           semantics?.file,
-          transitions?.file
+          transitions?.file,
+          sourceReport?.file
         ]
           .filter(Boolean)
           .reduce((sum, file) => sum + (file?.size ?? 0), 0),

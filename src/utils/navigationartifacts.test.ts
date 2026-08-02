@@ -9,6 +9,7 @@ import {
   calculateNavigationArtifactId,
   canonicalJson,
   NavigationArtifactManifest,
+  parseCollisionSemanticSourceReport,
   parseTsetHeader,
   verifyNavigationArtifact
 } from "./navigationartifacts";
@@ -46,6 +47,29 @@ function tsetBuffer(): Buffer {
 
 function sha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
+}
+
+function collisionSemanticSourceReport() {
+  return {
+    schema: "h1emu-collision-semantic-obj-v1",
+    semanticContract: "h1emu-nav-semantics-v1",
+    coordinateSpace: "h1z1-world-y-up-meters",
+    sourceStrategy: "heightmap-plus-h1col2-only",
+    renderGeometryMerged: false,
+    bounds: { minX: -255, minZ: -1180, maxX: -210, maxZ: -1125 },
+    terrainStep: 1,
+    output: { file: "world.obj", sha256: "4".repeat(64) },
+    inputs: {
+      heightmap: { file: "heightmap.png", sha256: "1".repeat(64) },
+      collision: { file: "z1_collision.bin", sha256: "2".repeat(64) },
+      collisionMetadata: {
+        file: "z1_collision.metadata.json",
+        sha256: "3".repeat(64),
+        matched: true
+      }
+    },
+    limitations: ["H1COL2 classifies merged actor meshes."]
+  };
 }
 
 function fixture() {
@@ -92,6 +116,74 @@ function fixture() {
   return { root, cache, manifestPath, manifest };
 }
 
+function claimCompleteProvenance(manifest: NavigationArtifactManifest): void {
+  const file = manifest.runtime.cache.parts[0];
+  manifest.provenance = {
+    status: "complete",
+    extractorCommit: "extractor",
+    recastCommit: "recast",
+    recastNavigationCommit: "recast-navigation",
+    sourceWorld: { name: "world.obj", size: file.size, sha256: file.sha256 },
+    classifierConfig: {
+      name: "navigation.yml",
+      size: file.size,
+      sha256: file.sha256
+    }
+  };
+  manifest.runtime.collision = {
+    file,
+    format: "H1COL2",
+    version: 1,
+    meshCount: 1,
+    instanceCount: 1
+  };
+  manifest.runtime.heightmap = {
+    file,
+    format: "PNG",
+    width: 8192,
+    height: 8192
+  };
+  manifest.runtime.navigationMetadata = {
+    file,
+    schemaVersion: 2,
+    instanceCount: 1,
+    kinds: { walkable: 1 },
+    semanticMode: "strict"
+  };
+  manifest.runtime.semantics = {
+    file,
+    schemaVersion: 1,
+    semanticContract: "h1emu-nav-semantics-v1",
+    semanticInput: true,
+    legacyObjectFallback: false,
+    sourceTriangles: 1,
+    keptTriangles: 1,
+    excludedTriangles: 0,
+    fallbackTriangles: 0,
+    ordinaryMaterialTriangles: 0,
+    materials: { nav_floor_exterior: 1 },
+    warnings: []
+  };
+  manifest.runtime.transitions = { file, count: 0 };
+}
+
+function bindSourceReport(
+  root: string,
+  manifest: NavigationArtifactManifest,
+  report: unknown
+): void {
+  const bytes = Buffer.from(JSON.stringify(report));
+  writeFileSync(join(root, "navigation-source-report.json"), bytes);
+  manifest.provenance.sourceReport = {
+    file: {
+      path: "navigation-source-report.json",
+      size: bytes.length,
+      sha256: sha256(bytes)
+    },
+    ...parseCollisionSemanticSourceReport(report)
+  };
+}
+
 test("canonical JSON and artifact IDs ignore object key order", () => {
   assert.equal(canonicalJson({ b: 2, a: 1 }), '{"a":1,"b":2}');
   const { manifest } = fixture();
@@ -108,6 +200,69 @@ test("verifies a runtime-only cache manifest", async () => {
   assert.equal(verified.filesVerified, 1);
 });
 
+test("binds and verifies a collision-first semantic source report", async () => {
+  const { root, cache, manifestPath, manifest } = fixture();
+  const reportPath = join(root, "navigation-source-report.json");
+  const report = collisionSemanticSourceReport();
+  const bytes = Buffer.from(JSON.stringify(report));
+  writeFileSync(reportPath, bytes);
+  manifest.provenance.sourceReport = {
+    file: {
+      path: "navigation-source-report.json",
+      size: bytes.length,
+      sha256: sha256(bytes)
+    },
+    ...parseCollisionSemanticSourceReport(report)
+  };
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  const verified = await verifyNavigationArtifact({
+    manifestPath,
+    cacheDirectory: cache
+  });
+  assert.equal(verified.filesVerified, 2);
+  assert.equal(
+    verified.manifest.provenance.sourceReport?.collisionMetadataMatched,
+    true
+  );
+});
+
+test("rejects source claims that differ from the bound source report", async () => {
+  const { root, cache, manifestPath, manifest } = fixture();
+  const reportPath = join(root, "navigation-source-report.json");
+  const report = collisionSemanticSourceReport();
+  const bytes = Buffer.from(JSON.stringify(report));
+  writeFileSync(reportPath, bytes);
+  manifest.provenance.sourceReport = {
+    file: {
+      path: "navigation-source-report.json",
+      size: bytes.length,
+      sha256: sha256(bytes)
+    },
+    ...parseCollisionSemanticSourceReport(report),
+    sourceStrategy: "tampered-strategy"
+  };
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /source report does not match manifested provenance/
+  );
+});
+
+test("rejects an inconsistent source sidecar matched state", () => {
+  assert.throws(
+    () =>
+      parseCollisionSemanticSourceReport({
+        ...collisionSemanticSourceReport(),
+        collisionMetadataMatched: false
+      }),
+    /matched state is inconsistent/
+  );
+});
+
 test("rejects a false complete-provenance claim", async () => {
   const { cache, manifestPath, manifest } = fixture();
   manifest.provenance.status = "complete";
@@ -116,6 +271,67 @@ test("rejects a false complete-provenance claim", async () => {
   await assert.rejects(
     verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
     /complete artifact provenance is missing extractorCommit/
+  );
+});
+
+test("complete provenance requires a collision semantic source report", async () => {
+  const { cache, manifestPath, manifest } = fixture();
+  claimCompleteProvenance(manifest);
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /complete artifact provenance is missing sourceReport/
+  );
+});
+
+test("complete provenance requires a matched collision metadata sidecar", async () => {
+  const { root, cache, manifestPath, manifest } = fixture();
+  claimCompleteProvenance(manifest);
+  const file = manifest.runtime.cache.parts[0];
+  const base = collisionSemanticSourceReport();
+  const report = {
+    ...base,
+    output: { ...base.output, sha256: file.sha256 },
+    inputs: {
+      ...base.inputs,
+      heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
+      collision: { ...base.inputs.collision, sha256: file.sha256 },
+      collisionMetadata: null
+    }
+  };
+  bindSourceReport(root, manifest, report);
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /does not match its sidecar, source world, or runtime inputs/
+  );
+});
+
+test("complete provenance binds the source report output to sourceWorld", async () => {
+  const { root, cache, manifestPath, manifest } = fixture();
+  claimCompleteProvenance(manifest);
+  const file = manifest.runtime.cache.parts[0];
+  const base = collisionSemanticSourceReport();
+  const report = {
+    ...base,
+    output: { file: "different.obj", sha256: file.sha256 },
+    inputs: {
+      ...base.inputs,
+      heightmap: { ...base.inputs.heightmap, sha256: file.sha256 },
+      collision: { ...base.inputs.collision, sha256: file.sha256 }
+    }
+  };
+  bindSourceReport(root, manifest, report);
+  manifest.artifactId = calculateNavigationArtifactId(manifest);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  await assert.rejects(
+    verifyNavigationArtifact({ manifestPath, cacheDirectory: cache }),
+    /does not match its sidecar, source world, or runtime inputs/
   );
 });
 

@@ -59,6 +59,7 @@ Generate and verify a staged bundle with:
 ```powershell
 npm run navmesh-artifact-create -- --bundle-root data/2016 `
   --source-world C:\path\to\world.obj `
+  --source-report data\2016\navigation-source-report.json `
   --classifier-config C:\path\to\config.yml `
   --semantic-report C:\path\to\navigation-semantics.json `
   --extractor-commit <sha> `
@@ -69,8 +70,14 @@ npm run navmesh-artifact-check -- --bundle-root data/2016
 
 New builds must use `provenance.status=complete`. Complete provenance requires
 all three tool commits, source/classifier hashes, navigation metadata, and a
-strict `h1emu-nav-semantics-v1` report with zero fallback triangles, ordinary
-materials, or warnings. A pre-contract rollback can be recorded honestly as
+valid `h1emu-collision-semantic-obj-v1` source report whose input hashes match
+the runtime collision and heightmap, whose output name and hash match the
+manifested source OBJ, and whose collision metadata sidecar is marked matched,
+plus a strict `h1emu-nav-semantics-v1` bake report with zero fallback triangles,
+ordinary materials, or warnings. The source report must be staged inside the
+bundle so its bytes, source strategy, bounds, render-merge policy, sidecar match
+state, output identity, and known limitations are all bound by the manifest. A
+pre-contract rollback can be recorded honestly as
 `runtime-only`; it still receives full runtime hashes but does not pretend that
 its original `world.obj` or tool commits are known.
 When `NAV_STREAMING=1`, a missing, altered, mixed, or incomplete cache bundle
