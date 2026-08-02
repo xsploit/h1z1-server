@@ -10,6 +10,18 @@ import { readFileSync } from "node:fs";
 
 export type NavigationProbePoint = { x: number; y: number; z: number };
 export type NavigationProbeTuple = [number, number, number];
+export type NavigationCardinalDirection = "west" | "east" | "south" | "north";
+
+export interface NavigationCardinalSeamGate {
+  tileOrigin: [number, number];
+  tileSize: number;
+  replacementTiles: {
+    minX: number;
+    minZ: number;
+    maxXExclusive: number;
+    maxZExclusive: number;
+  };
+}
 
 export interface NavigationValidationAnchor {
   name: string;
@@ -33,6 +45,7 @@ export interface NavigationValidationSegment {
   monotonicVertical?: "ascending" | "descending" | "either";
   monotonicVerticalTolerance?: number;
   requiredAreas?: number[];
+  seamDirection?: NavigationCardinalDirection;
 }
 
 export interface NavigationValidationRegion {
@@ -45,6 +58,7 @@ export interface NavigationValidationRegion {
 export interface NavigationValidationConfig {
   schemaVersion: 1;
   coordinateSpace: "h1z1-world-y-up-meters";
+  cardinalSeamGate?: NavigationCardinalSeamGate;
   regions: NavigationValidationRegion[];
 }
 
@@ -108,6 +122,7 @@ export interface NavigationValidationReport {
       maxCornerVerticalStep: number;
       maxSegmentSlopeDegrees: number;
       traversedAreas: number[];
+      seamDirection: NavigationCardinalDirection | null;
       failures: string[];
     }>;
   }>;
@@ -129,6 +144,101 @@ function isFiniteTuple(value: unknown): value is NavigationProbeTuple {
   );
 }
 
+const CARDINAL_DIRECTIONS: readonly NavigationCardinalDirection[] = [
+  "west",
+  "east",
+  "south",
+  "north"
+];
+
+function isCardinalDirection(
+  value: unknown
+): value is NavigationCardinalDirection {
+  return CARDINAL_DIRECTIONS.includes(value as NavigationCardinalDirection);
+}
+
+function parseCardinalSeamGate(value: unknown): NavigationCardinalSeamGate {
+  if (!value || typeof value !== "object") {
+    throw new Error("navigation cardinal seam gate must be an object");
+  }
+  const gate = value as Record<string, unknown>;
+  const replacement = gate.replacementTiles as
+    | Record<string, unknown>
+    | undefined;
+  if (
+    !Array.isArray(gate.tileOrigin) ||
+    gate.tileOrigin.length !== 2 ||
+    gate.tileOrigin.some((coordinate) => !Number.isFinite(coordinate)) ||
+    !Number.isFinite(gate.tileSize as number) ||
+    (gate.tileSize as number) <= 0 ||
+    !replacement ||
+    !Number.isInteger(replacement.minX) ||
+    !Number.isInteger(replacement.minZ) ||
+    !Number.isInteger(replacement.maxXExclusive) ||
+    !Number.isInteger(replacement.maxZExclusive) ||
+    (replacement.maxXExclusive as number) <= (replacement.minX as number) ||
+    (replacement.maxZExclusive as number) <= (replacement.minZ as number)
+  ) {
+    throw new Error("navigation cardinal seam gate is invalid");
+  }
+  return value as NavigationCardinalSeamGate;
+}
+
+function seamBoundary(
+  gate: NavigationCardinalSeamGate,
+  direction: NavigationCardinalDirection
+): number {
+  const { replacementTiles, tileOrigin, tileSize } = gate;
+  switch (direction) {
+    case "west":
+      return tileOrigin[0] + replacementTiles.minX * tileSize;
+    case "east":
+      return tileOrigin[0] + replacementTiles.maxXExclusive * tileSize;
+    case "south":
+      return tileOrigin[1] + replacementTiles.minZ * tileSize;
+    case "north":
+      return tileOrigin[1] + replacementTiles.maxZExclusive * tileSize;
+  }
+}
+
+function straddlesCardinalSeam(
+  gate: NavigationCardinalSeamGate,
+  direction: NavigationCardinalDirection,
+  from: NavigationProbePoint,
+  to: NavigationProbePoint
+): boolean {
+  const epsilon = 1e-6;
+  const boundary = seamBoundary(gate, direction);
+  const minimumX =
+    gate.tileOrigin[0] + gate.replacementTiles.minX * gate.tileSize;
+  const maximumX =
+    gate.tileOrigin[0] + gate.replacementTiles.maxXExclusive * gate.tileSize;
+  const minimumZ =
+    gate.tileOrigin[1] + gate.replacementTiles.minZ * gate.tileSize;
+  const maximumZ =
+    gate.tileOrigin[1] + gate.replacementTiles.maxZExclusive * gate.tileSize;
+  const crosses = (left: number, right: number) =>
+    (left < boundary - epsilon && right > boundary + epsilon) ||
+    (right < boundary - epsilon && left > boundary + epsilon);
+
+  if (direction === "west" || direction === "east") {
+    return (
+      crosses(from.x, to.x) &&
+      from.z >= minimumZ - epsilon &&
+      from.z <= maximumZ + epsilon &&
+      to.z >= minimumZ - epsilon &&
+      to.z <= maximumZ + epsilon
+    );
+  }
+  return (
+    crosses(from.z, to.z) &&
+    from.x >= minimumX - epsilon &&
+    from.x <= maximumX + epsilon &&
+    to.x >= minimumX - epsilon &&
+    to.x <= maximumX + epsilon
+  );
+}
+
 export function parseNavigationValidationConfig(
   value: unknown
 ): NavigationValidationConfig {
@@ -144,11 +254,16 @@ export function parseNavigationValidationConfig(
   if (config.coordinateSpace !== "h1z1-world-y-up-meters") {
     throw new Error("navigation validation coordinate space is invalid");
   }
+  const cardinalSeamGate =
+    config.cardinalSeamGate === undefined
+      ? undefined
+      : parseCardinalSeamGate(config.cardinalSeamGate);
   if (!Array.isArray(config.regions) || !config.regions.length) {
     throw new Error("navigation validation config has no regions");
   }
 
   const regionNames = new Set<string>();
+  const seamSegments = new Map<NavigationCardinalDirection, string[]>();
   for (const [regionIndex, rawRegion] of config.regions.entries()) {
     if (!rawRegion || typeof rawRegion !== "object") {
       throw new Error(`navigation validation region ${regionIndex} is invalid`);
@@ -173,6 +288,7 @@ export function parseNavigationValidationConfig(
       );
     }
     const anchors = new Set<string>();
+    const anchorPositions = new Map<string, NavigationProbeTuple>();
     for (const [anchorIndex, rawAnchor] of region.anchors.entries()) {
       if (!rawAnchor || typeof rawAnchor !== "object") {
         throw new Error(`${region.name} anchor ${anchorIndex} is invalid`);
@@ -199,6 +315,7 @@ export function parseNavigationValidationConfig(
         throw new Error(`${region.name} has duplicate anchor ${anchor.name}`);
       }
       anchors.add(anchor.name);
+      anchorPositions.set(anchor.name, anchor.position as NavigationProbeTuple);
     }
     if (!Array.isArray(region.segments)) {
       throw new Error(
@@ -228,9 +345,44 @@ export function parseNavigationValidationConfig(
         (segment.requiredAreas !== undefined &&
           (!Array.isArray(segment.requiredAreas) ||
             segment.requiredAreas.length === 0 ||
-            segment.requiredAreas.some((area) => !Number.isInteger(area))))
+            segment.requiredAreas.some((area) => !Number.isInteger(area)))) ||
+        (segment.seamDirection !== undefined &&
+          !isCardinalDirection(segment.seamDirection))
       ) {
         throw new Error(`${region.name} segment ${segmentIndex} is invalid`);
+      }
+      if (segment.seamDirection !== undefined) {
+        if (!cardinalSeamGate) {
+          throw new Error(
+            `${region.name} segment ${segment.name} declares a seam direction without a cardinal seam gate`
+          );
+        }
+        if (segment.required === false) {
+          throw new Error(
+            `${region.name} segment ${segment.name} cannot make a cardinal seam optional`
+          );
+        }
+        const direction = segment.seamDirection as NavigationCardinalDirection;
+        const from = point(anchorPositions.get(segment.from as string)!);
+        const to = point(anchorPositions.get(segment.to as string)!);
+        if (!straddlesCardinalSeam(cardinalSeamGate, direction, from, to)) {
+          throw new Error(
+            `${region.name} segment ${segment.name} does not straddle the ${direction} replacement seam`
+          );
+        }
+        const references = seamSegments.get(direction) ?? [];
+        references.push(`${region.name}/${String(segment.name)}`);
+        seamSegments.set(direction, references);
+      }
+    }
+  }
+  if (cardinalSeamGate) {
+    for (const direction of CARDINAL_DIRECTIONS) {
+      const references = seamSegments.get(direction) ?? [];
+      if (references.length !== 1) {
+        throw new Error(
+          `navigation cardinal seam gate requires exactly one ${direction} segment; found ${references.length}`
+        );
       }
     }
   }
@@ -362,6 +514,18 @@ export function evaluateNavigationValidation(
           return Math.max(maximum, slope);
         }, 0);
       const failures: string[] = [];
+      if (
+        segment.seamDirection &&
+        config.cardinalSeamGate &&
+        !straddlesCardinalSeam(
+          config.cardinalSeamGate,
+          segment.seamDirection,
+          from.point,
+          to.point
+        )
+      ) {
+        failures.push(`seam-not-straddled:${segment.seamDirection}`);
+      }
       if (required && !reached) failures.push("unreachable");
       if (
         reached &&
@@ -416,6 +580,7 @@ export function evaluateNavigationValidation(
         maxCornerVerticalStep,
         maxSegmentSlopeDegrees,
         traversedAreas,
+        seamDirection: segment.seamDirection ?? null,
         failures
       };
     });

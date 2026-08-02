@@ -84,6 +84,7 @@
     "navmesh-artifact-create": "tsx scripts/createNavigationArtifactManifest.ts",
     "navmesh-artifact-check": "tsx scripts/verifyNavigationArtifact.ts",
     "navmesh-regions-check": "tsx scripts/validateNavigationRegions.ts",
+    "navmesh-pv-seams-check": "tsx scripts/validateNavigationRegions.ts --config data/2016/navigationValidationRegions.pvOverlaySeams.json",
     "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
     "navmesh-islands-audit": "tsx scripts/auditNavigationIslands.ts",
     "test-nav-deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testNavigationDeployment.ps1",

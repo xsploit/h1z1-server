@@ -41,7 +41,143 @@ const config: NavigationValidationConfig = {
   ]
 };
 
+function cardinalSeamConfig(): NavigationValidationConfig {
+  return {
+    schemaVersion: 1,
+    coordinateSpace: "h1z1-world-y-up-meters",
+    cardinalSeamGate: {
+      tileOrigin: [0, 0],
+      tileSize: 10,
+      replacementTiles: {
+        minX: 1,
+        minZ: 2,
+        maxXExclusive: 3,
+        maxZExclusive: 4
+      }
+    },
+    regions: [
+      {
+        name: "west-seam",
+        description: "west seam",
+        anchors: [
+          { name: "outside", position: [9, 0, 25] },
+          { name: "inside", position: [11, 0, 25] }
+        ],
+        segments: [
+          {
+            name: "cross-west",
+            from: "outside",
+            to: "inside",
+            seamDirection: "west"
+          }
+        ]
+      },
+      {
+        name: "east-seam",
+        description: "east seam",
+        anchors: [
+          { name: "inside", position: [29, 0, 25] },
+          { name: "outside", position: [31, 0, 25] }
+        ],
+        segments: [
+          {
+            name: "cross-east",
+            from: "inside",
+            to: "outside",
+            seamDirection: "east"
+          }
+        ]
+      },
+      {
+        name: "south-seam",
+        description: "south seam",
+        anchors: [
+          { name: "outside", position: [15, 0, 19] },
+          { name: "inside", position: [15, 0, 21] }
+        ],
+        segments: [
+          {
+            name: "cross-south",
+            from: "outside",
+            to: "inside",
+            seamDirection: "south"
+          }
+        ]
+      },
+      {
+        name: "north-seam",
+        description: "north seam",
+        anchors: [
+          { name: "inside", position: [15, 0, 39] },
+          { name: "outside", position: [15, 0, 41] }
+        ],
+        segments: [
+          {
+            name: "cross-north",
+            from: "inside",
+            to: "outside",
+            seamDirection: "north"
+          }
+        ]
+      }
+    ]
+  };
+}
+
 describe("navigation regional validation", () => {
+  it("requires exactly one route across every cardinal replacement seam", () => {
+    const complete = cardinalSeamConfig();
+    assert.deepEqual(parseNavigationValidationConfig(complete), complete);
+
+    const missingNorth = cardinalSeamConfig();
+    missingNorth.regions = missingNorth.regions.filter(
+      (region) => region.name !== "north-seam"
+    );
+    assert.throws(
+      () => parseNavigationValidationConfig(missingNorth),
+      /requires exactly one north segment; found 0/
+    );
+
+    const duplicateWest = cardinalSeamConfig();
+    const extra = structuredClone(duplicateWest.regions[0]);
+    extra.name = "west-seam-duplicate";
+    duplicateWest.regions.push(extra);
+    assert.throws(
+      () => parseNavigationValidationConfig(duplicateWest),
+      /requires exactly one west segment; found 2/
+    );
+  });
+
+  it("rejects a cardinal seam route whose declared anchors do not straddle", () => {
+    const invalid = cardinalSeamConfig();
+    invalid.regions[0].anchors[1].position = [9.5, 0, 25];
+    assert.throws(
+      () => parseNavigationValidationConfig(invalid),
+      /does not straddle the west replacement seam/
+    );
+  });
+
+  it("fails when Detour snaps a declared seam route onto one side", () => {
+    const seamConfig = cardinalSeamConfig();
+    const adapter: NavigationProbeAdapter = {
+      snap(position) {
+        if (position.x === 11 && position.z === 25) {
+          return { ref: 1, point: { ...position, x: 9.5 }, area: 1 };
+        }
+        return { ref: 1, point: position, area: 1 };
+      },
+      path(from, to) {
+        return [from, to];
+      }
+    };
+
+    const report = evaluateNavigationValidation(seamConfig, adapter);
+    assert.equal(report.passed, false);
+    assert.deepEqual(report.regions[0].segments[0].failures, [
+      "seam-not-straddled:west"
+    ]);
+  });
+
   it("accepts a connected monotonic stair path", () => {
     const adapter: NavigationProbeAdapter = {
       snap(position) {
