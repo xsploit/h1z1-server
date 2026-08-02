@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   evaluateNavigationValidation,
   loadNavigationValidationConfig,
+  navigationValidationConfigSha256,
   NavigationProbeAdapter,
   NavigationProbePoint
 } from "../src/utils/navigationvalidation";
@@ -122,9 +122,7 @@ async function main() {
   };
   const report = evaluateNavigationValidation(config, adapter);
   report.provenance = {
-    configSha256: createHash("sha256")
-      .update(readFileSync(configPath))
-      .digest("hex"),
+    configSha256: navigationValidationConfigSha256(config),
     adapterVersion: ADAPTER_VERSION,
     straightPathOptions: DT_STRAIGHTPATH_ALL_CROSSINGS,
     maxPathPolys: MAX_PATH_POLYS,
