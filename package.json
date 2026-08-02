@@ -85,8 +85,11 @@
     "navmesh-artifact-check": "tsx scripts/verifyNavigationArtifact.ts",
     "navmesh-regions-check": "tsx scripts/validateNavigationRegions.ts",
     "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
+    "navmesh-islands-audit": "tsx scripts/auditNavigationIslands.ts",
     "test-nav-deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testNavigationDeployment.ps1",
     "test-forgelight-nav-source": "node --test tools/forgelight/export_semantic_nav_obj.test.js",
+    "navmesh-regional-source-compose": "node tools/forgelight/compose_regional_nav_source.js",
+    "test-forgelight-hybrid-nav-source": "node --test tools/forgelight/compose_regional_nav_source.test.js",
     "crash-capture": "node tools/crash-capture/soe-crash-server.mjs",
     "test-crash-capture": "node --test tools/crash-capture/soe-crash-server.test.mjs"
   },
