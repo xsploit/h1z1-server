@@ -139,17 +139,33 @@ function routeGap(query: NavMeshQuery, start: Point, end: Point) {
   };
 }
 
-function rayFraction(query: NavMeshQuery, start: Point, end: Point) {
+function rayProbe(query: NavMeshQuery, start: Point, end: Point) {
   const nearestOptions = { halfExtents: { x: 0.45, y: 1.5, z: 0.45 } };
   const startSnap = query.findNearestPoly(start, nearestOptions);
   const endSnap = query.findNearestPoly(end, nearestOptions);
-  if (!startSnap.nearestRef || !endSnap.nearestRef) return null;
+  if (!startSnap.nearestRef || !endSnap.nearestRef) {
+    return {
+      t: null,
+      startGap: Number.POSITIVE_INFINITY,
+      endGap: Number.POSITIVE_INFINITY
+    };
+  }
   const ray = query.raycast(
     startSnap.nearestRef,
     startSnap.nearestPoint,
     endSnap.nearestPoint
   );
-  return ray.success ? ray.t : null;
+  return {
+    t: ray.success ? ray.t : null,
+    startGap: Math.hypot(
+      startSnap.nearestPoint.x - start.x,
+      startSnap.nearestPoint.z - start.z
+    ),
+    endGap: Math.hypot(
+      endSnap.nearestPoint.x - end.x,
+      endSnap.nearestPoint.z - end.z
+    )
+  };
 }
 
 async function main() {
@@ -170,8 +186,14 @@ async function main() {
   }
   const wallRays = scenario.wallRays.map((probe) => ({
     ...probe,
-    t: rayFraction(query, probe.start, probe.end)
+    ...rayProbe(query, probe.start, probe.end)
   }));
+  const settleObstacleRequests = (operation: string) => {
+    for (let i = 0; i < 8 && nav.obstaclesRequestsPending; i++) nav.updt();
+    if (nav.obstaclesRequestsPending) {
+      throw new Error(`${operation}: tile-cache rebuild did not settle`);
+    }
+  };
 
   for (const doorway of [front, southwest]) {
     const open = routeGap(query, doorway.start, doorway.end);
@@ -186,10 +208,10 @@ async function main() {
       doorway.obstacle.angle
     );
     if (!added) throw new Error(`${doorway.name}: obstacle add failed`);
-    for (let i = 0; i < 8 && nav.obstaclesRequestsPending; i++) nav.updt();
+    settleObstacleRequests(`${doorway.name}: close`);
     const closed = routeGap(query, doorway.start, doorway.end);
     nav.removeObstacle(added);
-    for (let i = 0; i < 8 && nav.obstaclesRequestsPending; i++) nav.updt();
+    settleObstacleRequests(`${doorway.name}: reopen`);
     const reopened = routeGap(query, doorway.start, doorway.end);
     const readded = nav.addObstacle(
       new Float32Array([
@@ -202,10 +224,10 @@ async function main() {
       doorway.obstacle.angle
     );
     if (!readded) throw new Error(`${doorway.name}: obstacle re-add failed`);
-    for (let i = 0; i < 8 && nav.obstaclesRequestsPending; i++) nav.updt();
+    settleObstacleRequests(`${doorway.name}: reclose`);
     const reclosed = routeGap(query, doorway.start, doorway.end);
     nav.removeObstacle(readded);
-    for (let i = 0; i < 8 && nav.obstaclesRequestsPending; i++) nav.updt();
+    settleObstacleRequests(`${doorway.name}: final cleanup`);
     results.push({ name: doorway.name, open, closed, reopened, reclosed });
   }
 
@@ -228,6 +250,11 @@ async function main() {
     }
   }
   for (const wall of wallRays) {
+    if (wall.startGap > 0.25 || wall.endGap > 0.25) {
+      throw new Error(
+        `${wall.name}: wall probe snapped away from its endpoints`
+      );
+    }
     if (wall.t === null || wall.t >= 1) {
       throw new Error(`${wall.name}: adjacent wall probe was not blocked`);
     }
