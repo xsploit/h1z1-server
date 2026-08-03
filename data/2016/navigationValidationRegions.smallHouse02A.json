@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "coordinateSpace": "h1z1-world-y-up-meters",
+  "regions": [
+    {
+      "name": "small-house-02a-instance-108515-front-entrance",
+      "description": "Terrain-to-threshold-to-interior route through the repeated SmallHouse02A front entrance.",
+      "anchors": [
+        {
+          "name": "exterior",
+          "position": [6.6147, 21.9554, -922.5317],
+          "halfExtents": [0.8, 1.0, 0.8],
+          "expectedAreas": [3],
+          "maxHorizontalSnap": 0.5,
+          "maxVerticalSnap": 0.5
+        },
+        {
+          "name": "threshold",
+          "position": [4.1148, 22.2054, -922.5536],
+          "halfExtents": [0.8, 1.0, 0.8],
+          "expectedAreas": [7],
+          "maxHorizontalSnap": 0.5,
+          "maxVerticalSnap": 0.5
+        },
+        {
+          "name": "interior",
+          "position": [2.1149, 22.2914, -922.5711],
+          "halfExtents": [0.8, 1.0, 0.8],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 0.5,
+          "maxVerticalSnap": 0.5
+        }
+      ],
+      "segments": [
+        {
+          "name": "terrain-to-front-threshold",
+          "from": "exterior",
+          "to": "threshold",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        },
+        {
+          "name": "front-threshold-to-interior",
+          "from": "threshold",
+          "to": "interior",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        },
+        {
+          "name": "interior-to-front-threshold",
+          "from": "interior",
+          "to": "threshold",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        },
+        {
+          "name": "front-threshold-to-terrain",
+          "from": "threshold",
+          "to": "exterior",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        }
+      ]
+    },
+    {
+      "name": "small-house-02a-instance-108515-rear-entrance",
+      "description": "Terrain-to-threshold-to-interior route through the repeated SmallHouse02A rear entrance.",
+      "anchors": [
+        {
+          "name": "exterior",
+          "position": [-8.0961, 21.9554, -921.3606],
+          "halfExtents": [0.8, 1.0, 0.8],
+          "expectedAreas": [1],
+          "maxHorizontalSnap": 0.5,
+          "maxVerticalSnap": 0.5
+        },
+        {
+          "name": "threshold",
+          "position": [-5.8962, 22.1554, -921.3413],
+          "halfExtents": [0.8, 1.0, 0.8],
+          "expectedAreas": [7],
+          "maxHorizontalSnap": 0.5,
+          "maxVerticalSnap": 0.5
+        },
+        {
+          "name": "interior",
+          "position": [-4.6962, 22.2914, -921.3308],
+          "halfExtents": [0.8, 1.0, 0.8],
+          "expectedAreas": [4],
+          "maxHorizontalSnap": 0.5,
+          "maxVerticalSnap": 0.5
+        }
+      ],
+      "segments": [
+        {
+          "name": "terrain-to-rear-threshold",
+          "from": "exterior",
+          "to": "threshold",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        },
+        {
+          "name": "rear-threshold-to-interior",
+          "from": "threshold",
+          "to": "interior",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        },
+        {
+          "name": "interior-to-rear-threshold",
+          "from": "interior",
+          "to": "threshold",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        },
+        {
+          "name": "rear-threshold-to-terrain",
+          "from": "threshold",
+          "to": "exterior",
+          "maxDetourRatio": 1.5,
+          "maxCornerVerticalStep": 0.5,
+          "maxSegmentSlopeDegrees": 45
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Houses_SmallHouse02A.adr",
+  "boundsMargin": 15,
+  "maxTerrainDelta": 1.5,
+  "terrainProbes": [
+    [1.130983, 0.000047, -7.481328],
+    [2.173659, 0.000047, 7.239132]
+  ],
+  "routes": [
+    {
+      "label": "front exterior to threshold",
+      "start": [1.130983, 0.000047, -7.481328],
+      "end": [1.087267, 0.250047, -4.981714]
+    },
+    {
+      "label": "front threshold to interior",
+      "start": [1.087267, 0.250047, -4.981714],
+      "end": [1.052315, 0.336047, -2.982043]
+    },
+    {
+      "label": "front interior to threshold",
+      "start": [1.052315, 0.336047, -2.982043],
+      "end": [1.087267, 0.250047, -4.981714]
+    },
+    {
+      "label": "front threshold to exterior",
+      "start": [1.087267, 0.250047, -4.981714],
+      "end": [1.130983, 0.000047, -7.481328]
+    },
+    {
+      "label": "rear exterior to threshold",
+      "start": [2.173659, 0.000047, 7.239132],
+      "end": [2.212156, 0.200047, 5.039484]
+    },
+    {
+      "label": "rear threshold to interior",
+      "start": [2.212156, 0.200047, 5.039484],
+      "end": [2.233128, 0.336047, 3.839622]
+    },
+    {
+      "label": "rear interior to threshold",
+      "start": [2.233128, 0.336047, 3.839622],
+      "end": [2.212156, 0.200047, 5.039484]
+    },
+    {
+      "label": "rear threshold to exterior",
+      "start": [2.212156, 0.200047, 5.039484],
+      "end": [2.173659, 0.000047, 7.239132]
+    }
+  ]
+}
