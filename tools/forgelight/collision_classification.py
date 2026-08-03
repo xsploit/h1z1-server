@@ -85,8 +85,10 @@ KIND_SEMANTICS = {
 # both real navigation blockers (walls, fences, furniture) and thousands of
 # decorative/spawner meshes (paper, cans, road paint).  Treating the entire
 # kind as a carved obstacle punches holes through otherwise valid floors.
-# Actor metadata refines only whether a kind-2 mesh blocks or is excluded; it
-# still cannot promote that mesh to a walkable area.
+# Actor metadata normally refines only whether a kind-2 mesh blocks or is
+# excluded.  The semantic policy additionally permits an exact, hash-bound,
+# slope-verified road rule for the city road slabs that the extraction labels
+# kind 2; name inference never performs that promotion.
 THIN_STATIC_OBSTACLE_KEYWORDS = (
     "wall",
     "fence",

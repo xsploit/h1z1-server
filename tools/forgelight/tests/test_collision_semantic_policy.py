@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "b261cdb9daf868e51423ccf825213dea9eb9407199a7034954934481b62764df"
+POLICY_SHA256 = "b76b3780efa2957c264b3d1998642441911d81249f6bdb2256f3b99bef0be535"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -61,7 +61,7 @@ def uniform_rule(
         "strategy": "uniform",
         "triangleCount": triangle_count,
     }
-    if kind == 0 and semantic in {
+    if semantic in {
         "nav_road",
         "nav_floor_exterior",
         "nav_floor_interior",
@@ -151,9 +151,9 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 131)
+        self.assertEqual(len(policy.rules), 133)
         self.assertEqual(
-            sum(rule.strategy == "uniform" for rule in policy.rules), 95
+            sum(rule.strategy == "uniform" for rule in policy.rules), 97
         )
         self.assertEqual(
             sum(
@@ -278,7 +278,12 @@ class CompatibilityAndClassificationTests(unittest.TestCase):
                 SemanticId.UNKNOWN,
             },
             1: {SemanticId.OBSTACLE_STATIC},
-            2: {SemanticId.OBSTACLE_STATIC, SemanticId.EXCLUDE, SemanticId.UNKNOWN},
+            2: {
+                SemanticId.ROAD,
+                SemanticId.OBSTACLE_STATIC,
+                SemanticId.EXCLUDE,
+                SemanticId.UNKNOWN,
+            },
             3: {SemanticId.DOOR_PANEL_DYNAMIC},
         }
         for kind in range(4):
@@ -324,6 +329,32 @@ class CompatibilityAndClassificationTests(unittest.TestCase):
             classify(policy, "OtherFence.adr", kind=2),
             bytes((SemanticId.UNKNOWN,)),
         )
+
+    def test_exact_kind_two_road_requires_slope_precondition(self):
+        rule = uniform_rule("Road_City_Test.adr", kind=2, semantic="nav_road")
+        policy = decoded_policy((rule,))
+        self.assertEqual(
+            classify(
+                policy,
+                "Road_City_Test.adr",
+                kind=2,
+                strict=True,
+            ),
+            bytes((SemanticId.ROAD,)),
+        )
+
+        missing_precondition = dict(rule)
+        missing_precondition.pop("precondition")
+        with self.assertRaisesRegex(SemanticPolicyError, "slope_45 precondition"):
+            decoded_policy((missing_precondition,))
+
+        with self.assertRaisesRegex(SemanticPolicyError, "negative-Y slope"):
+            classify(
+                policy,
+                "Road_City_Test.adr",
+                kind=2,
+                positions=UP_POSITIONS,
+            )
 
     def test_uniform_road_requires_exact_binding_and_negative_y_geometry(self):
         policy = decoded_policy((uniform_rule(),))
@@ -654,7 +685,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
                     set(result).issubset({rule.surface_semantic, SemanticId.EXCLUDE})
                 )
         self.assertEqual(
-            (uniform_count, surface_count), (95, 34)
+            (uniform_count, surface_count), (97, 34)
         )
         self.assertEqual(explicit_count, 2)
 

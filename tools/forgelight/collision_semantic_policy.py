@@ -69,8 +69,18 @@ _ALLOWED_BY_KIND = MappingProxyType(
             }
         ),
         1: frozenset({SemanticId.OBSTACLE_STATIC}),
+        # Kind 2 means "not a grounding source" in the legacy collision
+        # runtime, not "never a walkable render surface".  A small number of
+        # city road slabs are exported as kind 2.  They may be promoted only
+        # by an exact hash-bound policy rule; uniform walkable rules still
+        # require the all-negative-Y slope precondition below.
         2: frozenset(
-            {SemanticId.OBSTACLE_STATIC, SemanticId.EXCLUDE, SemanticId.UNKNOWN}
+            {
+                SemanticId.ROAD,
+                SemanticId.OBSTACLE_STATIC,
+                SemanticId.EXCLUDE,
+                SemanticId.UNKNOWN,
+            }
         ),
         3: frozenset({SemanticId.DOOR_PANEL_DYNAMIC}),
     }
@@ -195,7 +205,7 @@ def _required_rule_keys(strategy: str, kind: int, semantic: SemanticId | None) -
         return base | {"slopeLimitDegrees", "surfaceSemantic"}
     if strategy == "uniform":
         keys = base | {"semantic"}
-        if kind == 0 and semantic in _WALKABLE_SURFACE_IDS:
+        if semantic in _WALKABLE_SURFACE_IDS:
             keys.add("precondition")
         return keys
     if strategy == "explicit_triangles":
@@ -322,7 +332,7 @@ def _parse_rule(value: Any, index: int) -> SemanticRule:
             raise SemanticPolicyError(
                 f"{label} semantic {SEMANTIC_TO_MATERIAL[semantic]} is unsafe for kind {kind}"
             )
-        if kind == 0 and semantic in _WALKABLE_SURFACE_IDS:
+        if semantic in _WALKABLE_SURFACE_IDS:
             precondition = value.get("precondition")
             if precondition != "all_negative_y_slope_45":
                 raise SemanticPolicyError(
