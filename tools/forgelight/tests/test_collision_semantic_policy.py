@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "39532cbad557300c36ab8101b1d0269badd062bfde0ad8426de2badba9a36b89"
+POLICY_SHA256 = "b261cdb9daf868e51423ccf825213dea9eb9407199a7034954934481b62764df"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,7 +151,7 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 130)
+        self.assertEqual(len(policy.rules), 131)
         self.assertEqual(
             sum(rule.strategy == "uniform" for rule in policy.rules), 95
         )
@@ -162,6 +162,25 @@ class CanonicalPolicyTests(unittest.TestCase):
             ),
             34,
         )
+        self.assertEqual(
+            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 2
+        )
+
+    def test_house34b_authored_thresholds_are_pinned(self):
+        policy = load_semantic_policy(POLICY_PATH)
+        rule = next(
+            rule
+            for rule in policy.rules
+            if rule.actor_file == "Common_Structures_Houses_House34B.adr"
+        )
+        self.assertEqual(rule.strategy, "explicit_triangles")
+        self.assertEqual(rule.triangle_count, 11173)
+        thresholds = next(
+            ranges
+            for semantic, ranges in rule.selections
+            if semantic == SemanticId.THRESHOLD
+        )
+        self.assertEqual(thresholds, ((10099, 10100), (10363, 10364)))
 
     def test_rejects_noncanonical_bytes_bom_and_duplicate_keys(self):
         canonical = canonical_policy_bytes(policy_value())
@@ -637,7 +656,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         self.assertEqual(
             (uniform_count, surface_count), (95, 34)
         )
-        self.assertEqual(explicit_count, 1)
+        self.assertEqual(explicit_count, 2)
 
 
 if __name__ == "__main__":
