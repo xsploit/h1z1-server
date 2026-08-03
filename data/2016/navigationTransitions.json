@@ -9,6 +9,15 @@
     "bidirectional": true
   },
   {
+    "name": "Pleasant Valley police front stair bottom seam",
+    "kind": "stairs",
+    "source": "crowd-route-replay",
+    "start": [-233.5, 23.5, -1133.2],
+    "end": [-233.5, 23.8, -1133.8],
+    "radius": 0.35,
+    "bidirectional": true
+  },
+  {
     "name": "Pleasant Valley police interior stairs lower landing",
     "kind": "stairs",
     "source": "regional-nav-analysis",

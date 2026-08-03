@@ -60,6 +60,7 @@
           "name": "road-to-stair-foot",
           "from": "road",
           "to": "stair-foot",
+          "reachTolerance": 0.75,
           "maxDetourRatio": 2.5,
           "maxSegmentSlopeDegrees": 45
         },
@@ -99,6 +100,24 @@
           "maxDetourRatio": 3.0,
           "maxSegmentSlopeDegrees": 45,
           "monotonicVertical": "ascending",
+          "monotonicVerticalTolerance": 0.11
+        },
+        {
+          "name": "road-to-interior",
+          "from": "road",
+          "to": "interior",
+          "maxDetourRatio": 3.0,
+          "maxSegmentSlopeDegrees": 45,
+          "monotonicVertical": "ascending",
+          "monotonicVerticalTolerance": 0.11
+        },
+        {
+          "name": "interior-to-road",
+          "from": "interior",
+          "to": "road",
+          "maxDetourRatio": 3.0,
+          "maxSegmentSlopeDegrees": 45,
+          "monotonicVertical": "descending",
           "monotonicVerticalTolerance": 0.11
         }
       ]
