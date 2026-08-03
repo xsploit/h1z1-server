@@ -10120,8 +10120,10 @@ export class ZoneServer2016 extends EventEmitter {
   private _rebuildAiTargetMap(): void {
     const sz = ZoneServer2016._AI_TARGET_GRID_SIZE;
     this.aiTargetSpatialMap.clear();
-    for (const characterId in this._characters) {
-      const char = this._characters[characterId];
+    for (const sessionId in this._clients) {
+      const client = this._clients[sessionId];
+      const char = client.character;
+      if (client.isLoading || !char.isReady) continue;
       if (!char.isAlive || char.isVanished || char.isHidden || char.isSpectator)
         continue;
       const pos = char.state.position;
@@ -10132,7 +10134,7 @@ export class ZoneServer2016 extends EventEmitter {
         this.aiTargetSpatialMap.set(key, b);
       }
       b.push({
-        id: characterId,
+        id: char.characterId,
         position: pos,
         faction: Factions.HUMAN
       });

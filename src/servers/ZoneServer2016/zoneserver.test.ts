@@ -18,6 +18,45 @@ test("ZoneServer2016", { timeout: 60000 }, async (t) => {
   await t.test("save", async () => {
     await zone.saveWorld();
   });
+  await t.test("AI target map excludes saved and loading characters", () => {
+    const savedCharacter = createFakeCharacter(zone);
+    const rebuildAiTargetMap = () =>
+      (
+        zone as unknown as {
+          _rebuildAiTargetMap(): void;
+        }
+      )._rebuildAiTargetMap();
+
+    rebuildAiTargetMap();
+    assert.equal(
+      [...zone.aiTargetSpatialMap.values()].flat().length,
+      0,
+      "Saved character without a live client became an AI target"
+    );
+
+    const client = createFakeZoneClient(zone, savedCharacter);
+    client.isLoading = false;
+    client.character.isReady = true;
+    rebuildAiTargetMap();
+    assert.equal(
+      [...zone.aiTargetSpatialMap.values()]
+        .flat()
+        .some((target) => target.id === savedCharacter.characterId),
+      true,
+      "Ready client was not added as an AI target"
+    );
+
+    client.isLoading = true;
+    rebuildAiTargetMap();
+    assert.equal(
+      [...zone.aiTargetSpatialMap.values()].flat().length,
+      0,
+      "Loading client remained an AI target"
+    );
+
+    delete zone._clients[client.sessionId];
+    delete zone._characters[savedCharacter.characterId];
+  });
   await t.test("character deletion", async () => {
     const character = createFakeCharacter(zone);
     createFakeZoneClient(zone, character);
