@@ -149,8 +149,18 @@
           "from": "lower",
           "to": "upper",
           "maxDetourRatio": 2.5,
+          "maxLateralDeviation": 0.5,
           "maxSegmentSlopeDegrees": 46,
           "monotonicVertical": "ascending"
+        },
+        {
+          "name": "upper-to-lower",
+          "from": "upper",
+          "to": "lower",
+          "maxDetourRatio": 2.5,
+          "maxLateralDeviation": 0.5,
+          "maxSegmentSlopeDegrees": 46,
+          "monotonicVertical": "descending"
         }
       ]
     },

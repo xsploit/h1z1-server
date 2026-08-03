@@ -41,6 +41,7 @@ export interface NavigationValidationSegment {
   required?: boolean;
   reachTolerance?: number;
   maxDetourRatio?: number;
+  maxLateralDeviation?: number;
   maxCornerVerticalStep?: number;
   maxSegmentSlopeDegrees?: number;
   monotonicVertical?: "ascending" | "descending" | "either";
@@ -122,6 +123,7 @@ export interface NavigationValidationReport {
       detourRatio: number | null;
       maxCornerVerticalStep: number;
       maxSegmentSlopeDegrees: number;
+      maxLateralDeviation: number;
       traversedAreas: number[];
       seamDirection: NavigationCardinalDirection | null;
       failures: string[];
@@ -339,6 +341,9 @@ export function parseNavigationValidationConfig(
           (!Number.isFinite(segment.maxSegmentSlopeDegrees as number) ||
             (segment.maxSegmentSlopeDegrees as number) < 0 ||
             (segment.maxSegmentSlopeDegrees as number) > 90)) ||
+        (segment.maxLateralDeviation !== undefined &&
+          (!Number.isFinite(segment.maxLateralDeviation as number) ||
+            (segment.maxLateralDeviation as number) < 0)) ||
         (segment.monotonicVerticalTolerance !== undefined &&
           (!Number.isFinite(segment.monotonicVerticalTolerance as number) ||
             (segment.monotonicVerticalTolerance as number) < 0 ||
@@ -430,6 +435,31 @@ function distance(
   right: NavigationProbePoint
 ): number {
   return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z);
+}
+
+function horizontalDistanceToSegment(
+  position: NavigationProbePoint,
+  start: NavigationProbePoint,
+  end: NavigationProbePoint
+): number {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const lengthSquared = dx * dx + dz * dz;
+  if (lengthSquared === 0) {
+    return Math.hypot(position.x - start.x, position.z - start.z);
+  }
+  const projection = Math.max(
+    0,
+    Math.min(
+      1,
+      ((position.x - start.x) * dx + (position.z - start.z) * dz) /
+        lengthSquared
+    )
+  );
+  return Math.hypot(
+    position.x - (start.x + projection * dx),
+    position.z - (start.z + projection * dz)
+  );
 }
 
 export function evaluateNavigationValidation(
@@ -537,6 +567,14 @@ export function evaluateNavigationValidation(
               : (Math.atan2(vertical, horizontal) * 180) / Math.PI;
           return Math.max(maximum, slope);
         }, 0);
+      const maxLateralDeviation = path.reduce(
+        (maximum, current) =>
+          Math.max(
+            maximum,
+            horizontalDistanceToSegment(current, from.point, to.point)
+          ),
+        0
+      );
       const failures: string[] = [];
       if (
         segment.seamDirection &&
@@ -558,6 +596,13 @@ export function evaluateNavigationValidation(
         detourRatio > segment.maxDetourRatio
       ) {
         failures.push(`detour-ratio:${detourRatio.toFixed(3)}`);
+      }
+      if (
+        reached &&
+        segment.maxLateralDeviation !== undefined &&
+        maxLateralDeviation > segment.maxLateralDeviation
+      ) {
+        failures.push(`lateral-deviation:${maxLateralDeviation.toFixed(3)}`);
       }
       if (
         reached &&
@@ -603,6 +648,7 @@ export function evaluateNavigationValidation(
         detourRatio,
         maxCornerVerticalStep,
         maxSegmentSlopeDegrees,
+        maxLateralDeviation,
         traversedAreas,
         seamDirection: segment.seamDirection ?? null,
         failures

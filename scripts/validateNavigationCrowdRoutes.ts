@@ -12,14 +12,14 @@ function option(name: string): string | undefined {
 const cacheDirectory = option("--cache-dir");
 if (!cacheDirectory) {
   console.error(
-    "Usage: npx tsx scripts/validateNavigationCrowdRoutes.ts --cache-dir <collision-dir> [--config <file>] [--region <name>] [--segment <name>] [--steps <count>] [--step-seconds <seconds>]"
+    "Usage: npx tsx scripts/validateNavigationCrowdRoutes.ts --cache-dir <collision-dir> [--config <file>] [--region <name>] [--segment <name>] [--steps <count>] [--step-seconds <seconds>] [--summary]"
   );
   process.exit(1);
 }
 
 process.env.NAV_STREAMING = "1";
 process.env.NAV_CACHE_DIR = resolve(cacheDirectory);
-process.env.NAV_TRANSITIONS = "1";
+process.env.NAV_TRANSITIONS ??= "1";
 
 const configPath = resolve(
   option("--config") ?? "data/2016/navigationValidationRegions.pvEvidence.json"
@@ -46,6 +46,31 @@ function distance(
   b: { x: number; y: number; z: number }
 ): number {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+function horizontalDistanceToSegment(
+  position: { x: number; z: number },
+  start: { x: number; z: number },
+  end: { x: number; z: number }
+): number {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const lengthSquared = dx * dx + dz * dz;
+  if (lengthSquared === 0) {
+    return Math.hypot(position.x - start.x, position.z - start.z);
+  }
+  const projection = Math.max(
+    0,
+    Math.min(
+      1,
+      ((position.x - start.x) * dx + (position.z - start.z) * dz) /
+        lengthSquared
+    )
+  );
+  return Math.hypot(
+    position.x - (start.x + projection * dx),
+    position.z - (start.z + projection * dz)
+  );
 }
 
 async function main() {
@@ -127,6 +152,11 @@ async function main() {
         let invalidSteps = 0;
         let stationarySteps = 0;
         let previous = agent.position();
+        let maxLateralDeviation = horizontalDistanceToSegment(
+          previous,
+          startSnap.nearestPoint,
+          targetSnap.nearestPoint
+        );
         const sampledPositions: Array<[number, number, number]> = [
           [previous.x, previous.y, previous.z]
         ];
@@ -143,6 +173,14 @@ async function main() {
             const movement = distance(current, previous);
             stationarySteps = movement < 0.001 ? stationarySteps + 1 : 0;
             previous = current;
+            maxLateralDeviation = Math.max(
+              maxLateralDeviation,
+              horizontalDistanceToSegment(
+                current,
+                startSnap.nearestPoint,
+                targetSnap.nearestPoint
+              )
+            );
             finalDistance = distance(current, targetSnap.nearestPoint);
             closestDistance = Math.min(closestDistance, finalDistance);
             if (steps % 20 === 0 || finalDistance <= tolerance) {
@@ -153,7 +191,11 @@ async function main() {
         }
 
         const passed =
-          accepted && nav.crowdHealthy && finalDistance <= tolerance;
+          accepted &&
+          nav.crowdHealthy &&
+          finalDistance <= tolerance &&
+          (segment.maxLateralDeviation === undefined ||
+            maxLateralDeviation <= segment.maxLateralDeviation);
         const result: Record<string, unknown> = {
           region: region.name,
           segment: segment.name,
@@ -164,6 +206,8 @@ async function main() {
           tolerance,
           closestDistance: Number(closestDistance.toFixed(3)),
           finalDistance: Number(finalDistance.toFixed(3)),
+          maxLateralDeviation: Number(maxLateralDeviation.toFixed(3)),
+          allowedLateralDeviation: segment.maxLateralDeviation ?? null,
           finalState: agent.state(),
           walkingSteps,
           offMeshSteps,

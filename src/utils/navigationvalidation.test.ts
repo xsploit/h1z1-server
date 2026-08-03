@@ -206,6 +206,25 @@ describe("navigation regional validation", () => {
     assert.equal(report.regions[0].segments[0].maxCornerVerticalStep, 0.5);
   });
 
+  it("rejects a stair path that cuts outside its authored corridor", () => {
+    const corridorConfig = structuredClone(config);
+    corridorConfig.regions[0].segments[0].maxLateralDeviation = 0.25;
+    const adapter: NavigationProbeAdapter = {
+      snap(position) {
+        return { ref: 1, point: position, area: 5 };
+      },
+      path(from, to) {
+        return [from, { x: 1, y: 0.5, z: 1 }, to];
+      }
+    };
+
+    const report = evaluateNavigationValidation(corridorConfig, adapter);
+    assert.equal(report.passed, false);
+    assert.deepEqual(report.regions[0].segments[0].failures, [
+      "lateral-deviation:1.000"
+    ]);
+  });
+
   it("passes the exact resolved anchor polygon refs into path queries", () => {
     let observedRefs: [number, number] | null = null;
     const adapter: NavigationProbeAdapter = {
