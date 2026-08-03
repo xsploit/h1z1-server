@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Houses_House01.adr",
+  "boundsMargin": 15,
+  "maxTerrainDelta": 1.5,
+  "terrainProbes": [
+    [2.7, 0.0, 9.2],
+    [3.8, 0.0, -7.0],
+    [10.6, 0.0, 3.0]
+  ],
+  "routes": [
+    {
+      "label": "north terrain to outer step",
+      "start": [2.7, 0.0, 9.2],
+      "end": [2.7, 0.152, 8.25]
+    },
+    {
+      "label": "north outer step to porch",
+      "start": [2.7, 0.152, 8.25],
+      "end": [2.7, 0.291, 7.0]
+    },
+    {
+      "label": "north porch to threshold",
+      "start": [2.7, 0.291, 7.0],
+      "end": [2.7, 0.309, 5.65]
+    },
+    {
+      "label": "north threshold to interior",
+      "start": [2.7, 0.309, 5.65],
+      "end": [2.7, 0.299, 4.8]
+    },
+    {
+      "label": "north interior to threshold",
+      "start": [2.7, 0.299, 4.8],
+      "end": [2.7, 0.309, 5.65]
+    },
+    {
+      "label": "north threshold to porch",
+      "start": [2.7, 0.309, 5.65],
+      "end": [2.7, 0.291, 7.0]
+    },
+    {
+      "label": "north porch to outer step",
+      "start": [2.7, 0.291, 7.0],
+      "end": [2.7, 0.152, 8.25]
+    },
+    {
+      "label": "north outer step to terrain",
+      "start": [2.7, 0.152, 8.25],
+      "end": [2.7, 0.0, 9.2]
+    },
+    {
+      "label": "south terrain to outer porch",
+      "start": [3.8, 0.0, -7.0],
+      "end": [3.8, 0.083, -6.0]
+    },
+    {
+      "label": "south outer porch to inner porch",
+      "start": [3.8, 0.083, -6.0],
+      "end": [3.8, 0.292, -5.2]
+    },
+    {
+      "label": "south porch to threshold",
+      "start": [3.8, 0.292, -5.2],
+      "end": [4.05, 0.309, -4.5]
+    },
+    {
+      "label": "south threshold to interior",
+      "start": [4.05, 0.309, -4.5],
+      "end": [4.05, 0.299, -3.8]
+    },
+    {
+      "label": "south interior to threshold",
+      "start": [4.05, 0.299, -3.8],
+      "end": [4.05, 0.309, -4.5]
+    },
+    {
+      "label": "south threshold to inner porch",
+      "start": [4.05, 0.309, -4.5],
+      "end": [3.8, 0.292, -5.2]
+    },
+    {
+      "label": "south inner porch to outer porch",
+      "start": [3.8, 0.292, -5.2],
+      "end": [3.8, 0.083, -6.0]
+    },
+    {
+      "label": "south outer porch to terrain",
+      "start": [3.8, 0.083, -6.0],
+      "end": [3.8, 0.0, -7.0]
+    },
+    {
+      "label": "east terrain to outer porch",
+      "start": [10.6, 0.0, 3.0],
+      "end": [9.6, 0.068, 3.0]
+    },
+    {
+      "label": "east outer porch to inner porch",
+      "start": [9.6, 0.068, 3.0],
+      "end": [8.9, 0.294, 3.0]
+    },
+    {
+      "label": "east porch to threshold",
+      "start": [8.9, 0.294, 3.0],
+      "end": [8.5, 0.31, 3.0]
+    },
+    {
+      "label": "east threshold to interior",
+      "start": [8.5, 0.31, 3.0],
+      "end": [7.8, 0.299, 3.0]
+    },
+    {
+      "label": "east interior to threshold",
+      "start": [7.8, 0.299, 3.0],
+      "end": [8.5, 0.31, 3.0]
+    },
+    {
+      "label": "east threshold to inner porch",
+      "start": [8.5, 0.31, 3.0],
+      "end": [8.9, 0.294, 3.0]
+    },
+    {
+      "label": "east inner porch to outer porch",
+      "start": [8.9, 0.294, 3.0],
+      "end": [9.6, 0.068, 3.0]
+    },
+    {
+      "label": "east outer porch to terrain",
+      "start": [9.6, 0.068, 3.0],
+      "end": [10.6, 0.0, 3.0]
+    }
+  ]
+}

@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "19c059554c30989e2806d6a5fb2fb58f003f57cc44389260b0f71c1e72673ea0"
+POLICY_SHA256 = "cf739b3ce38a77ec8ea53986468ee6bc73e2da1bdd640fa341c4ffc763a7f936"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,7 +151,7 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 136)
+        self.assertEqual(len(policy.rules), 137)
         self.assertEqual(
             sum(rule.strategy == "uniform" for rule in policy.rules), 97
         )
@@ -163,7 +163,7 @@ class CanonicalPolicyTests(unittest.TestCase):
             34,
         )
         self.assertEqual(
-            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 5
+            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 6
         )
 
     def test_house34b_authored_thresholds_are_pinned(self):
@@ -181,6 +181,35 @@ class CanonicalPolicyTests(unittest.TestCase):
             if semantic == SemanticId.THRESHOLD
         )
         self.assertEqual(thresholds, ((10099, 10100), (10363, 10364)))
+
+    def test_house01_authored_entrances_are_pinned(self):
+        policy = load_semantic_policy(POLICY_PATH)
+        rule = next(
+            rule
+            for rule in policy.rules
+            if rule.actor_file == "Common_Structures_Houses_House01.adr"
+        )
+        self.assertEqual(rule.strategy, "explicit_triangles")
+        self.assertEqual(rule.triangle_count, 1769)
+        selections = dict(rule.selections)
+        self.assertEqual(selections[SemanticId.THRESHOLD], ((148, 177),))
+        self.assertEqual(
+            selections[SemanticId.FLOOR_INTERIOR],
+            ((1660, 1663), (1682, 1685), (1700, 1713)),
+        )
+        self.assertEqual(
+            selections[SemanticId.FLOOR_EXTERIOR],
+            (
+                (661, 662),
+                (669, 670),
+                (1517, 1518),
+                (1521, 1526),
+                (1533, 1538),
+                (1626, 1631),
+                (1636, 1637),
+                (1640, 1645),
+            ),
+        )
 
     def test_office03_authored_ground_entrances_are_pinned(self):
         policy = load_semantic_policy(POLICY_PATH)
@@ -768,7 +797,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         self.assertEqual(
             (uniform_count, surface_count), (97, 34)
         )
-        self.assertEqual(explicit_count, 5)
+        self.assertEqual(explicit_count, 6)
 
 
 if __name__ == "__main__":
