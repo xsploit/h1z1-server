@@ -5,35 +5,108 @@ type Point = { x: number; y: number; z: number };
 
 const cachePath = process.argv[2];
 if (!cachePath) {
-  console.error("Usage: npx tsx scripts/validateHouse34BDoors.ts <cache-dir>");
+  console.error(
+    "Usage: npx tsx scripts/validateHouse34BDoors.ts <cache-dir> [representative|127141]"
+  );
   process.exit(1);
 }
 
-const front = {
-  name: "front",
-  start: { x: -2740.8447265625, y: 48.3000030518, z: 50.1675453186 },
-  end: { x: -2739.8447265625, y: 48.3000030518, z: 50.1675453186 },
-  obstacle: {
-    position: { x: -2740.244873046875, y: 48.2294921875, z: 49.65797805786133 },
-    halfExtents: { x: 0.7, y: 1.4, z: 0.12 },
-    angle: Math.PI / 2
-  }
+const representative = {
+  front: {
+    name: "front",
+    start: { x: -2740.8447265625, y: 48.3000030518, z: 50.1675453186 },
+    end: { x: -2739.8447265625, y: 48.3000030518, z: 50.1675453186 },
+    obstacle: {
+      position: {
+        x: -2740.244873046875,
+        y: 48.2294921875,
+        z: 49.65797805786133
+      },
+      halfExtents: { x: 0.7, y: 1.4, z: 0.12 },
+      angle: Math.PI / 2
+    }
+  },
+
+  southwest: {
+    name: "southwest",
+    start: { x: -2741.939697265625, y: 48.3000030518, z: 46.4005470276 },
+    end: { x: -2739.9267578125, y: 48.3000030518, z: 45.5005455017 },
+    obstacle: {
+      position: {
+        x: -2740.326904296875,
+        y: 48.20414733886719,
+        z: 45.17213821411133
+      },
+      halfExtents: { x: 0.7, y: 1.4, z: 0.12 },
+      angle: Math.PI / 2
+    }
+  },
+  wallRays: [
+    {
+      name: "front-wall-north",
+      start: { x: -2740.95, y: 48.3, z: 51.55 },
+      end: { x: -2739.55, y: 48.3, z: 51.55 }
+    },
+    {
+      name: "front-wall-south",
+      start: { x: -2740.95, y: 48.3, z: 48.55 },
+      end: { x: -2739.55, y: 48.3, z: 48.55 }
+    }
+  ]
 };
 
-const southwest = {
-  name: "southwest",
-  start: { x: -2741.939697265625, y: 48.3000030518, z: 46.4005470276 },
-  end: { x: -2739.9267578125, y: 48.3000030518, z: 45.5005455017 },
-  obstacle: {
-    position: {
-      x: -2740.326904296875,
-      y: 48.20414733886719,
-      z: 45.17213821411133
+const scenarios = {
+  representative,
+  "127141": {
+    front: {
+      name: "front-127141",
+      start: { x: -264.331279, y: 41.573986, z: -813.773826 },
+      end: { x: -263.331317, y: 41.573986, z: -813.7651 },
+      obstacle: {
+        position: {
+          x: -263.72700084,
+          y: 41.50347518,
+          z: -814.27813957
+        },
+        halfExtents: { x: 0.7, y: 1.4, z: 0.12 },
+        angle: Math.PI / 2 - Math.PI / 360
+      }
     },
-    halfExtents: { x: 0.7, y: 1.4, z: 0.12 },
-    angle: Math.PI / 2
+    southwest: {
+      name: "southwest-127141",
+      start: { x: -265.393335, y: 41.573986, z: -817.550237 },
+      end: { x: -263.372618, y: 41.573986, z: -818.432638 },
+      obstacle: {
+        position: {
+          x: -263.76988385,
+          y: 41.47813029,
+          z: -818.7645241
+        },
+        halfExtents: { x: 0.7, y: 1.4, z: 0.12 },
+        angle: Math.PI / 2 - Math.PI / 360
+      }
+    },
+    wallRays: [
+      {
+        name: "front-wall-north-127141",
+        start: { x: -264.44861247, y: 41.573986, z: -812.39234263 },
+        end: { x: -263.04866578, y: 41.573986, z: -812.38012548 }
+      },
+      {
+        name: "front-wall-south-127141",
+        start: { x: -264.42243286, y: 41.573986, z: -815.3922284 },
+        end: { x: -263.02248617, y: 41.573986, z: -815.38001125 }
+      }
+    ]
   }
-};
+} as const;
+
+const scenarioName = process.argv[3] ?? "representative";
+if (!(scenarioName in scenarios)) {
+  throw new Error(`unknown House34B scenario: ${scenarioName}`);
+}
+const scenario = scenarios[scenarioName as keyof typeof scenarios];
+const { front, southwest } = scenario;
 
 function routeGap(query: NavMeshQuery, start: Point, end: Point) {
   const nearestOptions = { halfExtents: { x: 0.8, y: 1.5, z: 0.8 } };
@@ -90,18 +163,12 @@ async function main() {
   ]);
   const query = nav.navMeshQuery;
   const results = [];
-  const wallRays = [
-    {
-      name: "front-wall-north",
-      start: { x: -2740.95, y: 48.3, z: 51.55 },
-      end: { x: -2739.55, y: 48.3, z: 51.55 }
-    },
-    {
-      name: "front-wall-south",
-      start: { x: -2740.95, y: 48.3, z: 48.55 },
-      end: { x: -2739.55, y: 48.3, z: 48.55 }
-    }
-  ].map((probe) => ({
+  let offMeshConnections = 0;
+  for (let index = 0; index < nav.navmesh.getMaxTiles(); index++) {
+    offMeshConnections +=
+      nav.navmesh.getTile(index).header()?.offMeshConCount() ?? 0;
+  }
+  const wallRays = scenario.wallRays.map((probe) => ({
     ...probe,
     t: rayFraction(query, probe.start, probe.end)
   }));
@@ -142,7 +209,14 @@ async function main() {
     results.push({ name: doorway.name, open, closed, reopened, reclosed });
   }
 
-  console.log(JSON.stringify({ doors: results, wallRays }, null, 2));
+  console.log(
+    JSON.stringify({ offMeshConnections, doors: results, wallRays }, null, 2)
+  );
+  if (offMeshConnections !== 0) {
+    throw new Error(
+      `House34B fixture contains ${offMeshConnections} unsafe off-mesh connection(s)`
+    );
+  }
   for (const result of results) {
     if (result.open.gap > 0.25 || result.reopened.gap > 0.25) {
       throw new Error(`${result.name}: doorway is not traversable while open`);
