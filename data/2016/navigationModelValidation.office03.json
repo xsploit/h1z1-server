@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Office03.adr",
+  "boundsMargin": 15,
+  "maxTerrainDelta": 1.5,
+  "terrainProbes": [
+    [-2.8, 0.0, -12.8],
+    [-5.0, 0.0, -10.3],
+    [-5.5, 0.0, 10.5],
+    [0.0, 0.0, 10.6],
+    [5.5, 0.0, 10.5]
+  ],
+  "routes": [
+    {
+      "label": "southwest entrance exterior to threshold",
+      "start": [-2.8, 0.0, -12.8],
+      "end": [-1.6, 0.253, -12.8]
+    },
+    {
+      "label": "southwest entrance threshold to interior",
+      "start": [-1.6, 0.253, -12.8],
+      "end": [0.0, 0.256, -12.8]
+    },
+    {
+      "label": "southwest entrance interior to threshold",
+      "start": [0.0, 0.256, -12.8],
+      "end": [-1.6, 0.253, -12.8]
+    },
+    {
+      "label": "southwest entrance threshold to exterior",
+      "start": [-1.6, 0.253, -12.8],
+      "end": [-2.8, 0.0, -12.8]
+    },
+    {
+      "label": "south entrance exterior to threshold",
+      "start": [-5.0, 0.0, -10.3],
+      "end": [-5.0, 0.39, -9.25]
+    },
+    {
+      "label": "south entrance threshold to interior",
+      "start": [-5.0, 0.39, -9.25],
+      "end": [-5.0, 0.252, -8.3]
+    },
+    {
+      "label": "south entrance interior to threshold",
+      "start": [-5.0, 0.252, -8.3],
+      "end": [-5.0, 0.39, -9.25]
+    },
+    {
+      "label": "south entrance threshold to exterior",
+      "start": [-5.0, 0.39, -9.25],
+      "end": [-5.0, 0.0, -10.3]
+    },
+    {
+      "label": "northwest entrance exterior to threshold",
+      "start": [-5.5, 0.0, 10.5],
+      "end": [-5.5, 0.43, 9.45]
+    },
+    {
+      "label": "northwest entrance threshold to interior",
+      "start": [-5.5, 0.43, 9.45],
+      "end": [-5.5, 0.252, 8.4]
+    },
+    {
+      "label": "northwest entrance interior to threshold",
+      "start": [-5.5, 0.252, 8.4],
+      "end": [-5.5, 0.43, 9.45]
+    },
+    {
+      "label": "northwest entrance threshold to exterior",
+      "start": [-5.5, 0.43, 9.45],
+      "end": [-5.5, 0.0, 10.5]
+    },
+    {
+      "label": "north-center entrance exterior to threshold",
+      "start": [0.0, 0.0, 10.6],
+      "end": [0.0, 0.253, 9.65]
+    },
+    {
+      "label": "north-center entrance threshold to interior",
+      "start": [0.0, 0.253, 9.65],
+      "end": [0.0, 0.252, 8.4]
+    },
+    {
+      "label": "north-center entrance interior to threshold",
+      "start": [0.0, 0.252, 8.4],
+      "end": [0.0, 0.253, 9.65]
+    },
+    {
+      "label": "north-center entrance threshold to exterior",
+      "start": [0.0, 0.253, 9.65],
+      "end": [0.0, 0.0, 10.6]
+    },
+    {
+      "label": "northeast entrance exterior to threshold",
+      "start": [5.5, 0.0, 10.5],
+      "end": [5.5, 0.43, 9.45]
+    },
+    {
+      "label": "northeast entrance threshold to interior",
+      "start": [5.5, 0.43, 9.45],
+      "end": [5.5, 0.252, 8.4]
+    },
+    {
+      "label": "northeast entrance interior to threshold",
+      "start": [5.5, 0.252, 8.4],
+      "end": [5.5, 0.43, 9.45]
+    },
+    {
+      "label": "northeast entrance threshold to exterior",
+      "start": [5.5, 0.43, 9.45],
+      "end": [5.5, 0.0, 10.5]
+    }
+  ]
+}
