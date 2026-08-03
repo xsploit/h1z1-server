@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   evaluateNavigationValidation,
@@ -19,44 +19,67 @@ function option(name: string): string | undefined {
 }
 
 const cacheDirectory = option("--cache-dir");
+const navmeshPath = option("--navmesh");
 const configPath = resolve(
   option("--config") ?? "data/2016/navigationValidationRegions.pvEvidence.json"
 );
 const reportPath = option("--report");
 const topologyOnly = process.argv.includes("--topology-only");
-if (!cacheDirectory) {
+if (Boolean(cacheDirectory) === Boolean(navmeshPath)) {
   console.error(
-    "Usage: npx tsx scripts/validateNavigationRegions.ts --cache-dir <dir> [--config <file>] [--report <file>] [--topology-only]"
+    "Usage: npx tsx scripts/validateNavigationRegions.ts (--cache-dir <dir> | --navmesh <z1_0.bin>) [--config <file>] [--report <file>] [--topology-only]"
   );
   process.exit(1);
 }
 
-process.env.NAV_STREAMING = "1";
-process.env.NAV_CACHE_DIR = resolve(cacheDirectory);
+if (cacheDirectory) {
+  process.env.NAV_STREAMING = "1";
+  process.env.NAV_CACHE_DIR = resolve(cacheDirectory);
+}
 if (topologyOnly) process.env.NAV_TRANSITIONS = "0";
 
 async function main() {
   const { hasDetourSuccess, NavManager } = await import("../src/utils/recast");
-  const nav = new NavManager();
-  await nav.loadNav();
-  if (!nav.streaming) throw new Error("streaming cache did not load");
+  let navmesh;
+  let query;
+  let nav: InstanceType<typeof NavManager> | undefined;
+  if (navmeshPath) {
+    const { importNavMesh, init, NavMeshQuery } = await import(
+      "recast-navigation"
+    );
+    await init();
+    navmesh = importNavMesh(
+      new Uint8Array(readFileSync(resolve(navmeshPath)))
+    ).navMesh;
+    query = new NavMeshQuery(navmesh);
+  } else {
+    nav = new NavManager();
+    await nav.loadNav();
+    if (!nav.streaming) throw new Error("streaming cache did not load");
+    navmesh = nav.navmesh;
+    query = nav.navMeshQuery;
+  }
   const config = loadNavigationValidationConfig(configPath);
-  nav.streamAround(
-    config.regions.flatMap((region) =>
-      region.anchors.map((anchor) => new Float32Array([...anchor.position, 1]))
-    )
-  );
+  if (nav) {
+    nav.streamAround(
+      config.regions.flatMap((region) =>
+        region.anchors.map(
+          (anchor) => new Float32Array([...anchor.position, 1])
+        )
+      )
+    );
+  }
 
   const adapter: NavigationProbeAdapter = {
     snap(position, halfExtents) {
-      const nearest = nav.navMeshQuery.findNearestPoly(position, {
+      const nearest = query.findNearestPoly(position, {
         halfExtents
       });
       if (!nearest.nearestRef) {
         return { ref: 0, point: position, area: null };
       }
       let area: number | null = null;
-      const result = nav.navmesh.getPolyArea(nearest.nearestRef);
+      const result = navmesh.getPolyArea(nearest.nearestRef);
       if (hasDetourSuccess(result.status)) area = result.area;
       return {
         ref: nearest.nearestRef,
@@ -67,20 +90,20 @@ async function main() {
     path(from, to, _halfExtents, fromRef, toRef) {
       if (!fromRef || !toRef) return [];
 
-      const corridor = nav.navMeshQuery.findPath(fromRef, toRef, from, to, {
+      const corridor = query.findPath(fromRef, toRef, from, to, {
         maxPathPolys: MAX_PATH_POLYS
       });
       try {
         if (!corridor.success || corridor.polys.size === 0) return [];
         const areas: number[] = [];
         for (let index = 0; index < corridor.polys.size; index++) {
-          const area = nav.navmesh.getPolyArea(corridor.polys.get(index));
+          const area = navmesh.getPolyArea(corridor.polys.get(index));
           if (hasDetourSuccess(area.status)) areas.push(area.area);
         }
         const lastRef = corridor.polys.get(corridor.polys.size - 1);
         let closestEnd: NavigationProbePoint = to;
         if (lastRef !== toRef) {
-          const closest = nav.navMeshQuery.closestPointOnPoly(lastRef, to);
+          const closest = query.closestPointOnPoly(lastRef, to);
           if (!closest.success) return [];
           closestEnd = closest.closestPoint;
         }
@@ -90,7 +113,7 @@ async function main() {
         // vertical jump, while a bogus elevator edge can look identical. Emit
         // every polygon crossing so the topology gate measures the actual
         // baked corridor rather than its string-pulled presentation.
-        const straight = nav.navMeshQuery.findStraightPath(
+        const straight = query.findStraightPath(
           from,
           closestEnd,
           corridor.polys,
