@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "7a45a72bd44dfe75aca2e012e6a9a93850ac572c2f127e1b6865adb8b253a99c"
+POLICY_SHA256 = "d302d621c803129b4b9ffe6c299e0f8dd1c795619bbab4cbb54291d73ea668d0"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,7 +151,7 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 134)
+        self.assertEqual(len(policy.rules), 135)
         self.assertEqual(
             sum(rule.strategy == "uniform" for rule in policy.rules), 97
         )
@@ -163,7 +163,7 @@ class CanonicalPolicyTests(unittest.TestCase):
             34,
         )
         self.assertEqual(
-            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 3
+            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 4
         )
 
     def test_house34b_authored_thresholds_are_pinned(self):
@@ -205,6 +205,33 @@ class CanonicalPolicyTests(unittest.TestCase):
         self.assertEqual(
             selections[SemanticId.FLOOR_INTERIOR],
             ((1516, 1531), (1588, 1591), (1618, 1621)),
+        )
+
+    def test_storefront04_authored_entrances_are_pinned(self):
+        policy = load_semantic_policy(POLICY_PATH)
+        rule = next(
+            rule
+            for rule in policy.rules
+            if rule.actor_file == "Common_Structures_StoreFront04.adr"
+        )
+        self.assertEqual(rule.strategy, "explicit_triangles")
+        self.assertEqual(rule.triangle_count, 2741)
+        selections = dict(rule.selections)
+        self.assertEqual(
+            selections[SemanticId.THRESHOLD],
+            (
+                (2211, 2214),
+                (2221, 2224),
+                (2237, 2240),
+                (2247, 2248),
+                (2255, 2256),
+                (2271, 2276),
+                (2281, 2286),
+            ),
+        )
+        self.assertEqual(
+            selections[SemanticId.FLOOR_INTERIOR],
+            ((2261, 2270), (2667, 2672)),
         )
 
     def test_rejects_noncanonical_bytes_bom_and_duplicate_keys(self):
@@ -712,7 +739,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         self.assertEqual(
             (uniform_count, surface_count), (97, 34)
         )
-        self.assertEqual(explicit_count, 3)
+        self.assertEqual(explicit_count, 4)
 
 
 if __name__ == "__main__":
