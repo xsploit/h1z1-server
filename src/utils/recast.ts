@@ -90,8 +90,24 @@ const MAX_ACTIVE_AGENT_VERTICAL_SNAP = 1.5;
 
 type NavigationTransition = OffMeshConnectionParams & { name: string };
 
-const NAVIGATION_TRANSITIONS_PATH =
-  __dirname + "/../../data/2016/navigationTransitions.json";
+export function resolveNavigationTransitionsPath(
+  overridePath: string | undefined,
+  cacheDirectory: string | undefined,
+  moduleDirectory: string
+): string {
+  return (
+    overridePath ??
+    (cacheDirectory
+      ? join(cacheDirectory, "..", "navigationTransitions.json")
+      : join(moduleDirectory, "../../data/2016/navigationTransitions.json"))
+  );
+}
+
+const NAVIGATION_TRANSITIONS_PATH = resolveNavigationTransitionsPath(
+  process.env.NAV_TRANSITIONS_PATH,
+  process.env.NAV_CACHE_DIR,
+  __dirname
+);
 
 export function selectNavigationTransitionsForTile(
   transitions: NavigationTransition[],

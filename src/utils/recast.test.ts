@@ -1,8 +1,10 @@
 import assert from "node:assert";
 import test from "node:test";
 import type { BoxObstacle } from "recast-navigation";
+import { join } from "node:path";
 import {
   NavManager,
+  resolveNavigationTransitionsPath,
   selectNavigationTransitionsForTile,
   selectStreamingReferenceCapacity,
   shouldLoadNavigationTransitions,
@@ -15,6 +17,31 @@ test("topology validation can exclude manual navigation transitions", () => {
   assert.equal(shouldLoadNavigationTransitions(undefined), true);
   assert.equal(shouldLoadNavigationTransitions("1"), true);
   assert.equal(shouldLoadNavigationTransitions("0"), false);
+});
+
+test("navigation transitions follow the selected cache bundle", () => {
+  const moduleDirectory = join("C:", "server", "out", "utils");
+  const cacheDirectory = join("D:", "artifact", "collision");
+  assert.equal(
+    resolveNavigationTransitionsPath(
+      undefined,
+      cacheDirectory,
+      moduleDirectory
+    ),
+    join("D:", "artifact", "navigationTransitions.json")
+  );
+  assert.equal(
+    resolveNavigationTransitionsPath(
+      join("E:", "override.json"),
+      cacheDirectory,
+      moduleDirectory
+    ),
+    join("E:", "override.json")
+  );
+  assert.equal(
+    resolveNavigationTransitionsPath(undefined, undefined, moduleDirectory),
+    join("C:", "server", "data", "2016", "navigationTransitions.json")
+  );
 });
 
 test("streaming trades one tile bit for dense POI polygon capacity", () => {
