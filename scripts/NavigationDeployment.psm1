@@ -147,6 +147,10 @@ function Get-NavigationBundleFileRecords {
         Add-ManifestFileRecord (Get-NavigationPropertyValue $entry 'file') $name
     }
     $provenance = Get-NavigationPropertyValue $manifest 'provenance'
+    $bakeNavmeshParts = @(Get-NavigationPropertyValue $provenance 'bakeNavmeshParts')
+    foreach ($part in $bakeNavmeshParts) {
+        Add-ManifestFileRecord $part 'bake navmesh part'
+    }
     $sourceReport = Get-NavigationPropertyValue $provenance 'sourceReport'
     Add-ManifestFileRecord (
         Get-NavigationPropertyValue $sourceReport 'file'

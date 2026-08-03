@@ -170,6 +170,7 @@ try {
     $bundleRoot = Join-Path $testRoot 'staged-bundle'
     $bundleFiles = [ordered]@{
         'collision\z1_cache_0.bin' = 'new-cache-zero'
+        'collision\z1_0.bin' = 'new-direct-navmesh-zero'
         'collision\z1_collision.bin' = 'new-collision'
         'navigationTransitions.json' = '[]'
     }
@@ -202,6 +203,11 @@ try {
             }
         }
         provenance = [ordered]@{
+            bakeNavmeshParts = @(
+                New-FixtureArtifactRecord `
+                    -Root $bundleRoot `
+                    -RelativePath 'collision\z1_0.bin'
+            )
             sourceReport = $null
             composition = $null
         }
