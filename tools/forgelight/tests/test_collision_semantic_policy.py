@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "9ceef8baff547f7fcc54dd8db64df98175f71a0f596d58cc5e72db63ffb6ab03"
+POLICY_SHA256 = "c0aa00359e5d8163313061ae8317894aebdbaac367a674c51bc1bdc8dee42a30"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -180,8 +180,8 @@ class CanonicalPolicyTests(unittest.TestCase):
             for semantic, ranges in rule.selections
         }
         self.assertEqual(selected[SemanticId.FLOOR_INTERIOR], 394)
-        self.assertEqual(selected[SemanticId.STAIR], 105)
-        self.assertEqual(selected[SemanticId.OBSTACLE_STATIC], 29840)
+        self.assertEqual(selected[SemanticId.STAIR], 100)
+        self.assertEqual(selected[SemanticId.OBSTACLE_STATIC], 29845)
 
     def test_house34b_authored_thresholds_are_pinned(self):
         policy = load_semantic_policy(POLICY_PATH)

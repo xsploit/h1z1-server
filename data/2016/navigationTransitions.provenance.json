@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "outputSha256": "91877e9f528bacb2dbc0d0785e5ea69290b4a9306a464442531a922ee108cf0d",
+  "transitionCount": 69,
+  "authoredSource": {
+    "path": "data/2016/navigationTransitions.authored.json",
+    "sha256": "600f0a61e8bf485848ac8e09918d02a31e06388ac2b2b2794b9d9c0150a8a49e",
+    "transitionCount": 5
+  },
+  "generatedSources": [
+    {
+      "label": "house36B",
+      "sha256": "c5652b9640de323106b414d4db2135887fdb2b54e8153fd2454cd1753687475a",
+      "transitionCount": 64
+    }
+  ]
+}

@@ -64,6 +64,15 @@ entrance mostly fails, and the south entrance is only partly connected. This
 is the pinned pre-classification baseline for a bounded House36B candidate;
 it demonstrates missing topology without authorizing a full-world bake.
 
+The accepted post-classification checkpoint is deliberately recorded
+separately from that historical baseline. The current streamed admission gate
+resolves all eight per-instance regional caches, requires positive mesh
+presence before crediting a forbidden probe, and reports 224/224 routes plus
+120/120 evaluated forbidden-roof probes. The five authored PV links and 64
+generated House36B links are compiled into the provenance-bound canonical
+`data/2016/navigationTransitions.json`; no full-world rebake is required to
+replay this regional evidence.
+
 ## Recoverable runtime and bundle deployment
 
 `scripts/deployNavigationArtifact.ps1` deploys a compiled navigation runtime

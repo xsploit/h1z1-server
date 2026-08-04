@@ -11,32 +11,19 @@ import {
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import {
+  assessNavigationPreparedModels,
   createNavigationDoctorReport,
   NavigationDoctorLegacyValidation,
   NavigationDoctorTemplateSource,
   NavigationModelValidationTemplate,
+  NavigationPreparedModelRun,
   NavigationUnknownInventory,
   renderNavigationDoctorMarkdown
 } from "../src/utils/navigationdoctor";
 
-type PreparedModel = {
-  actorFile: string;
+type PreparedModel = NavigationPreparedModelRun & {
   templatePath: string;
   outputDirectory: string;
-  instances: number;
-  skippedInstances: number;
-  routes: number;
-  forbiddenProbes: number;
-  transitions: number;
-  validation?: {
-    instances: number;
-    routes: number;
-    passed: number;
-    failures: unknown[];
-    forbiddenProbes: number;
-    forbiddenPassed: number;
-    forbiddenFailures: unknown[];
-  };
 };
 
 const repositoryRoot = resolve(__dirname, "..");
@@ -278,6 +265,7 @@ function prepareModels(
         throw new Error(
           `model validation produced no report for ${source.template.actorFile}: ${validationChild.stderr || validationChild.stdout || validationChild.error?.message}`
         );
+      row.validationExitCode = validationChild.status ?? -1;
       row.validation = jsonFile<PreparedModel["validation"]>(reportPath)!;
     }
     prepared.push(row);
@@ -325,6 +313,9 @@ async function main(): Promise<void> {
   if (!Number.isInteger(limit) || limit <= 0)
     throw new Error("--limit must be a positive integer");
 
+  const cacheDirectory = value("--cache-dir")
+    ? requireDirectory(value("--cache-dir")!, "streaming cache")
+    : undefined;
   const prepared = has("--prepare")
     ? prepareModels(
         selectedTemplates(templates, values("--model")),
@@ -334,9 +325,7 @@ async function main(): Promise<void> {
           ? requireFile(value("--heightmap")!, "heightmap")
           : undefined,
         resolve(requireOption("--work-dir")),
-        value("--cache-dir")
-          ? requireDirectory(value("--cache-dir")!, "streaming cache")
-          : undefined
+        cacheDirectory
       )
     : [];
 
@@ -356,10 +345,15 @@ async function main(): Promise<void> {
       markdown += [
         "## Bounded model runs",
         "",
-        ...prepared.map(
-          (model) =>
-            `- \`${model.actorFile}\`: ${model.instances} instances, ${model.routes} routes prepared${model.validation ? `, ${model.validation.passed}/${model.validation.routes} passed` : ""}`
-        ),
+        ...prepared.map((model) => {
+          const skipped = model.skippedInstances
+            ? `, ${model.skippedInstances} skipped`
+            : "";
+          const validation = model.validation
+            ? `, ${model.validation.passed}/${model.validation.routes} routes passed, ${model.validation.forbiddenPassed}/${model.validation.forbiddenProbes} forbidden probes passed (${model.validation.forbiddenEvaluated} evaluated)`
+            : "";
+          return `- \`${model.actorFile}\`: ${model.instances} instances${skipped}, ${model.routes} routes prepared${validation}`;
+        }),
         ""
       ].join("\n");
     }
@@ -388,6 +382,13 @@ async function main(): Promise<void> {
           ? `; ${model.validation.passed}/${model.validation.routes} passed`
           : "")
     );
+  const preparationFailures = assessNavigationPreparedModels(
+    prepared,
+    Boolean(cacheDirectory)
+  );
+  for (const failure of preparationFailures)
+    console.error(`[nav-doctor] FAIL ${failure}`);
+  if (preparationFailures.length) process.exitCode = 1;
 }
 
 main().catch((error) => {

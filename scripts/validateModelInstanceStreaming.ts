@@ -82,11 +82,14 @@ async function main() {
 
   const options = { halfExtents: { x: 0.8, y: 1.5, z: 0.8 } };
   const failures = [];
+  let routeAnchorHits = 0;
   for (const route of routes) {
     const start = { x: route.start[0], y: route.start[1], z: route.start[2] };
     const end = { x: route.end[0], y: route.end[1], z: route.end[2] };
     const startSnap = query.findNearestPoly(start, options);
     const endSnap = query.findNearestPoly(end, options);
+    if (startSnap.nearestRef) routeAnchorHits++;
+    if (endSnap.nearestRef) routeAnchorHits++;
     let gap = Number.POSITIVE_INFINITY;
     if (startSnap.nearestRef && endSnap.nearestRef) {
       const path = query.computePath(
@@ -114,8 +117,15 @@ async function main() {
       });
     }
   }
+  const meshPresent = routeAnchorHits === routes.length * 2;
   const forbiddenFailures = [];
-  for (const probe of forbiddenProbes) {
+  const forbiddenUnverified = meshPresent
+    ? []
+    : forbiddenProbes.map((probe) => ({
+        ...probe,
+        reason: "model navmesh presence was not proven"
+      }));
+  for (const probe of meshPresent ? forbiddenProbes : []) {
     const nearest = query.findNearestPoly(
       {
         x: probe.position[0],
@@ -138,17 +148,24 @@ async function main() {
     transitionsPath: process.env.NAV_TRANSITIONS_PATH,
     instance,
     streamed,
+    meshPresent,
+    routeAnchorHits,
     routes: routes.length,
     passed: routes.length - failures.length,
     failures,
     forbiddenProbes: forbiddenProbes.length,
-    forbiddenPassed: forbiddenProbes.length - forbiddenFailures.length,
-    forbiddenFailures
+    forbiddenEvaluated: meshPresent ? forbiddenProbes.length : 0,
+    forbiddenPassed: meshPresent
+      ? forbiddenProbes.length - forbiddenFailures.length
+      : 0,
+    forbiddenFailures,
+    forbiddenUnverified
   };
   const encoded = `${JSON.stringify(summary, null, 2)}\n`;
   if (reportPath) writeFileSync(resolve(reportPath), encoded);
   console.log(encoded);
-  if (failures.length || forbiddenFailures.length) process.exitCode = 1;
+  if (failures.length || forbiddenFailures.length || forbiddenUnverified.length)
+    process.exitCode = 1;
 }
 
 main().catch((error) => {

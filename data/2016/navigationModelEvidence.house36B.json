@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Houses_House36B.adr",
+  "inputs": {
+    "collision": {
+      "sha256": "ce8ca93c8b3d3607d829b323580b6cad60723ea46c7f46eb0e8f16ed38656065",
+      "size": 26332088
+    },
+    "compiledTransitions": {
+      "sha256": "91877e9f528bacb2dbc0d0785e5ea69290b4a9306a464442531a922ee108cf0d",
+      "size": 27497
+    },
+    "metadata": {
+      "sha256": "5500799b7d5a82d40cab376a07b6eaa2ee9d360115e166714e5357bbb28a64b1",
+      "size": 343678
+    },
+    "modelForbiddenProbes": {
+      "sha256": "bb90f83dab4315219694a973e714993cd7a9f544f50056978ec8bf7baaf45a34",
+      "size": 32817
+    },
+    "modelRoutes": {
+      "sha256": "2ee5d1d41b77867483fe0c82d9b3db6fb06599c2c14960d2cba910167bc21d28",
+      "size": 65555
+    },
+    "modelTransitions": {
+      "sha256": "c5652b9640de323106b414d4db2135887fdb2b54e8153fd2454cd1753687475a",
+      "size": 32734
+    },
+    "semanticPolicy": {
+      "sha256": "c0aa00359e5d8163313061ae8317894aebdbaac367a674c51bc1bdc8dee42a30",
+      "size": 40594
+    },
+    "semanticRecipe": {
+      "sha256": "5df902dd0193deec87f8426de7ed9086bf9ba9a6ca92221716669fbfd4e5f5e2",
+      "size": 2204
+    },
+    "semanticSidecar": {
+      "sha256": "a8d8cca3d2b06c7283a212091d5b90df828a9141799ee55fa45e9e106315c108",
+      "size": 508976
+    },
+    "validationTemplate": {
+      "sha256": "ae796f215afe8dbe3d5f64b6847ab1e8367b6b2a233e20d38da4c167fe9da8dd",
+      "size": 7833
+    }
+  },
+  "streamingCaches": [
+    {
+      "instanceIndex": 146658,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "78b99744d8a2cd8130da0cf6b8c65776149c9dc83ab7d666acde80ebd2ec8d60",
+          "size": 78938
+        }
+      ]
+    },
+    {
+      "instanceIndex": 146659,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "f464596e4e5441f34c37d50ed9a6dbacf83760276fcc0c7f4724963f6974516b",
+          "size": 76249
+        }
+      ]
+    },
+    {
+      "instanceIndex": 146660,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "9f90f3d9ecce0987d10442f4fdec77f319d7e3d4938b4657724401ad5a22ee48",
+          "size": 48659
+        }
+      ]
+    },
+    {
+      "instanceIndex": 146661,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "14aaa74fd9470594f4f065341d5d8138482585f115f871b4f2fcba215a0a4fd6",
+          "size": 48505
+        }
+      ]
+    },
+    {
+      "instanceIndex": 146662,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "35d73e99fcb1dd3e91593f4010fcba184da6d87395dacbf23913ff18bcc638b2",
+          "size": 47412
+        }
+      ]
+    },
+    {
+      "instanceIndex": 146663,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "40439fef031c757778787a55f93d2e182abd2ef8e21d46497a39d8df059fc97f",
+          "size": 37064
+        }
+      ]
+    },
+    {
+      "instanceIndex": 146664,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "c2f2cbb26e9341518b432bb99a7e57a715c99670f63b5bb97729af017939db70",
+          "size": 46555
+        }
+      ]
+    },
+    {
+      "instanceIndex": 146665,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "114bce311020c14a2e021603c72be8a083e361e4d80f7683f52f062a5f6e427f",
+          "size": 33426
+        }
+      ]
+    }
+  ],
+  "result": {
+    "instances": 8,
+    "routes": 224,
+    "passed": 224,
+    "forbiddenProbes": 120,
+    "forbiddenEvaluated": 120,
+    "forbiddenPassed": 120
+  }
+}

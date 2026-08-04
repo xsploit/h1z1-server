@@ -104,6 +104,83 @@ export interface NavigationDoctorReport {
   }>;
 }
 
+export interface NavigationPreparedValidationSummary {
+  instances: number;
+  routes: number;
+  passed: number;
+  failures: unknown[];
+  forbiddenProbes: number;
+  forbiddenEvaluated: number;
+  forbiddenPassed: number;
+  forbiddenFailures: unknown[];
+  forbiddenUnverified: unknown[];
+}
+
+export interface NavigationPreparedModelRun {
+  actorFile: string;
+  instances: number;
+  skippedInstances: number;
+  routes: number;
+  forbiddenProbes: number;
+  transitions: number;
+  validationExitCode?: number;
+  validation?: NavigationPreparedValidationSummary;
+}
+
+export function assessNavigationPreparedModels(
+  models: NavigationPreparedModelRun[],
+  requireValidation: boolean
+): string[] {
+  const failures: string[] = [];
+  for (const model of models) {
+    const label = model.actorFile;
+    if (model.instances <= 0 || model.routes <= 0)
+      failures.push(`${label}: zero model instances or routes were prepared`);
+    if (!model.validation) {
+      if (requireValidation)
+        failures.push(`${label}: streaming validation was not produced`);
+      continue;
+    }
+    const validation = model.validation;
+    if (
+      model.validationExitCode !== undefined &&
+      model.validationExitCode !== 0
+    )
+      failures.push(
+        `${label}: streaming validator exited ${model.validationExitCode}`
+      );
+    if (validation.instances !== model.instances)
+      failures.push(
+        `${label}: validated ${validation.instances}/${model.instances} instances`
+      );
+    if (validation.routes !== model.routes)
+      failures.push(
+        `${label}: validated ${validation.routes}/${model.routes} routes`
+      );
+    if (
+      validation.passed !== validation.routes ||
+      validation.failures.length > 0
+    )
+      failures.push(
+        `${label}: ${validation.passed}/${validation.routes} routes passed`
+      );
+    if (validation.forbiddenProbes !== model.forbiddenProbes)
+      failures.push(
+        `${label}: received ${validation.forbiddenProbes}/${model.forbiddenProbes} forbidden probes`
+      );
+    if (
+      validation.forbiddenEvaluated !== model.forbiddenProbes ||
+      validation.forbiddenPassed !== model.forbiddenProbes ||
+      validation.forbiddenFailures.length > 0 ||
+      validation.forbiddenUnverified.length > 0
+    )
+      failures.push(
+        `${label}: ${validation.forbiddenPassed}/${model.forbiddenProbes} forbidden probes passed with ${validation.forbiddenEvaluated} evaluated`
+      );
+  }
+  return failures;
+}
+
 function finiteNonNegativeInteger(value: unknown, field: string): number {
   if (!Number.isInteger(value) || Number(value) < 0)
     throw new Error(`${field} must be a non-negative integer`);

@@ -8,6 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { resolveModelInstanceCacheDirectory } from "../src/utils/modelroutevalidation";
 
 type Route = {
   instance?: number;
@@ -15,6 +16,13 @@ type Route = {
   label?: string;
   start: [number, number, number];
   end: [number, number, number];
+};
+
+type ForbiddenProbe = {
+  instanceIndex: number;
+  label: string;
+  position: [number, number, number];
+  halfExtents: [number, number, number];
 };
 
 function option(name: string): string | undefined {
@@ -53,12 +61,30 @@ async function main() {
   const routes = routeFiles.flatMap(
     (path) => JSON.parse(readFileSync(resolve(path), "utf8")) as Route[]
   );
+  if (routes.length === 0) throw new Error("no model routes were provided");
   const routesByInstance = new Map<number, Route[]>();
   for (const route of routes) {
     const instance = routeInstance(route);
     const instanceRoutes = routesByInstance.get(instance) ?? [];
     instanceRoutes.push(route);
     routesByInstance.set(instance, instanceRoutes);
+  }
+  const forbiddenProbes = forbiddenPath
+    ? (JSON.parse(
+        readFileSync(resolve(forbiddenPath), "utf8")
+      ) as ForbiddenProbe[])
+    : [];
+  const forbiddenByInstance = new Map<number, ForbiddenProbe[]>();
+  for (const probe of forbiddenProbes) {
+    if (!Number.isInteger(probe.instanceIndex))
+      throw new Error("forbidden probe has no instance index");
+    if (!routesByInstance.has(probe.instanceIndex))
+      throw new Error(
+        `forbidden probe targets unvalidated instance ${probe.instanceIndex}`
+      );
+    const entries = forbiddenByInstance.get(probe.instanceIndex) ?? [];
+    entries.push(probe);
+    forbiddenByInstance.set(probe.instanceIndex, entries);
   }
 
   // A mutable Detour runtime is intentionally not reused across distant model
@@ -68,8 +94,10 @@ async function main() {
   // loader with a clean bounded runtime, matching a player visiting one POI.
   const failures: unknown[] = [];
   const forbiddenFailures: unknown[] = [];
+  const forbiddenUnverified: unknown[] = [];
   let checkedRoutes = 0;
-  let checkedForbiddenProbes = 0;
+  let evaluatedForbiddenProbes = 0;
+  const cacheDirectories: Record<string, string> = {};
   const tempRoot = mkdtempSync(join(tmpdir(), "h1emu-nav-routes-"));
   try {
     let completed = 0;
@@ -78,12 +106,17 @@ async function main() {
     )) {
       const routesPath = join(tempRoot, `${instance}.routes.json`);
       const instanceReportPath = join(tempRoot, `${instance}.report.json`);
+      const instanceCacheDirectory = resolveModelInstanceCacheDirectory(
+        cacheDir,
+        instance
+      );
+      cacheDirectories[String(instance)] = instanceCacheDirectory;
       writeFileSync(routesPath, JSON.stringify(instanceRoutes));
       const childArguments = [
         "--import",
         "tsx",
         resolve(__dirname, "validateModelInstanceStreaming.ts"),
-        resolve(cacheDir),
+        instanceCacheDirectory,
         routesPath,
         String(instance),
         "--report",
@@ -109,12 +142,21 @@ async function main() {
         routes: number;
         failures: unknown[];
         forbiddenProbes: number;
+        forbiddenEvaluated: number;
         forbiddenFailures: unknown[];
+        forbiddenUnverified: unknown[];
+        meshPresent: boolean;
       };
+      const expectedForbidden = forbiddenByInstance.get(instance)?.length ?? 0;
+      if (result.forbiddenProbes !== expectedForbidden)
+        throw new Error(
+          `instance ${instance} received ${result.forbiddenProbes}/${expectedForbidden} forbidden probes`
+        );
       checkedRoutes += result.routes;
       failures.push(...result.failures);
-      checkedForbiddenProbes += result.forbiddenProbes;
+      evaluatedForbiddenProbes += result.forbiddenEvaluated;
       forbiddenFailures.push(...result.forbiddenFailures);
+      forbiddenUnverified.push(...result.forbiddenUnverified);
       completed++;
       if (completed % 10 === 0 || completed === routesByInstance.size) {
         console.error(
@@ -128,19 +170,28 @@ async function main() {
 
   const summary = {
     cacheDirectory: resolve(cacheDir),
+    cacheDirectories,
     routeFiles: routeFiles.map((path) => resolve(path)),
     instances: routesByInstance.size,
     routes: checkedRoutes,
     passed: checkedRoutes - failures.length,
     failures,
-    forbiddenProbes: checkedForbiddenProbes,
-    forbiddenPassed: checkedForbiddenProbes - forbiddenFailures.length,
-    forbiddenFailures
+    forbiddenProbes: forbiddenProbes.length,
+    forbiddenEvaluated: evaluatedForbiddenProbes,
+    forbiddenPassed: evaluatedForbiddenProbes - forbiddenFailures.length,
+    forbiddenFailures,
+    forbiddenUnverified
   };
   const encoded = `${JSON.stringify(summary, null, 2)}\n`;
   if (reportPath) writeFileSync(resolve(reportPath), encoded);
   console.log(encoded);
-  if (failures.length || forbiddenFailures.length) process.exitCode = 1;
+  if (
+    failures.length ||
+    forbiddenFailures.length ||
+    forbiddenUnverified.length ||
+    evaluatedForbiddenProbes !== forbiddenProbes.length
+  )
+    process.exitCode = 1;
 }
 
 main().catch((error) => {

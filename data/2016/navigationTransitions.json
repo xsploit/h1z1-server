@@ -3,8 +3,16 @@
     "name": "Pleasant Valley police front stair top seam",
     "kind": "stairs",
     "source": "collision-semantic-regional-analysis",
-    "start": [-233.5, 25.3, -1136.4],
-    "end": [-233.5, 25.58, -1137.0],
+    "start": [
+      -233.5,
+      25.3,
+      -1136.4
+    ],
+    "end": [
+      -233.5,
+      25.58,
+      -1137.0
+    ],
     "radius": 0.35,
     "bidirectional": true
   },
@@ -12,8 +20,16 @@
     "name": "Pleasant Valley police front stair bottom seam",
     "kind": "stairs",
     "source": "crowd-route-replay",
-    "start": [-233.5, 23.5, -1133.2],
-    "end": [-233.5, 23.8, -1133.8],
+    "start": [
+      -233.5,
+      23.5,
+      -1133.2
+    ],
+    "end": [
+      -233.5,
+      23.8,
+      -1133.8
+    ],
     "radius": 0.35,
     "bidirectional": true
   },
@@ -21,8 +37,16 @@
     "name": "Pleasant Valley police interior stairs lower landing",
     "kind": "stairs",
     "source": "crowd-route-replay",
-    "start": [-227.2, 25.5, -1163.2],
-    "end": [-227.8, 26.06, -1163.28],
+    "start": [
+      -227.2,
+      25.5,
+      -1163.2
+    ],
+    "end": [
+      -227.8,
+      26.06,
+      -1163.28
+    ],
     "radius": 0.35,
     "bidirectional": true
   },
@@ -30,8 +54,16 @@
     "name": "Pleasant Valley police basement stair bottom seam",
     "kind": "stairs",
     "source": "collision-semantic-regional-analysis",
-    "start": [-233.0, 22.7, -1165.7],
-    "end": [-232.2, 23.2, -1165.7],
+    "start": [
+      -233.0,
+      22.7,
+      -1165.7
+    ],
+    "end": [
+      -232.2,
+      23.2,
+      -1165.7
+    ],
     "radius": 0.35,
     "bidirectional": true
   },
@@ -39,9 +71,1105 @@
     "name": "Pleasant Valley police basement stair top seam",
     "kind": "stairs",
     "source": "collision-semantic-regional-analysis",
-    "start": [-228.5, 25.34, -1165.7],
-    "end": [-227.8, 25.5, -1165.7],
+    "start": [
+      -228.5,
+      25.34,
+      -1165.7
+    ],
+    "end": [
+      -227.8,
+      25.5,
+      -1165.7
+    ],
     "radius": 0.35,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2791.7339642327356,
+      28.947486877441406,
+      -841.829220840624
+    ],
+    "end": [
+      -2791.071968062577,
+      29.133486877441406,
+      -840.9507215084267
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2786.0138866986267,
+      32.76748687744141,
+      -832.9921843718142
+    ],
+    "end": [
+      -2787.8507489386757,
+      33.317486877441404,
+      -831.6080105614822
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2785.11116464841,
+      32.2474868774414,
+      -831.7942307369997
+    ],
+    "end": [
+      -2786.0138866986267,
+      32.76748687744141,
+      -832.9921843718142
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2783.456174223013,
+      30.232486877441406,
+      -829.5979824065065
+    ],
+    "end": [
+      -2784.208442598194,
+      31.197486877441406,
+      -830.5962771021852
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2779.8950588627936,
+      29.687486877441405,
+      -824.706054609407
+    ],
+    "end": [
+      -2780.2561476828805,
+      30.017486877441407,
+      -825.1852360633327
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2779.5038793077,
+      29.347486877441405,
+      -824.186941367654
+    ],
+    "end": [
+      -2779.8950588627936,
+      29.687486877441405,
+      -824.706054609407
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2778.9923368125774,
+      29.159486877441406,
+      -823.5081009745926
+    ],
+    "end": [
+      -2779.5038793077,
+      29.347486877441405,
+      -824.186941367654
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146658 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2778.149796232375,
+      28.947486877441406,
+      -822.3900109154323
+    ],
+    "end": [
+      -2778.9923368125774,
+      29.159486877441406,
+      -823.5081009745926
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2587.44392101571,
+      55.146366119384766,
+      -881.771210987237
+    ],
+    "end": [
+      -2586.462647741572,
+      55.35836611938477,
+      -880.7726606527262
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2586.462647741572,
+      55.35836611938477,
+      -880.7726606527262
+    ],
+    "end": [
+      -2585.866874682273,
+      55.546366119384764,
+      -880.1663979496303
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2585.866874682273,
+      55.546366119384764,
+      -880.1663979496303
+    ],
+    "end": [
+      -2585.4112835192805,
+      55.88636611938477,
+      -879.7027852943218
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2585.4112835192805,
+      55.88636611938477,
+      -879.7027852943218
+    ],
+    "end": [
+      -2584.9907378303637,
+      56.216366119384766,
+      -879.2748351509599
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2581.2421061799323,
+      56.43136611938476,
+      -875.3175304006041
+    ],
+    "end": [
+      -2580.365969328023,
+      57.396366119384766,
+      -874.4259676019337
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2579.3146051057315,
+      58.44636611938476,
+      -873.3560922435292
+    ],
+    "end": [
+      -2578.26324088344,
+      58.966366119384766,
+      -872.2862168851248
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2578.26324088344,
+      58.966366119384766,
+      -872.2862168851248
+    ],
+    "end": [
+      -2576.622765333887,
+      59.51636611938476,
+      -873.8983086926382
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146659 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -2571.438629006603,
+      55.146366119384766,
+      -864.2714072651477
+    ],
+    "end": [
+      -2572.2096294362836,
+      55.332366119384766,
+      -865.0559825279776
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -263.1662814426505,
+      39.92839813232422,
+      -747.2677865748859
+    ],
+    "end": [
+      -263.1374865330439,
+      40.11439813232422,
+      -748.3674097227777
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -262.1024121006523,
+      43.228398132324216,
+      -759.2440425680642
+    ],
+    "end": [
+      -262.1416778864795,
+      43.74839813232422,
+      -757.7445564573027
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -262.1416778864795,
+      43.74839813232422,
+      -757.7445564573027
+    ],
+    "end": [
+      -259.8424658499785,
+      44.298398132324216,
+      -757.6843489190343
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -262.0304248266358,
+      41.213398132324215,
+      -761.9931004377935
+    ],
+    "end": [
+      -262.06314631482513,
+      42.17839813232422,
+      -760.7435286788256
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -261.772087083082,
+      40.66839813232422,
+      -768.0384100321429
+    ],
+    "end": [
+      -261.7877933974128,
+      40.99839813232422,
+      -767.4386155878383
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -261.75507190922355,
+      40.32839813232422,
+      -768.6881873468061
+    ],
+    "end": [
+      -261.772087083082,
+      40.66839813232422,
+      -768.0384100321429
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -261.73282129725476,
+      40.14039813232422,
+      -769.5378961429044
+    ],
+    "end": [
+      -261.75507190922355,
+      40.32839813232422,
+      -768.6881873468061
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146660 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -261.69617323048277,
+      39.92839813232422,
+      -770.9374165129484
+    ],
+    "end": [
+      -261.73282129725476,
+      40.14039813232422,
+      -769.5378961429044
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -211.18960783281807,
+      37.904884338378906,
+      -821.0175064625244
+    ],
+    "end": [
+      -209.78960788073806,
+      38.11688433837891,
+      -821.017506274422
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -209.78960788073806,
+      38.11688433837891,
+      -821.017506274422
+    ],
+    "end": [
+      -208.93960790983232,
+      38.304884338378905,
+      -821.0175061602168
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -208.93960790983232,
+      38.304884338378905,
+      -821.0175061602168
+    ],
+    "end": [
+      -208.28960793208088,
+      38.64488433837891,
+      -821.0175060728837
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -208.28960793208088,
+      38.64488433837891,
+      -821.0175060728837
+    ],
+    "end": [
+      -207.689607952618,
+      38.97488433837891,
+      -821.0175059922683
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -202.2396081525995,
+      39.1898843383789,
+      -820.9175052634355
+    ],
+    "end": [
+      -200.9896081953852,
+      40.154884338378906,
+      -820.9175050954868
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -199.489608246728,
+      41.2048843383789,
+      -820.9175048939486
+    ],
+    "end": [
+      -197.98960829807083,
+      41.72488433837891,
+      -820.9175046924104
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -197.98960829807083,
+      41.72488433837891,
+      -820.9175046924104
+    ],
+    "end": [
+      -197.98960798904545,
+      42.274884338378904,
+      -823.2175046136847
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146661 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -187.48960875823974,
+      37.904884338378906,
+      -820.1675033073137
+    ],
+    "end": [
+      -188.58960872058833,
+      38.090884338378906,
+      -820.1675034551084
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      245.724607616687,
+      24.125879287719727,
+      -530.33155312816
+    ],
+    "end": [
+      246.87838417009488,
+      24.337879287719726,
+      -531.1245219966564
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      246.87838417009488,
+      24.337879287719726,
+      -531.1245219966564
+    ],
+    "end": [
+      247.57889136323536,
+      24.525879287719725,
+      -531.6059673811005
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      247.57889136323536,
+      24.525879287719725,
+      -531.6059673811005
+    ],
+    "end": [
+      248.11457333446043,
+      24.865879287719725,
+      -531.9741314986168
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      248.11457333446043,
+      24.865879287719725,
+      -531.9741314986168
+    ],
+    "end": [
+      248.60904900020665,
+      25.195879287719727,
+      -532.3139752994008
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      253.15717693086555,
+      25.410879287719727,
+      -535.3184772122326
+    ],
+    "end": [
+      254.18733456783684,
+      26.375879287719727,
+      -536.0264851305329
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      256.65971289656795,
+      27.945879287719727,
+      -537.7257041344537
+    ],
+    "end": [
+      255.35697832689536,
+      28.495879287719728,
+      -539.6211941864809
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      255.4235237322024,
+      27.425879287719727,
+      -536.8760946324933
+    ],
+    "end": [
+      256.65971289656795,
+      27.945879287719727,
+      -537.7257041344537
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146662 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      265.73784179810707,
+      24.125879287719727,
+      -543.0548760659938
+    ],
+    "end": [
+      264.83130307757233,
+      24.311879287719727,
+      -542.4318290978895
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1811.8858650172492,
+      28.789962768554688,
+      2479.544581458521
+    ],
+    "end": [
+      1812.9858649795979,
+      28.975962768554687,
+      2479.544581310726
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1822.3858647586187,
+      32.60996276855469,
+      2480.2945800220814
+    ],
+    "end": [
+      1822.3858650676439,
+      33.159962768554685,
+      2482.5945799433557
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1823.885864707276,
+      32.089962768554685,
+      2480.2945798205433
+    ],
+    "end": [
+      1822.3858647586187,
+      32.60996276855469,
+      2480.2945800220814
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1826.6358646131475,
+      30.074962768554688,
+      2480.2945794510565
+    ],
+    "end": [
+      1825.3858646559331,
+      31.039962768554688,
+      2480.2945796190047
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1832.6858644195004,
+      29.529962768554686,
+      2480.394578634763
+    ],
+    "end": [
+      1832.0858644400375,
+      29.859962768554688,
+      2480.394578715378
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1833.335864397252,
+      29.189962768554686,
+      2480.3945785474293
+    ],
+    "end": [
+      1832.6858644195004,
+      29.529962768554686,
+      2480.394578634763
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1834.1858643681576,
+      29.001962768554687,
+      2480.3945784332245
+    ],
+    "end": [
+      1833.335864397252,
+      29.189962768554686,
+      2480.3945785474293
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146663 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1835.5858643202378,
+      28.789962768554688,
+      2480.394578245122
+    ],
+    "end": [
+      1834.1858643681576,
+      29.001962768554687,
+      2480.3945784332245
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2254.843359375,
+      55.1821826171875,
+      2402.78955078125
+    ],
+    "end": [
+      2252.543359375,
+      55.7321826171875,
+      2402.78955078125
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2254.743359375,
+      51.3621826171875,
+      2415.98955078125
+    ],
+    "end": [
+      2254.743359375,
+      51.5741826171875,
+      2414.58955078125
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2254.743359375,
+      51.5741826171875,
+      2414.58955078125
+    ],
+    "end": [
+      2254.743359375,
+      51.7621826171875,
+      2413.73955078125
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2254.743359375,
+      51.7621826171875,
+      2413.73955078125
+    ],
+    "end": [
+      2254.743359375,
+      52.1021826171875,
+      2413.08955078125
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2254.743359375,
+      52.1021826171875,
+      2413.08955078125
+    ],
+    "end": [
+      2254.743359375,
+      52.4321826171875,
+      2412.48955078125
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2254.843359375,
+      52.6471826171875,
+      2407.03955078125
+    ],
+    "end": [
+      2254.843359375,
+      53.6121826171875,
+      2405.78955078125
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2254.843359375,
+      54.6621826171875,
+      2404.28955078125
+    ],
+    "end": [
+      2254.843359375,
+      55.1821826171875,
+      2402.78955078125
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146664 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2255.593359375,
+      51.3621826171875,
+      2392.28955078125
+    ],
+    "end": [
+      2255.593359375,
+      51.5481826171875,
+      2393.38955078125
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 north entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2291.8684637785823,
+      51.3379020690918,
+      2439.184562859273
+    ],
+    "end": [
+      2293.2682505549255,
+      51.5499020690918,
+      2439.160129461354
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 north entrance lower seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2293.2682505549255,
+      51.5499020690918,
+      2439.160129461354
+    ],
+    "end": [
+      2294.118121097705,
+      51.737902069091795,
+      2439.145294898331
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 north entrance middle seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2294.118121097705,
+      51.737902069091795,
+      2439.145294898331
+    ],
+    "end": [
+      2294.7680221010073,
+      52.0779020690918,
+      2439.1339508207257
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 north entrance upper seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2294.7680221010073,
+      52.0779020690918,
+      2439.1339508207257
+    ],
+    "end": [
+      2295.36793071944,
+      52.4079020690918,
+      2439.1234793644744
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 interior lower stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2300.818845912913,
+      52.62290206909179,
+      2439.128348406598
+    ],
+    "end": [
+      2302.068655534648,
+      53.5879020690918,
+      2439.1065328727414
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 interior upper stair seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2303.56842708073,
+      54.637902069091794,
+      2439.080354232113
+    ],
+    "end": [
+      2305.068198626812,
+      55.1579020690918,
+      2439.0541755914855
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 second-floor landing seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2305.068198626812,
+      55.1579020690918,
+      2439.0541755914855
+    ],
+    "end": [
+      2305.0280580445155,
+      55.707902069091794,
+      2436.7545258874934
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Houses_House36B.adr #146665 south entrance terrain seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2315.5796887696997,
+      51.3379020690918,
+      2439.6208108801306
+    ],
+    "end": [
+      2314.479856302573,
+      51.5239020690918,
+      2439.6400085499245
+    ],
+    "radius": 0.5,
     "bidirectional": true
   }
 ]

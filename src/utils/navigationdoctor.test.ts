@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  assessNavigationPreparedModels,
   createNavigationDoctorReport,
   NavigationModelValidationTemplate,
   NavigationUnknownInventory,
@@ -148,8 +149,8 @@ test("House36B evidence covers both entrances and the interior stair", () => {
   ) as NavigationModelValidationTemplate;
   assert.equal(house36B.actorFile, "Common_Structures_Houses_House36B.adr");
   assert.equal(house36B.terrainProbes?.length, 2);
-  assert.equal(house36B.forbiddenProbes?.length, 5);
-  assert.equal(house36B.transitions?.length, 5);
+  assert.equal(house36B.forbiddenProbes?.length, 15);
+  assert.equal(house36B.transitions?.length, 8);
   assert.equal(house36B.routes.length, 28);
   const labels = house36B.routes.map((route) =>
     String((route as { label?: unknown }).label)
@@ -158,4 +159,54 @@ test("House36B evidence covers both entrances and the interior stair", () => {
   assert(labels.some((label) => label.startsWith("north terrain")));
   assert(labels.some((label) => label.includes("interior upper flight")));
   assert(labels.some((label) => label.includes("second floor")));
+});
+
+test("navigation doctor fails closed on empty and incomplete prepared evidence", () => {
+  assert.deepEqual(
+    assessNavigationPreparedModels(
+      [
+        {
+          actorFile: "Empty.adr",
+          instances: 0,
+          skippedInstances: 1,
+          routes: 0,
+          forbiddenProbes: 0,
+          transitions: 0
+        }
+      ],
+      true
+    ),
+    [
+      "Empty.adr: zero model instances or routes were prepared",
+      "Empty.adr: streaming validation was not produced"
+    ]
+  );
+
+  const failures = assessNavigationPreparedModels(
+    [
+      {
+        actorFile: "Broken.adr",
+        instances: 2,
+        skippedInstances: 0,
+        routes: 4,
+        forbiddenProbes: 2,
+        transitions: 0,
+        validation: {
+          instances: 2,
+          routes: 4,
+          passed: 3,
+          failures: [{}],
+          forbiddenProbes: 2,
+          forbiddenEvaluated: 1,
+          forbiddenPassed: 1,
+          forbiddenFailures: [],
+          forbiddenUnverified: [{}]
+        }
+      }
+    ],
+    true
+  );
+  assert.equal(failures.length, 2);
+  assert.match(failures[0], /3\/4 routes passed/);
+  assert.match(failures[1], /1\/2 forbidden probes passed/);
 });

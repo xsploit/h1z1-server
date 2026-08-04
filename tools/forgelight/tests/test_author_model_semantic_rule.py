@@ -76,6 +76,78 @@ class AuthorModelSemanticRuleTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "selected 0 triangles"):
             author_rule(0, evidence, recipe)
 
+    def test_selector_maximum_and_vertex_containment_fail_closed(self):
+        evidence = triangle_evidence(
+            (
+                -10.0, 0.0, 0.0,
+                10.0, 0.0, 0.0,
+                0.0, 0.0, 1.0,
+            ),
+            (0, 1, 2),
+        )
+        base_selector = {
+            "id": "wide-centroid-match",
+            "semantic": "nav_stair",
+            "centroidBounds": [-1, -1, -1, 1, 1, 1],
+            "normalYMax": -0.9,
+            "minSelectedTriangles": 0,
+        }
+        recipe = {
+            "actorFile": "Test.adr",
+            "collisionAssetSha256": "a" * 64,
+            "defaultSemantic": "nav_obstacle_static",
+            "selectors": [{**base_selector, "maxSelectedTriangles": 0}],
+        }
+        with self.assertRaisesRegex(ValueError, "selected 1 triangles, expected at most 0"):
+            author_rule(0, evidence, recipe)
+
+        recipe["selectors"] = [
+            {
+                **base_selector,
+                "requireVerticesInsideBounds": True,
+                "minSelectedTriangles": 0,
+            }
+        ]
+        rule, _report = author_rule(0, evidence, recipe)
+        self.assertEqual(
+            rule["selections"],
+            [{"semantic": "nav_obstacle_static", "triangleRanges": [[0, 0]]}],
+        )
+
+    def test_selector_can_pin_a_triangle_index_range(self):
+        evidence = triangle_evidence(
+            (
+                0.0, 0.0, 0.0,
+                0.0, 0.0, 1.0,
+                1.0, 0.0, 0.0,
+                2.0, 0.0, 0.0,
+            ),
+            (0, 1, 2, 1, 3, 2),
+        )
+        recipe = {
+            "actorFile": "Test.adr",
+            "collisionAssetSha256": "a" * 64,
+            "defaultSemantic": "nav_obstacle_static",
+            "selectors": [
+                {
+                    "id": "second-triangle-only",
+                    "semantic": "nav_stair",
+                    "triangleMin": 1,
+                    "triangleMax": 1,
+                    "minSelectedTriangles": 1,
+                    "maxSelectedTriangles": 1,
+                }
+            ],
+        }
+        rule, _report = author_rule(0, evidence, recipe)
+        self.assertEqual(
+            rule["selections"],
+            [
+                {"semantic": "nav_obstacle_static", "triangleRanges": [[0, 0]]},
+                {"semantic": "nav_stair", "triangleRanges": [[1, 1]]},
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

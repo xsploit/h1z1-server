@@ -78,6 +78,7 @@ def triangle_evidence(positions, indices) -> list[dict]:
                     sum(point[axis] for point in points) / 3.0
                     for axis in range(3)
                 ],
+                "vertices": [list(point) for point in points],
                 "normalY": normal_y,
                 "slopeDegrees": slope,
                 "area": length * 0.5,
@@ -98,7 +99,15 @@ def _matches(selector: dict, triangle: dict) -> bool:
             and bounds[2] <= z <= bounds[5]
         ):
             return False
-    for field in ("normalY", "slopeDegrees", "area"):
+        if selector.get("requireVerticesInsideBounds", False):
+            if not all(
+                bounds[0] <= vertex[0] <= bounds[3]
+                and bounds[1] <= vertex[1] <= bounds[4]
+                and bounds[2] <= vertex[2] <= bounds[5]
+                for vertex in triangle["vertices"]
+            ):
+                return False
+    for field in ("triangle", "normalY", "slopeDegrees", "area"):
         minimum = selector.get(f"{field}Min")
         maximum = selector.get(f"{field}Max")
         value = triangle[field]
@@ -147,10 +156,20 @@ def author_rule(kind: int, evidence: list[dict], recipe: dict) -> tuple[dict, di
         raw_matches = [row["triangle"] for row in evidence if _matches(selector, row)]
         selected = [index for index in raw_matches if not claimed[index]]
         minimum = int(selector.get("minSelectedTriangles", 1))
+        maximum = int(selector.get("maxSelectedTriangles", len(evidence)))
+        if maximum < minimum:
+            raise ValueError(
+                f"selector {selector.get('id', selector_index)} maximum is below minimum"
+            )
         if len(selected) < minimum:
             raise ValueError(
                 f"selector {selector.get('id', selector_index)} selected "
                 f"{len(selected)} triangles, expected at least {minimum}"
+            )
+        if len(selected) > maximum:
+            raise ValueError(
+                f"selector {selector.get('id', selector_index)} selected "
+                f"{len(selected)} triangles, expected at most {maximum}"
             )
         for triangle_index in selected:
             assignments[triangle_index] = semantic

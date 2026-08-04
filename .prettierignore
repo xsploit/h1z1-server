@@ -1,1 +1,4 @@
 src/types/**/*
+data/2016/navigationTransitions.json
+data/2016/navigationTransitions.provenance.json
+data/2016/navigationModelEvidence.house36B.json

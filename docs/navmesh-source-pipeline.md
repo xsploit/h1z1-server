@@ -152,11 +152,36 @@ door geometry, the opt-in remains disabled.
 
 ## Transitions
 
-`data/2016/navigationTransitions.json` contains only reviewed off-mesh links,
-such as the Pleasant Valley police front steps. Door thresholds are not linked
-blindly: an off-mesh link across every door would let NPCs bypass a closed
-door. Add a transition only after the matching validator proves that ordinary
-navmesh connectivity cannot represent the stair or threshold.
+`data/2016/navigationTransitions.authored.json` contains the five manually
+reviewed Pleasant Valley police links. Model-local templates emit transformed
+per-placement links during preparation. The deterministic compiler merges
+those two sources into the runtime/full-bake input
+`data/2016/navigationTransitions.json` and records its input/output hashes in
+`data/2016/navigationTransitions.provenance.json`.
+
+For the House36B checkpoint the compiled artifact contains 69 links: five
+authored PV links plus eight reviewed seams at each of eight exact House36B
+placements. Rebuild it after model preparation with:
+
+```powershell
+py -3 tools/forgelight/compile_navigation_transitions.py `
+  --authored data/2016/navigationTransitions.authored.json `
+  --generated "house36B=C:\path\to\house36b-prepared\transitions.json" `
+  --output data/2016/navigationTransitions.json `
+  --provenance data/2016/navigationTransitions.provenance.json
+```
+
+Compilation is deterministic and idempotent. Exact repeated entries collapse;
+conflicting links at the same endpoints fail instead of silently appending.
+Generator-only `actorFile` and `instanceIndex` fields are recorded by
+provenance but stripped from the compiled artifact. Ordering uses the runtime
+link geometry itself, so recompiling an already stripped artifact is stable
+even when source instance indices cross a digit boundary. The same canonical
+JSON is accepted by both the TypeScript runtime and the strict C++ baker parser.
+Door thresholds are not linked blindly: an off-mesh link across every door
+would let NPCs bypass a closed door. Add a transition only after the matching
+validator proves that ordinary navmesh connectivity cannot represent the
+stair or threshold.
 
 Useful focused checks:
 

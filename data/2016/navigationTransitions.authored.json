@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Pleasant Valley police front stair top seam",
+    "kind": "stairs",
+    "source": "collision-semantic-regional-analysis",
+    "start": [-233.5, 25.3, -1136.4],
+    "end": [-233.5, 25.58, -1137.0],
+    "radius": 0.35,
+    "bidirectional": true
+  },
+  {
+    "name": "Pleasant Valley police front stair bottom seam",
+    "kind": "stairs",
+    "source": "crowd-route-replay",
+    "start": [-233.5, 23.5, -1133.2],
+    "end": [-233.5, 23.8, -1133.8],
+    "radius": 0.35,
+    "bidirectional": true
+  },
+  {
+    "name": "Pleasant Valley police interior stairs lower landing",
+    "kind": "stairs",
+    "source": "crowd-route-replay",
+    "start": [-227.2, 25.5, -1163.2],
+    "end": [-227.8, 26.06, -1163.28],
+    "radius": 0.35,
+    "bidirectional": true
+  },
+  {
+    "name": "Pleasant Valley police basement stair bottom seam",
+    "kind": "stairs",
+    "source": "collision-semantic-regional-analysis",
+    "start": [-233.0, 22.7, -1165.7],
+    "end": [-232.2, 23.2, -1165.7],
+    "radius": 0.35,
+    "bidirectional": true
+  },
+  {
+    "name": "Pleasant Valley police basement stair top seam",
+    "kind": "stairs",
+    "source": "collision-semantic-regional-analysis",
+    "start": [-228.5, 25.34, -1165.7],
+    "end": [-227.8, 25.5, -1165.7],
+    "radius": 0.35,
+    "bidirectional": true
+  }
+]

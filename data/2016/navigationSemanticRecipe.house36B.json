@@ -10,7 +10,9 @@
       "centroidBounds": [-4.2, 0.1, -10.8, -1.5, 1.05, -8.55],
       "normalYMax": -0.7,
       "slopeDegreesMax": 50,
-      "minSelectedTriangles": 20
+      "areaMax": 4.0,
+      "minSelectedTriangles": 20,
+      "maxSelectedTriangles": 26
     },
     {
       "id": "north-exterior-stair",
@@ -18,7 +20,10 @@
       "centroidBounds": [-5.5, 0.1, 9.05, -1.5, 1.1, 12.15],
       "normalYMax": -0.7,
       "slopeDegreesMax": 50,
-      "minSelectedTriangles": 15
+      "areaMax": 4.0,
+      "triangleMin": 29236,
+      "minSelectedTriangles": 12,
+      "maxSelectedTriangles": 12
     },
     {
       "id": "interior-upper-landing",
@@ -26,7 +31,9 @@
       "centroidBounds": [-4.8, 3.7, -0.8, -2.6, 4.1, 0.0],
       "normalYMax": -0.7,
       "slopeDegreesMax": 50,
-      "minSelectedTriangles": 1
+      "areaMax": 4.0,
+      "minSelectedTriangles": 1,
+      "maxSelectedTriangles": 1
     },
     {
       "id": "interior-main-stair",
@@ -34,7 +41,9 @@
       "centroidBounds": [-4.3, 1.15, 0.2, -2.9, 4.25, 4.35],
       "normalYMax": -0.7,
       "slopeDegreesMax": 50,
-      "minSelectedTriangles": 30
+      "areaMax": 4.0,
+      "minSelectedTriangles": 30,
+      "maxSelectedTriangles": 61
     },
     {
       "id": "main-house-floor",
@@ -42,7 +51,8 @@
       "centroidBounds": [-12.2, 1.0, -8.6, 4.8, 1.16, 9.6],
       "normalYMax": -0.95,
       "slopeDegreesMax": 10,
-      "minSelectedTriangles": 100
+      "minSelectedTriangles": 100,
+      "maxSelectedTriangles": 161
     },
     {
       "id": "garage-floor",
@@ -50,7 +60,8 @@
       "centroidBounds": [4.7, 1.0, -5.0, 12.9, 1.16, 3.2],
       "normalYMax": -0.95,
       "slopeDegreesMax": 10,
-      "minSelectedTriangles": 2
+      "minSelectedTriangles": 2,
+      "maxSelectedTriangles": 80
     },
     {
       "id": "second-floor",
@@ -58,7 +69,8 @@
       "centroidBounds": [-12.2, 4.3, -2.7, 4.8, 4.46, 9.7],
       "normalYMax": -0.95,
       "slopeDegreesMax": 10,
-      "minSelectedTriangles": 50
+      "minSelectedTriangles": 50,
+      "maxSelectedTriangles": 153
     }
   ]
 }
