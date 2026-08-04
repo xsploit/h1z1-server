@@ -505,8 +505,48 @@ resident, and the WASM heap stayed fixed at 667 MiB. The report is
 `work/staging/full-apartments06-v1/installed-obstacle-recovery-recycle-1000x1000-20260804.json`.
 
 This proves local salt-change recovery and disproves global teardown as a
-viable full-pop strategy. A fresh long soak on this corrected lifecycle is
-still required before release.
+viable full-pop strategy.
+
+The next installed 100-fake-player, two-hour run completed its full wall-clock
+duration and kept the complete mesh and fixed 667 MiB WASM heap alive without a
+WASM trap, but correctly failed its final accounting gate: native Crowd had
+filled all 2,000 slots while only 676 live entity/test agents were expected.
+`WorldObjectManager` expires dead NPC corpses through
+`batchDeleteEntities()`. That optimized path removed the entity from the world
+registries but, unlike `deleteEntity()`, did not release its native Crowd
+agent. The evidence is the stdout/stderr pair named
+`installed-distributed-100-player-2h-local-recovery-20260804.*` under
+`work/staging/full-apartments06-v1/`; the pre-fix validator threw before it
+could serialize its JSON report.
+
+Agent release is now shared by direct and batch deletion through one guarded
+`releaseNavAgent()` path. The validator also writes its report before failing,
+enforces native-active/wrapper/entity accounting in every mode, compares
+wrapper retention only for original NPCs that still exist, preserves baseline
+off-nav NPCs as an explicit metric, and emits progress every 5,000 ticks.
+
+The corrected accelerated reproducer then ran 40,000 deterministic 200 ms
+steps (2.22 simulated hours) with 100 distributed fake players and completed
+2,000 obstacle add/remove cycles. It exited zero with all 40,000 steps complete:
+
+- native active agents, native wrappers, and expected entity/test agents all
+  matched at 912;
+- 796 of 798 surviving original eligible NPC wrappers remained identical; the
+  other two were recovered locally;
+- Crowd and obstacle health remained true, no agent index was invalid, and the
+  target-tile recovery probe remained valid while moving 10.583 m;
+- all 100,289 columns / 104,935 layers remained resident and the WASM heap was
+  fixed at 667 MiB; and
+- RSS plateaued at about 1,975 MiB during the last 15,000 progress ticks rather
+  than growing with every despawn/obstacle cycle.
+
+The machine-readable report is
+`work/staging/full-apartments06-v1/accelerated-despawn-recovery2-40000-20260804.json`.
+Its stderr contains only the server framework's unconditional version banner
+on clean process exit; there is no exception, rejection, warning, or WASM trap.
+This clears the server-side Crowd lifecycle and deterministic two-hour-equivalent
+obstacle/churn gate. It does not replace multi-client replication, event
+delivery, or entity-specific gameplay checks.
 
 Candidate A is therefore the preferred full-pop architecture. The remaining
 blockers concern installed-server and gameplay behavior, not reference
@@ -514,8 +554,8 @@ capacity:
 
 - upstream `webidl-dts-gen` still mishandles `unsigned long long[]`, so a
   publishable 64-bit package needs a BigInt-aware declaration path;
-- the staged 64-bit runtime package still needs an installed Play smoke after
-  the corrected two-hour soak releases the QuickStart runtime;
+- the staged 64-bit runtime package still needs an installed Play smoke proving
+  the launcher selects only packaged module paths;
 - door/construction/vehicle obstacle churn must prove that geometry is actually
   blocked and locally replanned, not merely that the API returns success;
 - replication, the complete AI update phase, and separated sound/explosion
@@ -586,11 +626,11 @@ make it the most complex fallback.
 | Obstacles             | Repeated door, construction, and vehicle changes cause bounded local replans without corrupting unrelated agents.                          |
 
 Current evidence clears the standalone 2,000-agent Crowd, replan, reference
-ABI, full-cache materialization, and clean-teardown portions of these gates. It
-also clears installed-runtime startup, representative box-carve
+ABI, full-cache materialization, clean-teardown, 100-player synthetic
+distribution, and two-hour-equivalent Crowd/obstacle churn portions of these
+gates. It also clears installed-runtime startup, representative box-carve
 effectiveness, and a 1,000-tick/50-obstacle ZoneServer stress. It does not clear
-the 100-player distribution, replication/event delivery, entity-specific
-obstacle behavior, or two-hour soak portions.
+multi-client replication/event delivery or entity-specific obstacle behavior.
 
 ## Audited surfaces
 

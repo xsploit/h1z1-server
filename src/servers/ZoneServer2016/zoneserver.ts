@@ -4540,6 +4540,13 @@ export class ZoneServer2016 extends EventEmitter {
   /**
    * Deletes multiple entities from the same dictionary in one optimised pass.
    */
+  private releaseNavAgent(entity: BaseEntity): void {
+    if (!(entity instanceof BaseLightweightCharacter) || !entity.navAgent)
+      return;
+    this.navManager.removeAgent(entity.navAgent);
+    entity.navAgent = undefined;
+  }
+
   batchDeleteEntities(
     characterIds: string[],
     dictionary: EntityDictionary<BaseEntity>
@@ -4552,6 +4559,14 @@ export class ZoneServer2016 extends EventEmitter {
       if (entity) entities.push({ id, entity });
     }
     if (entities.length === 0) return;
+
+    // Batch despawn must release native Crowd slots just like deleteEntity().
+    // WorldObjectManager uses this path for expired NPC corpses; leaving their
+    // agents behind eventually fills the 2,000-agent monolithic Crowd even
+    // though the NPCs themselves are no longer present in the world registry.
+    for (const { entity } of entities) {
+      this.releaseNavAgent(entity);
+    }
 
     // 1. Pack + send Character.RemovePlayer once per entity
     for (const { id } of entities) {
@@ -4613,10 +4628,7 @@ export class ZoneServer2016 extends EventEmitter {
   ): boolean {
     const entity = dictionary[characterId];
     if (!entity) return false;
-    if (entity instanceof BaseLightweightCharacter && entity.navAgent) {
-      this.navManager.crowd.removeAgent(entity.navAgent);
-      entity.navAgent = undefined;
-    }
+    this.releaseNavAgent(entity);
     this.sendDataToAllWithSpawnedEntity<CharacterRemovePlayer>(
       dictionary,
       characterId,
@@ -8924,7 +8936,8 @@ export class ZoneServer2016 extends EventEmitter {
     weaponItem: LoadoutItem,
     itemDefinition: ItemDefinition
   ): boolean {
-    if (this._pendingThrowableConsumptions.has(weaponItem.itemGuid)) return false;
+    if (this._pendingThrowableConsumptions.has(weaponItem.itemGuid))
+      return false;
     this._pendingThrowableConsumptions.add(weaponItem.itemGuid);
     const currentSlotId = weaponItem.slotId;
 
@@ -8938,11 +8951,7 @@ export class ZoneServer2016 extends EventEmitter {
           client.character.getInventoryAsContainer()[itemDefinition.ID];
         const nextGrenade = similarItems?.find((item) => item !== weaponItem);
         if (nextGrenade) {
-          client.character.equipContainerItem(
-            this,
-            nextGrenade,
-            currentSlotId
-          );
+          client.character.equipContainerItem(this, nextGrenade, currentSlotId);
         }
       } finally {
         this._pendingThrowableConsumptions.delete(weaponItem.itemGuid);
@@ -10865,10 +10874,7 @@ export class ZoneServer2016 extends EventEmitter {
     const cellSize = (boundary * 2) / 10;
     const cellMin = (coordinate: number) =>
       -boundary +
-      Math.min(
-        9,
-        Math.max(0, Math.floor((coordinate + boundary) / cellSize))
-      ) *
+      Math.min(9, Math.max(0, Math.floor((coordinate + boundary) / cellSize))) *
         cellSize;
     const minX = cellMin(callerPos[0]);
     const minZ = cellMin(callerPos[2]);
@@ -11066,14 +11072,8 @@ export class ZoneServer2016 extends EventEmitter {
         // cliff disambiguation/reference height instead of doing a second
         // nearest-poly query for every NPC on every update.
         const navFloorY = Number.isFinite(gamePos[1]) ? gamePos[1] : null;
-        const ground = runRuntimePhase(
-          "path-npc-ground",
-          () =>
-            this.getGroundInfo(
-              gamePos,
-              navFloorY,
-              npc.state.position[1]
-            )
+        const ground = runRuntimePhase("path-npc-ground", () =>
+          this.getGroundInfo(gamePos, navFloorY, npc.state.position[1])
         );
         gamePos[1] = ground.selection.height;
         if (
@@ -11095,9 +11095,7 @@ export class ZoneServer2016 extends EventEmitter {
           }
           runRuntimePhase("path-npc-replicate", () => npc.goTo(gamePos));
         } else {
-          runRuntimePhase("path-npc-replicate", () =>
-            npc.syncIdleIfStopped()
-          );
+          runRuntimePhase("path-npc-replicate", () => npc.syncIdleIfStopped());
         }
       }
     }

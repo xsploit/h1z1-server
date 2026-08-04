@@ -147,7 +147,12 @@ async function main() {
     );
   }
 
+  const initialWorldNpcs = Object.keys(server._npcs).length;
   const wrappers = [];
+  const initialNpcWrappers = new Map<
+    string,
+    NonNullable<(typeof server._npcs)[string]["navAgent"]>
+  >();
   const vehicleWrappers = [];
   let npcAgents = 0;
   let vehicleAgents = 0;
@@ -179,6 +184,7 @@ async function main() {
     if (!agent) continue;
     npc.navAgent = agent;
     wrappers.push(agent);
+    initialNpcWrappers.set(npc.characterId, agent);
     agent.requestMoveTarget(centerSnap.nearestPoint);
     npcAgents++;
   }
@@ -330,6 +336,11 @@ async function main() {
         );
       }
       completedCrowdSteps = i + 1;
+      if ((i + 1) % 5000 === 0 || i + 1 === crowdSteps) {
+        process.stdout.write(
+          `[NAV-SOAK] progress=${i + 1}/${crowdSteps} active=${server.navManager.crowd.getActiveAgentCount()} npcs=${Object.keys(server._npcs).length} rssMb=${Math.round(process.memoryUsage().rss / 1024 / 1024)}\n`
+        );
+      }
       if (realtimeDelayMs) {
         await new Promise((resolve) => setTimeout(resolve, realtimeDelayMs));
       }
@@ -359,9 +370,22 @@ async function main() {
   const retainedOriginalWrappers = wrappers.filter((agent) =>
     activeCrowdWrapperSet.has(agent)
   ).length;
-  const currentNpcAgents = Object.values(server._npcs).filter(
+  const currentNpcs = Object.values(server._npcs);
+  const currentNpcAgents = currentNpcs.filter((npc) => npc.navAgent).length;
+  const agentlessCurrentNpcs = currentNpcs.length - currentNpcAgents;
+  const currentLiveNpcs = currentNpcs.filter((npc) => npc.isAlive);
+  const currentLiveNpcAgents = currentLiveNpcs.filter(
     (npc) => npc.navAgent
   ).length;
+  const survivingInitialNpcWrappers = [...initialNpcWrappers].filter(
+    ([characterId]) => server._npcs[characterId]
+  );
+  const retainedSurvivingInitialNpcWrappers =
+    survivingInitialNpcWrappers.filter(
+      ([characterId, agent]) =>
+        server._npcs[characterId]?.navAgent === agent &&
+        activeCrowdWrapperSet.has(agent)
+    ).length;
   const expectedActiveAgents =
     currentNpcAgents + validationCharacters.length + vehicleWrappers.length + 1;
   const obstacleRecoveryProbeFinal = obstacleRecoveryProbe.position();
@@ -373,30 +397,35 @@ async function main() {
     finalState: obstacleRecoveryProbe.state(),
     finalTargetState: obstacleRecoveryProbe.raw.targetState
   };
+  const validationFailures: string[] = [];
+  if (
+    activeAgents !== activeCrowdWrappers.length ||
+    activeAgents !== expectedActiveAgents
+  ) {
+    validationFailures.push(
+      `crowd agent accounting diverged: active=${activeAgents}; wrappers=${activeCrowdWrappers.length}; expected=${expectedActiveAgents}`
+    );
+  }
   if (churnObstacles && process.env.NAV_MONOLITHIC_64 === "1") {
+    if (currentNpcs.length === 0 || (npcAgents > 0 && currentNpcAgents === 0)) {
+      validationFailures.push(
+        `obstacle churn removed all NPC navigation coverage: agents=${currentNpcAgents}; registry=${currentNpcs.length}; initialEligible=${npcAgents}`
+      );
+    }
     if (
-      activeAgents !== activeCrowdWrappers.length ||
-      activeAgents !== expectedActiveAgents
+      survivingInitialNpcWrappers.length > 0 &&
+      retainedSurvivingInitialNpcWrappers / survivingInitialNpcWrappers.length <
+        0.97
     ) {
-      throw new Error(
-        `obstacle churn lost crowd agents: active=${activeAgents}; wrappers=${activeCrowdWrappers.length}; expected=${expectedActiveAgents}`
-      );
-    }
-    if (currentNpcAgents / npcAgents < 0.99) {
-      throw new Error(
-        `obstacle churn left too many NPCs agentless: current=${currentNpcAgents}; initial=${npcAgents}`
-      );
-    }
-    if (retainedOriginalWrappers / wrappers.length < 0.97) {
-      throw new Error(
-        `obstacle churn replaced too much of the crowd: retained=${retainedOriginalWrappers}/${wrappers.length}`
+      validationFailures.push(
+        `obstacle churn replaced too many surviving original NPC agents: retained=${retainedSurvivingInitialNpcWrappers}/${survivingInitialNpcWrappers.length}`
       );
     }
     if (
       obstacleRecoveryProbeInvalidSteps > 0 ||
       obstacleRecoveryProbeMaxDisplacement < 0.25
     ) {
-      throw new Error(
+      validationFailures.push(
         `obstacle-recovery probe failed: ${JSON.stringify(obstacleRecoveryProbeDiagnostics)}`
       );
     }
@@ -412,14 +441,22 @@ async function main() {
     wallSeconds: Number(((realDateNow() - wallStartedAt) / 1000).toFixed(3)),
     requestedSoakSeconds: soakSeconds,
     realtimeDelayMs,
+    initialWorldNpcs,
+    initialAgentlessNpcs: initialWorldNpcs - npcAgents,
     npcAgents,
+    currentNpcs: currentNpcs.length,
     currentNpcAgents,
+    agentlessCurrentNpcs,
+    currentLiveNpcs: currentLiveNpcs.length,
+    currentLiveNpcAgents,
     vehicleAgents,
     wrapperCount: wrappers.length,
     activeAgents,
     expectedActiveAgents,
     retainedOriginalWrappers,
     recycledOriginalWrappers: wrappers.length - retainedOriginalWrappers,
+    survivingInitialNpcWrappers: survivingInitialNpcWrappers.length,
+    retainedSurvivingInitialNpcWrappers,
     invalidIndexes,
     crowdHealthy: server.navManager.crowdHealthy,
     obstacleUpdatesHealthy: server.navManager.obstacleUpdatesHealthy,
@@ -457,6 +494,10 @@ async function main() {
       ),
       wasmResizeHeapAvailable:
         typeof R.Raw.Module._emscripten_resize_heap === "function"
+    },
+    validation: {
+      passed: validationFailures.length === 0,
+      failures: validationFailures
     }
   };
   const serialized = `${JSON.stringify(report, null, 2)}\n`;
@@ -464,6 +505,9 @@ async function main() {
     writeFileSync(resolve(process.env.NAV_WORLD_CROWD_REPORT), serialized);
   }
   process.stdout.write(serialized);
+  if (validationFailures.length > 0) {
+    throw new Error(validationFailures.join("; "));
+  }
   process.exit(server.navManager.crowdHealthy ? 0 : 1);
 }
 

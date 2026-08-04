@@ -1,6 +1,45 @@
 import assert from "node:assert";
 import test from "node:test";
+import { BaseLightweightCharacter } from "./entities/baselightweightcharacter";
 import { ZoneServer2016 } from "./zoneserver";
+
+test("batch NPC despawn releases its native Crowd agent", () => {
+  const staleAgent = {};
+  const npc = Object.assign(
+    Object.create(
+      BaseLightweightCharacter.prototype
+    ) as BaseLightweightCharacter,
+    {
+      characterId: "npc",
+      navAgent: staleAgent
+    }
+  );
+  const removedAgents: unknown[] = [];
+  const dictionary = { npc };
+  const server = Object.assign(Object.create(ZoneServer2016.prototype), {
+    navManager: {
+      removeAgent(agent: unknown) {
+        removedAgents.push(agent);
+      }
+    },
+    sendDataToAllWithSpawnedEntity() {},
+    _grid: [],
+    _clients: {},
+    explosiveManager: { removeEntity() {} },
+    _transientIds: {},
+    _characterIds: {}
+  }) as ZoneServer2016;
+
+  ZoneServer2016.prototype.batchDeleteEntities.call(
+    server,
+    ["npc"],
+    dictionary
+  );
+
+  assert.deepEqual(removedAgents, [staleAgent]);
+  assert.equal(npc.navAgent, undefined);
+  assert.equal(dictionary.npc, undefined);
+});
 
 test("all crowd-agent references are invalidated before streamed tiles change", () => {
   const staleAgent = {
