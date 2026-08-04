@@ -338,6 +338,36 @@ closes the cache file descriptors, creates a 2,000-agent Crowd, and uses the
 non-interpolating one-argument Crowd update. The stock 32-bit path remains the
 default when `NAV_MONOLITHIC_64` is absent.
 
+### Installed QuickStart startup evidence
+
+The opt-in runtime and latest bundle were transactionally deployed to the local
+QuickStart on 2026-08-04. The bundle was re-manifested only after the deployment
+dry-run caught a stale transition hash: the runtime file contained the reviewed
+177-link set while the manifest still described the older 127-link set. The
+corrected runtime-only artifact is
+`4b8368d7afdb72fdfe3ae73a7bc5a521dbe3caf860ce1d384f199f7cc42a2e2b`;
+all 26 files and 649,409,748 bytes verified before deployment. The recoverable
+backup is `nav-artifact-contract-20260804-072232` under the QuickStart
+`backups` directory.
+
+The real Node 24.18.0 launcher was then started with the dedicated 64-bit WASM
+module, not the last generic `dist` build (which was correctly rejected as
+32-bit by the capability check). The installed ZoneServer reported:
+
+- 104,935 layers imported and 100,289 columns materialized;
+- 667.3 MiB WASM heap and 17.992 seconds to load the monolithic cache;
+- the full collision/heightmap/plugin/runtime sequence completed;
+- the normal world population created 604 zombies, 140 bandits, 36 rabbits,
+  103 deer, 34 wolves, and 18 bears; and
+- no Crowd, out-of-bounds, worker, watchdog, or unhandled-rejection fault before
+  the test PID was deliberately stopped.
+
+The combined launcher process retained about 1.59 GiB RSS after world/NPC
+creation. This is the current installed-server memory baseline. The Play
+launcher is not yet permanently switched to 64-bit mode because the external
+64-bit package still needs a reproducible deployment location instead of a
+workspace build path.
+
 Candidate A is therefore the preferred full-pop architecture. The remaining
 blockers concern installed-server and gameplay behavior, not reference
 capacity:
