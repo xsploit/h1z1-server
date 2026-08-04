@@ -2,185 +2,207 @@
 
 Status: proposed proof gate; no production claim yet.
 
-This document deliberately pauses further whole-map semantic grinding until the
-runtime architecture can support a populated public server. The current
-disk-indexed streamer is useful evidence and remains the working solo artifact,
-but its default additive-safe mode is not the final multiplayer architecture.
+This document pauses further whole-map semantic grinding until the runtime can
+support a populated public server. The current disk-indexed streamer remains a
+useful solo test bed, but neither its additive-safe mode nor mutable eviction is
+accepted as the final multiplayer architecture.
 
-## Decision
+An adversarial source-and-artifact review found that the previous version of
+this plan started at 64-bit too early. The current baker's 16,384 direct-tile
+limit is a hard-coded policy, not a demonstrated `dtPolyRef32` limit. The first
+job is therefore to measure the real 32-bit capacity and crowd bottlenecks.
+
+## Decision order
 
 Evaluate these implementations in order:
 
-1. a 64-bit monolithic Recast/Detour WASM runtime;
-2. a native 64-bit navigation worker that keeps Detour references out of
-   JavaScript;
-3. only if both fail, sharded static navigation contexts with a high-level
-   portal graph.
+0. prove or reject a complete 32-bit monolithic runtime;
+1. if 32-bit capacity fails, build a 64-bit monolithic Recast/Detour runtime;
+2. if WASM bindings or memory fail, use a native 64-bit navigation worker;
+3. only if both monolithic options fail, use immutable regional contexts with
+   a high-level portal graph.
 
-Do not resume the repeated-building classification batch and do not run another
-full bake until candidate 1 passes the artifact and runtime gates below. A
-regional fixture bake is allowed when it proves an ABI or loader change.
+Do not resume repeated-building classification or run another routine full bake
+until Slice 0 below has produced its decision evidence. Regional fixtures and
+bounded capacity experiments are allowed. A whole-map bake is allowed only
+when its exact question cannot be answered from the existing TileCache.
 
-## Confirmed limits in the current build
+## Critical artifact finding
 
-The current fine Apartments06 artifact provides a concrete capacity baseline:
+The current fine Apartments06 run produced useful compressed data, but its
+direct navmesh is silently partial:
 
-- 102,400 world tile coordinates were considered;
-- 100,280 non-empty columns produced compressed data;
-- 104,935 compressed layers were serialized;
-- the split TileCache is 561,150,989 bytes (535.16 MiB);
-- the 32-bit direct navmesh admitted only 16,384 tiles and is 21,704,224 bytes;
-- streaming mode creates a 16,384-tile/16,384-layer runtime;
-- the default server list advertises a maximum population of 100;
-- the current runtime crowd limits are 1,000 agents in streaming mode and
-  2,000 in the direct-navmesh mode.
+- 102,400 tile coordinates were considered;
+- 100,280 non-empty columns reached the direct-build insertion stage;
+- 104,935 compressed TileCache layers were generated and serialized;
+- only 16,384 direct navmesh tiles were admitted;
+- 83,896 later direct tiles were rejected when the navmesh filled;
+- 2,120 coordinates were genuinely empty;
+- the baker combined rejected and genuinely empty tiles into the reported
+  `86,016 empty/water skipped` count and exited successfully.
 
-The additive-safe runtime never removes a previously admitted column. This
-avoids the stale-reference/WASM corruption seen during mutable streaming, but
-widely separated players eventually fill the 16,384-layer budget. It therefore
-cannot be represented as full-population support.
+Because insertion was in canonical row-major order, `z1_0.bin` contains an
+early strip of the map rather than representative whole-map coverage. It must
+not be called complete or used as capacity proof. The 104,935 count describes
+compressed cache layers; direct-nav completeness is 100,280 non-empty columns
+admitted with zero `addTile` rejections.
 
-Mutable streaming is opt-in with `NAV_STREAMING_MUTATION=1`. Before a runtime
-mutation, the server clears entity `navAgent` references and removes the crowd
-agents; it then removes/builds tiles and recreates eligible agents. This fixed
-one stale-reference ordering problem, but the mutable path has not passed a
-public-population soak and is not the default.
+The failure is in `work/h1emu-recast/main.cpp`: failed `addTile` calls decrement
+the built count and increment the same counter later labeled empty/water. The
+baker must fail closed before any new artifact can be trusted.
 
-### Audited implementation surfaces
+## Slice 0: measure before changing ABI
 
-The relevant local sources and artifacts are deliberately listed so a future
-review does not inspect an adjacent checkout:
+Slice 0 is the next implementation milestone and the only approved one until
+its report is complete.
 
-- server runtime and bindings use:
-  `work/h1z1-pv-nav/src/utils/recast.ts`;
-- player-window and NPC-agent lifecycle:
-  `work/h1z1-pv-nav/src/servers/ZoneServer2016/zoneserver.ts`,
-  `updatePathfindingPositions()`;
-- exact JavaScript dependency: `recast-navigation` 0.43.1 from
-  `work/h1z1-pv-nav/package-lock.json` and
-  `work/h1z1-pv-nav/node_modules/@recast-navigation/{core,wasm}`;
-- native baker capacity and serialization:
-  `work/h1emu-recast/main.cpp`;
-- vendored native 64-bit build option:
-  `work/h1emu-recast/recastnavigation/CMakeLists.txt`;
-- measured artifact and its completion log:
-  `work/staging/full-apartments06-v1/`;
-- advertised 100-player default:
-  `work/h1z1-pv-nav/data/defaultDatabase/shared/servers.json`;
-- upstream 64-bit definition and serialization warning:
-  [DetourNavMesh.h](https://github.com/recastnavigation/recastnavigation/blob/main/Detour/Include/DetourNavMesh.h);
-- current WASM build and 32-bit IDL boundary:
-  [recast-navigation-wasm](https://github.com/isaac-mason/recast-navigation-js/tree/main/packages/recast-navigation-wasm);
-- the streaming proposal being compared:
-  [QuentinGruber/h1z1-server#2840](https://github.com/QuentinGruber/h1z1-server/pull/2840).
+### 0.1 Make artifact creation fail closed
 
-## Candidate A: 64-bit monolithic WASM
+Update the baker to report these separately:
 
-### Why it is plausible
+- geometrically empty/water columns;
+- successfully admitted direct tiles;
+- rejected direct tiles, including the full `dtStatus`;
+- per-tile polygon counts: maximum, percentiles, and a histogram;
+- configured tile bits, polygon bits, maximum tiles, and maximum polygons per
+  tile.
 
-Upstream Detour's `DT_POLYREF64` layout reserves 28 tile bits and 20 polygon
-bits. A 131,072-slot navmesh is therefore comfortably inside the reference
-space needed by the current 104,935-layer artifact. A monolithic navmesh also
-removes player-window eviction, remote-event coverage gaps, and crowd teardown
-caused solely by global streaming.
+Any direct-tile rejection must produce a non-zero exit unless an explicit
+diagnostic `--allow-partial-navmesh` option was supplied. Artifact manifests
+must record the same counts, configuration, ABI, tool commit, source identity,
+and semantic/transition identities.
 
-The existing `h1emu-recast` checkout already vendors a Recast version with the
-`RECASTNAVIGATION_DT_POLYREF64` build option. That option is not sufficient by
-itself:
+### 0.2 Test the two cheaper 32-bit layouts
 
-- `main.cpp` still calculates capacities using the 32-bit 22-bit budget;
-- 32-bit navigation tiles are explicitly incompatible with a 64-bit Detour
-  build, so `z1_0.bin` must be regenerated;
-- `recast-navigation` 0.43.1 exposes polygon and tile references through
-  `unsigned long`, `UnsignedIntRef`, and `UnsignedIntArray`;
-- its WASM build explicitly sets `WASM_BIGINT=0`;
-- the TypeScript core represents references as JavaScript `number` values.
+The current builder clamps tile bits to 14:
 
-Consequently, the spike must port every reference-bearing boundary to a
-BigInt-safe or opaque representation. A compiler define with the existing
-bindings would truncate references and would be rejected.
+```text
+tileBits = min(ilog2(nextPow2(capacity)), 14)
+maxTiles = 1 << tileBits
+maxPolys = 1 << (22 - tileBits)
+```
 
-### Artifact approach
+Detour's actual 32-bit constraint is the 22-bit tile-plus-polygon budget, with
+enough salt bits remaining. Two layouts must be measured before an ABI port:
 
-The preferred production artifact is a new, direct 64-bit navmesh containing
-all 104,935 navigation layers. The 535 MiB compressed TileCache must not be
-preloaded into the WASM heap merely to recover whole-map coverage.
+1. **Current 128-cell tiles, 17/5 layout**: 131,072 tile slots and 32 polygons
+   per tile. This is viable only if every direct tile fits the 32-poly ceiling.
+2. **256-cell tiles, 15/7 layout**: approximately 25,600 world columns, 32,768
+   tile slots, and 128 polygons per tile. This trades larger raster tiles for a
+   much safer polygon allowance.
 
-The artifact manifest must declare at least:
+First attempt to materialize the 17/5 direct mesh from the existing 128-cell
+TileCache, whose compressed references and headers are ABI-portable. Do not
+reraster the world merely to measure a slot layout. The 256-cell candidate does
+require new rasterization because it changes tile geometry, but it should be
+run only if the histogram or 17/5 materialization rejects the first layout.
 
-- navigation ABI (`detour-polyref32` or `detour-polyref64`);
-- Detour serialization version and tool commit;
-- tile-slot count, admitted tile count, and maximum polygons per tile;
-- source cache identity and semantic/transition identities.
+Acceptance for a 32-bit candidate is exact: all 100,280 expected non-empty
+columns are admitted, no tile exceeds the configured polygon ceiling, there are
+zero rejected tiles, distributed nearest-poly probes pass, and long routes do
+not truncate silently.
 
-Loaders must fail closed when the ABI is absent or mismatched. The current
-32-bit `z1_0.bin` is not a valid input for this runtime.
+### 0.3 Remove known crowd overhead and measure the real ceiling
 
-### Dynamic obstacles
+The current runtime calls `crowd.update(1 / 60, elapsed, 1)`. The JavaScript
+adapter then enumerates every agent, crosses WASM for positions, and computes
+interpolated positions that `updatePathfindingPositions()` discards in favor of
+authoritative crowd positions. With `maxSubSteps=1`, a slow tick also cannot
+drain accumulated simulation time.
 
-Monolithic static navigation does not remove the need for doors, construction,
-and vehicles. The first experiment should keep the full direct navmesh resident
-and use a small scratch TileCache for only the columns affected by an obstacle.
-Those compressed layers can remain disk-indexed. Rebuilding a changed column
-still invalidates references in that column, so ordinary obstacle churn needs a
-separate crowd/path revalidation test; it must not reuse the old whole-runtime
-recycle behavior by assumption.
+Use the non-interpolating single-argument update path and benchmark the full
+zone-server phase—not only native `dtCrowd`—at 500, 1,000, and 2,000 active
+agents. Record:
 
-If localized TileCache replacement cannot be made safe, dynamic objects must
-use bounded local avoidance/collision while the static monolithic mesh remains
-immutable. That is less exact but does not compromise global path coverage.
+- `dtCrowd.update` p50/p95/p99;
+- `updatePathfindingPositions()` p50/p95/p99;
+- event-loop lag and peak tick time;
+- replication packet count and bytes per second;
+- peak RSS and WASM high-water mark;
+- invalid positions, failed agents, and stalled paths.
 
-### Implementation slices
+Crowd work may consume at most 30% of the configured tick period at the accepted
+population. A p99 merely below the entire tick period is not sufficient.
 
-1. **64-bit binding fixture**
-   - fork the exact `recast-navigation` 0.43.1 dependency;
-   - compile with `DT_POLYREF64` and `WASM_BIGINT=1`;
-   - add 64-bit scalar/ref/array wrappers;
-   - prove round trips with values above `2^32` and `2^53`;
-   - keep polygon references internal where a public API does not need them.
-2. **64-bit baker and ABI**
-   - remove the hard-coded 22-bit capacity calculations in `h1emu-recast`;
-   - emit a versioned 64-bit navmesh set;
-   - prove that all 104,935 layers are admitted, not merely generated;
-   - make 32/64-bit loader mismatches deterministic errors.
-3. **Server integration**
-   - load the complete direct navmesh with streaming disabled;
-   - create the crowd once and leave the static map immutable;
-   - retain the current interest rules for expensive AI decisions;
-   - add memory, event-loop, query, path, and crowd telemetry.
-4. **Dynamic-obstacle experiment**
-   - change a door, construction, and vehicle footprint repeatedly;
-   - prove affected agents replan without global crowd destruction;
-   - prove unaffected agents and cross-map queries remain stable.
+### 0.4 Measure path and replan behavior
 
-### Go/no-go gates
+DetourCrowd has structural queue and corridor limits: only eight agents enter
+the path queue per update, the queue shares 100 A\* iterations, and crowd path
+results are capped at 256 polygons. Whole-map coverage can make these limits
+more visible rather than less.
 
-Candidate A is not accepted based on a successful compile or server boot. It
-must pass all of the following:
+Measure time from `requestMoveTarget()` to a valid target state at 500, 1,000,
+and 2,000 agents, including a synchronized sound/explosion replan. Record
+p50/p95/p99 and failure rate. Also test representative cross-town and
+corner-to-corner paths for feasibility and corridor truncation.
 
-| Gate                  | Required evidence                                                                                                                                  |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reference ABI         | Exact values above `2^32` and `2^53` survive every binding, array, crowd, query, and serialization round trip.                                     |
-| Artifact completeness | At least 104,935 expected layers are admitted; there is no 16,384-tile truncation; distributed nearest-poly probes and cross-map routes succeed.   |
-| Memory                | Startup completes below 1.4 GiB WASM memory, retaining at least 30% headroom below the observed 2 GiB ceiling.                                     |
-| Population            | 100 distributed synthetic player positions plus the configured world NPC population run without coverage loss.                                     |
-| Crowd                 | At least 1,000 active agents, with a path to the existing 2,000-agent direct limit, complete a two-hour movement soak.                             |
-| Events                | Concurrent gunshot, screamer, falling-tree, vehicle, grenade, and explosion events at separated map locations do not require navigation streaming. |
-| Timing                | Crowd update p95 stays below 8 ms and p99 below 16 ms at the accepted agent count; event-loop lag p99 stays below 50 ms.                           |
-| Safety                | Zero WASM out-of-bounds faults, invalid/stale reference reports, frozen server loops, non-finite positions, or silent crowd disablement.           |
-| Dynamic obstacles     | Repeated add/remove/rebuild cycles do not corrupt crowd paths, and agents do not route through the tested blocker.                                 |
+### Slice 0 decision
 
-Thresholds may be tightened after the first baseline run, but they may not be
-relaxed merely to label the candidate successful.
+- If either 32-bit layout passes completeness, path, population, timing, and
+  soak gates, keep the 32-bit ABI and make 64-bit optional research.
+- If both layouts fail on measured reference capacity, proceed to Candidate A.
+- If capacity passes but crowd/replan gates fail, changing reference width does
+  not solve the blocker; address crowd scheduling, AI activation, or regional
+  crowd ownership before changing ABI.
+
+## Current streaming runtime
+
+The disk-indexed TileCache avoids a 535.16 MiB compressed-cache preload. Nearby
+layers are materialized into a 16,384-tile/16,384-layer runtime.
+
+Additive-safe mode never evicts admitted columns. It avoids the stale-reference
+WASM corruption observed during mutable streaming, but distributed players will
+eventually fill the finite runtime. It is not full-pop support.
+
+Mutable streaming is opt-in with `NAV_STREAMING_MUTATION=1`. Before mutation,
+the server clears entity `navAgent` references and removes crowd agents because
+an agent may hold a path reference into a tile other than the one it stands on.
+Tiles are then removed or built, and eligible agents are recreated. NPC entities
+outside the window remain in world state but agentless. This ordering fixes one
+stale-reference class, but global crowd teardown and remote event coverage make
+it unsuitable as the default public-server design without a much stronger
+distributed soak.
+
+## Candidate A: conditional 64-bit monolithic WASM
+
+Use this only if Slice 0 proves that no complete 32-bit layout fits.
+
+Upstream `DT_POLYREF64` provides 28 tile bits and 20 polygon bits. The vendored
+option in `recastnavigation/CMakeLists.txt` is currently unreachable by the
+actual baker targets because the root build globs Recast/Detour sources directly.
+The exact baker and overlay targets therefore need explicit, matching compile
+definitions.
+
+This is not a compiler-flag-only change:
+
+- current direct tiles are 32-bit and must be regenerated or materialized;
+- `recast-navigation` 0.43.1 exposes references through 32-bit IDL surfaces;
+- WebIDL does not provide a clean complete 64-bit reference API;
+- scalar and array query paths must not silently coerce references to numbers;
+- serialized tile headers change size and acquire padding if raw structs are
+  written.
+
+Prefer opaque handles at the JavaScript boundary. If raw 64-bit references are
+temporarily exposed for verification, force at least 32 remove/add cycles on
+the same slot so the salt produces references above JavaScript's exact-integer
+range. Cover `findPath`, `findStraightPath`, `findPolysAroundCircle`,
+`queryPolygons`, `moveAlongSurface`, crowd state, and serialization—not only a
+fresh scalar reference.
+
+Serialization must use explicit little-endian fields, a bumped format version,
+and an ABI tag. Do not `fwrite` a padded `NavMeshTileHeader` containing a
+64-bit reference; uninitialized padding would break deterministic hashes.
+
+The existing compressed TSET is ABI-portable because compressed tile and
+obstacle references remain 32-bit and its layer headers contain no polygon
+references. A 64-bit spike should reuse it to materialize a new direct artifact
+where possible; it should not automatically pay for another full raster bake.
 
 ## Candidate B: native 64-bit navigation worker
 
-This is the real fallback if WASM reference marshalling or the 2 GiB address
-space prevents candidate A from passing.
-
-Compile Recast, Detour, TileCache, and Crowd as native 64-bit code. The Node
-server must not receive polygon or tile references. It communicates through an
-opaque API:
+This is the fallback if 64-bit WASM bindings, lifecycle, or memory cannot pass.
+Compile Recast, Detour, TileCache, and Crowd as native 64-bit code and keep all
+polygon/tile references inside an opaque worker API:
 
 - `loadArtifact(identity)`;
 - `samplePosition(position, floorHint)`;
@@ -190,57 +212,59 @@ opaque API:
 - `addObstacle/removeObstacle(obstacleId, bounds)`;
 - `tick(dt)` returning entity positions and status counters.
 
-A dedicated worker thread owns all Detour state and publishes double-buffered
-position snapshots. A Node-API addon is preferred for the production latency
-path; a child-process sidecar is acceptable for the initial correctness spike
-because a crash cannot poison the zone server. Windows and Linux build/package
-proof is part of acceptance.
+A dedicated thread or process owns Detour state and publishes position
+snapshots. A child-process spike is acceptable because it isolates crashes; a
+Node-API addon is the lower-latency production candidate. Windows and Linux
+build/package proof is mandatory. The opaque API should be shared with
+Candidate A so the server integration is not rewritten twice.
 
-This option avoids JavaScript's integer precision boundary and the WASM heap
-ceiling. Its costs are native packaging, process/thread lifecycle, observability,
-and a larger integration surface. It uses the same extracted geometry,
-semantics, transitions, and regional validators, so prior navigation work is
-not discarded.
+## Candidate C: immutable regional contexts
 
-Candidate B must pass the same population, event, timing, obstacle, and soak
-gates as candidate A. IPC/addon overhead is measured as part of the timing gate.
+If neither monolithic implementation passes, partition the map into independent
+immutable navmeshes and crowds. A high-level portal graph selects inter-region
+routes, agents migrate only at validated portals, and sound/event state wakes
+dormant regions without mutating a live crowd's navmesh.
 
-## Candidate C: sharded static contexts
+This scales with occupied regions and avoids stale references from eviction,
+but portal authoring, migration, construction ownership, and event propagation
+make it the most complex fallback.
 
-If neither monolithic implementation fits memory or crowd performance, the
-last scalable design is not additive global streaming. Partition the map into
-independent, immutable navigation contexts. Each active region owns its own
-navmesh and crowd; a high-level portal graph selects region-to-region routes.
-Agents migrate only at validated portals. Player presence and queued sound
-events activate regions, while dormant NPC entities remain in world state
-without crowd agents.
+## Production gates
 
-This avoids mutating a navmesh under a live crowd and scales with occupied
-regions, but cross-region routing, portal authoring, NPC migration, construction
-ownership, and event propagation make it substantially more work. It is a
-fallback, not a shortcut.
+| Gate                  | Required evidence                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Builder integrity     | Empty, admitted, and rejected counts are distinct; any rejection fails the build; the manifest matches the emitted artifact.               |
+| Artifact completeness | All 100,280 expected direct columns are admitted with zero rejections; distributed probes and long routes succeed.                         |
+| Reference ABI         | Every scalar and array path survives churn-generated references above `2^53`; ABI mismatch fails closed.                                   |
+| Path feasibility      | Representative long paths do not exceed or silently truncate queue/corridor limits.                                                        |
+| Replan latency        | Target-request-to-valid p95/p99 and failure rate pass under synchronized replans at accepted population.                                   |
+| Population            | 100 distributed synthetic players and the configured NPC population retain coverage for a two-hour movement soak.                          |
+| Timing                | Crowd uses at most 30% of its tick budget; full pathfinding phase and event-loop p95/p99 remain within measured headroom.                  |
+| Memory                | Peak RSS and WASM high-water remain bounded after a two-hour obstacle/churn soak; no heap-growth failure occurs.                           |
+| Events                | Separated gunshot, screamer, tree, vehicle, grenade, and explosion events reach eligible agents without relying on a single player window. |
+| Safety                | Zero out-of-bounds faults, stale refs, frozen loops, non-finite positions, silent crowd disablement, or unexplained agent loss.            |
+| Obstacles             | Repeated door, construction, and vehicle changes cause bounded local replans without corrupting unrelated agents.                          |
 
-## Expected effort
+## Audited surfaces
 
-These are engineering ranges, not delivery promises:
+- runtime and bindings: `work/h1z1-pv-nav/src/utils/recast.ts`;
+- agent lifecycle: `work/h1z1-pv-nav/src/servers/ZoneServer2016/zoneserver.ts`;
+- AI sound scans: `work/h1z1-pv-nav/src/servers/ZoneServer2016/entities/npcs/zombie.jsm.ts`;
+- dependency: `recast-navigation` 0.43.1 in `package-lock.json` and
+  `node_modules/@recast-navigation/{core,wasm}`;
+- native capacity/serialization: `work/h1emu-recast/main.cpp`;
+- root native build: `work/h1emu-recast/CMakeLists.txt`;
+- measured cache and partial direct artifact:
+  `work/staging/full-apartments06-v1/`;
+- 100-player default: `data/defaultDatabase/shared/servers.json`;
+- streaming comparison:
+  [QuentinGruber/h1z1-server#2840](https://github.com/QuentinGruber/h1z1-server/pull/2840).
 
-- candidate A binding and ABI spike: 2-4 focused days;
-- full artifact loader and completeness harness: 2-4 days;
-- population/event/soak harness: 2-4 days;
-- dynamic-obstacle proof: 2-5 days;
-- candidate B native worker, if needed: approximately 2-3 focused weeks,
-  including Windows/Linux packaging;
-- candidate C: multiple weeks and should be undertaken only with profiling
-  evidence that rejects both monolithic paths.
+## What this architecture does not solve
 
-The first decisive result should therefore come from a small 64-bit binding and
-artifact-completeness spike, not from another 90-minute whole-map bake.
-
-## What 64-bit does not solve
-
-Even a successful monolithic runtime does not classify stairs, prevent roofs
-from becoming walkable, create missing doorway connectivity, implement
-character-vs-character physics, stop weapon damage through walls, or make all
-NPC AI cheap. It makes the complete reviewed topology available everywhere.
-The existing regional classification and route evidence remains necessary, but
-it becomes worth finishing only after the runtime foundation passes.
+Monolithic coverage does not classify stairs, prevent roofs from becoming
+walkable, create missing doorway connectivity, implement character collision,
+stop weapon damage through walls, or make every NPC AI loop cheap. It makes the
+reviewed topology available consistently. Regional classification and route
+evidence remain necessary—but they become worth finishing only after the
+runtime foundation passes these gates.
