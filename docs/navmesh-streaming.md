@@ -1,8 +1,13 @@
 # Navmesh streaming (fine tilecache)
 
 Optional mode that loads a **fine, whole-map navmesh** as a compressed
-`TileCache` streamed from RAM, instead of the coarse pre-baked navmesh in
+`TileCache` indexed from disk, instead of the coarse pre-baked navmesh in
 `data/2016/navData/`. Enabled with the `NAV_STREAMING=1` environment variable.
+
+This mode is currently a solo/small-group compatibility path, not a proven
+full-population server architecture. See
+[`navigation-full-pop-architecture.md`](navigation-full-pop-architecture.md)
+for the production proof gate and alternatives.
 
 ## Why streaming
 
@@ -13,7 +18,12 @@ navmesh bounded: the compressed tilecache remains split and disk-backed, while
 only layers near a live player enter the TileCache/NavMesh runtime. The
 streamed runtime periodically recycles its bounded layer set and rebuilds the
 active crowd wrappers. This stays within the WASM and Detour reference budgets
-while retaining whole-map coverage on disk.
+while retaining whole-map coverage on disk. In the current default
+**additive-safe** mode, columns are added but not evicted because the mutable
+crowd/tile lifecycle previously produced WASM corruption. A long-running or
+widely distributed multiplayer session can therefore exhaust the bounded
+runtime layer budget. Mutable eviction is available only for explicit testing
+with `NAV_STREAMING_MUTATION=1`; it is not production-approved.
 
 ## Enabling it
 
@@ -99,9 +109,9 @@ exactly, which is a good sanity check that the pipeline is set up correctly.
   empty `TileCache` and tiled `NavMesh`. Compressed layers enter the WASM
   runtime only when their columns are visited.
 - **`streamAround(playerPositions)`** — called from
-  `zoneserver.updatePathfindingPositions()`; materialises the column window
-  around players and removes columns that left it. Throttled by
-  `STREAM_INTERVAL`.
+  `zoneserver.updatePathfindingPositions()`; materialises columns around
+  players. It removes columns that left the window only when the experimental
+  `NAV_STREAMING_MUTATION=1` mode is enabled. Throttled by `STREAM_INTERVAL`.
 - **Carving** — `addObstacle` / `removeObstacle` feed the tilecache
   (`addBoxObstacle`) and `updt()` pumps `tilecache.update()`, so player
   constructions carve the streamed navmesh natively (NPCs route around them).

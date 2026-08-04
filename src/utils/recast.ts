@@ -199,8 +199,10 @@ function createNavigationTileCacheMeshProcess(): TileCacheMeshProcess {
 // h1emu-recast pipeline compiled fine, cs=0.2). The compressed tilecache
 // (~600 MB / ~108k layers) stays disk-backed; only the tiles within
 // STREAM_RADIUS of a player are loaded and materialised into the live navmesh
-// (buildNavMeshTilesAt), the rest are removed, so the navmesh stays bounded and
-// under the 32-bit polyref budget. Grid params (orig, tileWidth) come from the
+// (buildNavMeshTilesAt). The default additive-safe mode retains visited columns
+// until its bounded budget is full. Experimental NAV_STREAMING_MUTATION=1
+// removes columns outside all player windows, but that lifecycle is not yet a
+// full-population production path. Grid params (orig, tileWidth) come from the
 // TSET header. Construction obstacles carve natively via the tilecache.
 const STREAM_CACHE_DIR =
   process.env.NAV_CACHE_DIR ?? __dirname + "/../../data/2016/collision";
@@ -954,8 +956,9 @@ export class NavManager {
   }
 
   // Materialise the navmesh tiles within STREAM_RADIUS of any player from the
-  // in-RAM tilecache (buildNavMeshTilesAt) and remove the columns that left the
-  // window. Throttled. No-op unless streaming.
+  // disk-indexed tilecache (buildNavMeshTilesAt). Columns that leave every
+  // window are removed only in experimental mutable mode. Throttled. No-op
+  // unless streaming.
   streamAround(
     positions: Float32Array[],
     beforeMutation?: () => void

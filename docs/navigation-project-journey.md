@@ -1060,10 +1060,18 @@ Large regional caches and reports remain under
 ranked, exact polygon-edge seam candidates, so another full-world bake is not
 needed while an archetype is being classified and repaired.
 
-The project is no longer a blind experiment. It has a stable streamed runtime,
+The project is no longer a blind experiment. It has a stable solo-tested
+additive-safe streamed runtime,
 native world inputs, semantic classification, targeted validation, a successful
 full bake, a verified installed artifact, and a measurable 43.9-point route
 improvement.
+
+That runtime is not claimed to support a full public population. Its bounded
+32-bit layer set cannot cover indefinitely separated players without safe
+eviction, and mutable eviction has not passed a population soak. Further
+whole-map classification is paused behind the explicit 64-bit monolithic and
+native-worker proof gates in
+[`navigation-full-pop-architecture.md`](navigation-full-pop-architecture.md).
 
 The first server-authoritative static movement sweep was disproved by its live
 test and removed rather than normalized as acceptable jitter. The existing
