@@ -1,8 +1,9 @@
 # Full-population navigation architecture
 
-Status: Slice 0 capacity audit and standalone 64-bit monolithic WASM consumer
-complete; server integration and population gates remain open. No production
-claim yet.
+Status: Slice 0 capacity audit, 64-bit monolithic WASM consumer, opt-in server
+integration, and a standalone 2,000-agent crowd/replan benchmark are complete.
+Installed-server deployment and the two-hour distributed gameplay soak remain
+open. No production claim yet.
 
 This document pauses further whole-map semantic grinding until the runtime can
 support a populated public server. The current disk-indexed streamer remains a
@@ -286,16 +287,71 @@ The machine-readable report is
 `work/staging/full-apartments06-v1/monolithic64-wide-regions.json`. This reuses
 the existing compressed bake; it is not another raster bake.
 
-The standalone capacity and map-coverage question therefore passes. The open
-Candidate A blockers are now production integration and load behavior:
+The standalone capacity and map-coverage question therefore passes.
+
+The first 2,000-agent teardown attempts exposed a deterministic native bug that
+looked like TileCache corruption but was actually in the Crowd binding.
+`CrowdUtils.getActiveAgentCount()` called Detour's pointer-output overload with
+a null output array. Detour then wrote every active agent pointer starting at
+WASM address zero; at roughly 306 agents those writes reached static/vtable
+memory and later destruction failed with `table index is out of bounds`.
+Fork commit `xsploit/recast-navigation-js@6ff5a6a` now counts each agent's
+`active` flag without writing through a null pointer and pins a 512-agent
+regression test. Commit `3a41b0d` also aligns TileCache scratch allocations to
+`std::max_align_t`, which is required for safe 64-bit reference storage.
+
+After those fixes, the complete real cache passes a clean 2,000-agent run:
+
+| Measurement                         |                    Result |
+| ----------------------------------- | ------------------------: |
+| active agents                       |                     2,000 |
+| request / target / timeout failures |                 0 / 0 / 0 |
+| slowest target resolution           |                 135 ticks |
+| replan update p95 / p99 / max       | 3.348 / 4.145 / 10.022 ms |
+| moving update p50 / p95 / p99       |  2.142 / 2.686 / 2.803 ms |
+| moving update max                   |                  2.862 ms |
+| process RSS                         |                 793.8 MiB |
+| teardown                            |        clean, exit code 0 |
+
+The machine-readable report is
+`work/staging/full-apartments06-v1/full-pop-2000-clean-20260804.json`.
+This benchmark exercises the full 104,935-layer cache and synchronized local
+replans; it is not yet a zone-server replication or gameplay-event soak.
+
+### Opt-in server integration
+
+`work/h1z1-pv-nav` can now select the external 64-bit runtime without replacing
+the stock package or silently mixing ABIs. The required contract is:
+
+```text
+NAV_MONOLITHIC_64=1
+NAV_64_CORE_MODULE=<absolute path to the 64-bit core dist/index.mjs>
+NAV_64_WASM_MODULE=<absolute path to recast-navigation.wasm-compat.js>
+NAV_CACHE_DIR=<directory containing the verified split TSET>
+NAV_ARTIFACT_MANIFEST=<verified artifact manifest>
+```
+
+The mode fails closed when either module is missing, is not a 64-bit build, or
+differs from the runtime already initialized in the process. It imports all
+compressed layers with Detour-owned copies, materializes every unique column,
+closes the cache file descriptors, creates a 2,000-agent Crowd, and uses the
+non-interpolating one-argument Crowd update. The stock 32-bit path remains the
+default when `NAV_MONOLITHIC_64` is absent.
+
+Candidate A is therefore the preferred full-pop architecture. The remaining
+blockers concern installed-server and gameplay behavior, not reference
+capacity:
 
 - upstream `webidl-dts-gen` still mishandles `unsigned long long[]`, so a
   publishable 64-bit package needs a BigInt-aware declaration path;
-- the H1 server must load this consumer behind an explicit opt-in without
-  changing the installed/default runtime;
-- dynamic-obstacle churn must be tested without global crowd teardown; and
-- query-array, raycast, Crowd, path/replan latency, memory stability, and event
-  delivery must pass the full-pop gates below.
+- the opt-in server build has not yet been staged into the installed QuickStart
+  runtime and exercised by a real client;
+- door/construction/vehicle obstacle churn must prove that geometry is actually
+  blocked and locally replanned, not merely that the API returns success;
+- replication, the complete AI update phase, and separated sound/explosion
+  delivery remain outside the standalone benchmark; and
+- the roughly 794 MiB retained RSS needs an explicit host-capacity budget and a
+  two-hour stability soak.
 
 Opaque handles remain Candidate B's preferred process boundary, but Candidate
 A can proceed with BigInt refs if the high-level wrapper and tests stay
@@ -358,6 +414,11 @@ make it the most complex fallback.
 | Safety                | Zero out-of-bounds faults, stale refs, frozen loops, non-finite positions, silent crowd disablement, or unexplained agent loss.            |
 | Obstacles             | Repeated door, construction, and vehicle changes cause bounded local replans without corrupting unrelated agents.                          |
 
+Current evidence clears the standalone 2,000-agent Crowd, replan, reference
+ABI, full-cache materialization, and clean-teardown portions of these gates. It
+does not clear the 100-player distribution, replication/event delivery,
+installed-runtime, obstacle-effectiveness, or two-hour soak portions.
+
 ## Audited surfaces
 
 - runtime and bindings: `work/h1z1-pv-nav/src/utils/recast.ts`;
@@ -374,6 +435,12 @@ make it the most complex fallback.
 - 100-player default: `data/defaultDatabase/shared/servers.json`;
 - streaming comparison:
   [QuentinGruber/h1z1-server#2840](https://github.com/QuentinGruber/h1z1-server/pull/2840).
+- 2,000-agent clean benchmark:
+  `work/staging/full-apartments06-v1/full-pop-2000-clean-20260804.json`;
+- 64-bit runtime selection:
+  `work/h1z1-pv-nav/src/utils/navigationruntime.ts`;
+- repeatable server-side benchmark entry point:
+  `work/h1z1-pv-nav/scripts/benchmarkNavigationFullPopulation.ts`.
 
 ## What this architecture does not solve
 
