@@ -1,5 +1,53 @@
 # Navigation regional gates
 
+## Model-oriented navigation doctor
+
+Use the navigation doctor before authorizing a regional or full-world bake.
+Its default mode is read-only: it ranks kind-0 composite/building meshes by
+their placed-world unknown-triangle impact, binds every reusable model-route
+template, and reports which high-impact archetype needs probes next.
+
+Generate the inventory from the exact H1SEM1 sidecar used by the candidate
+bake. This overrides older histograms embedded in metadata while checking the
+collision digest and every mesh's triangle cardinality:
+
+```powershell
+py -3 tools\forgelight\inventory_nav_unknown.py `
+  "C:\path\to\z1_collision.metadata.json" `
+  --collision "C:\path\to\z1_collision.bin" `
+  --semantics "C:\path\to\z1_collision.semantics.bin" `
+  --json "C:\path\to\nav-unknown-current.json"
+```
+
+```powershell
+npm run navmesh-doctor -- `
+  --inventory "C:\path\to\nav-unknown-current.json" `
+  --limit 20 `
+  --report "$env:TEMP\navigation-doctor.json" `
+  --markdown "$env:TEMP\navigation-doctor.md"
+```
+
+Existing templates can be transformed across every matching H1COL2 placement
+and checked against a streamed cache without mutating the cache or server:
+
+```powershell
+npm run navmesh-doctor -- `
+  --prepare `
+  --inventory "C:\path\to\nav-unknown-current.json" `
+  --collision "C:\path\to\z1_collision.bin" `
+  --metadata "C:\path\to\z1_collision.metadata.json" `
+  --heightmap "C:\path\to\heightmap.png" `
+  --cache-dir "C:\path\to\data\2016\collision" `
+  --work-dir "$env:TEMP\navigation-doctor-work" `
+  --model Office03
+```
+
+`--model` may be repeated. Preparation verifies that the collision binary and
+metadata share the exact SHA-256 identity. Each placement is validated in a
+fresh bounded Recast process so distant-model iteration cannot exhaust one
+mutable WASM TileCache. The doctor never bakes, composes, deploys, or changes
+game/server files.
+
 ## Recoverable runtime and bundle deployment
 
 `scripts/deployNavigationArtifact.ps1` deploys a compiled navigation runtime

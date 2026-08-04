@@ -15,10 +15,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import struct
 import sys
+from collections import Counter
 from pathlib import Path
+
+from h1sem import SemanticId, decode_h1sem1
 
 
 def read_mesh_aabbs(collision_path: Path) -> list[dict]:
@@ -59,7 +63,56 @@ def read_mesh_aabbs(collision_path: Path) -> list[dict]:
     return aabbs
 
 
-def build_inventory(metadata: dict) -> dict:
+def semantic_histograms_from_sidecar(
+    metadata: dict, semantic_bytes: bytes
+) -> tuple[list[dict[str, int]], str]:
+    """Decode an H1SEM1 sidecar bound to this exact metadata artifact.
+
+    Metadata histograms describe classification at export time and can become
+    stale when a later policy emits a replacement sidecar for the same H1COL2
+    collision file.  The sidecar is therefore the authoritative source when
+    supplied; digest and per-mesh triangle counts are checked before any
+    ranking is produced.
+    """
+
+    meshes = metadata.get("meshes")
+    if not isinstance(meshes, list) or not meshes:
+        raise ValueError("metadata has no mesh list")
+    collision_sha = metadata.get("collisionSha256")
+    if not isinstance(collision_sha, str) or len(collision_sha) != 64:
+        raise ValueError("metadata has no valid collisionSha256")
+
+    ordered = sorted(meshes, key=lambda mesh: int(mesh["meshIndex"]))
+    actual_indices = [int(mesh["meshIndex"]) for mesh in ordered]
+    expected_indices = list(range(len(ordered)))
+    if actual_indices != expected_indices:
+        raise ValueError("metadata meshIndex values are not contiguous from zero")
+
+    document = decode_h1sem1(
+        semantic_bytes,
+        expected_h1col2_sha256=bytes.fromhex(collision_sha),
+        expected_mesh_triangle_counts=tuple(
+            int(mesh["triangleCount"]) for mesh in ordered
+        ),
+        strict_production=False,
+    )
+    histograms: list[dict[str, int]] = []
+    for mesh_index in range(document.mesh_count):
+        counts = Counter(document.semantics_for_mesh(mesh_index))
+        histograms.append(
+            {
+                f"nav_{SemanticId(semantic_id).name.lower()}": count
+                for semantic_id, count in sorted(counts.items())
+            }
+        )
+    return histograms, hashlib.sha256(semantic_bytes).hexdigest()
+
+
+def build_inventory(
+    metadata: dict,
+    semantic_histograms: list[dict[str, int]] | None = None,
+    semantic_sidecar_sha256: str | None = None,
+) -> dict:
     """Group and rank meshes that still carry nav_unknown triangles."""
 
     meshes = metadata.get("meshes")
@@ -67,8 +120,17 @@ def build_inventory(metadata: dict) -> dict:
         raise ValueError("metadata has no mesh list")
 
     entries = []
+    if semantic_histograms is not None and len(semantic_histograms) != len(meshes):
+        raise ValueError("semantic histogram count does not match metadata meshes")
+
     for mesh in meshes:
-        unknown = int(mesh["semanticHistogram"].get("nav_unknown", 0))
+        mesh_index = int(mesh["meshIndex"])
+        histogram = (
+            semantic_histograms[mesh_index]
+            if semantic_histograms is not None
+            else mesh["semanticHistogram"]
+        )
+        unknown = int(histogram.get("nav_unknown", 0))
         if unknown == 0:
             continue
         triangle_count = int(mesh["triangleCount"])
@@ -79,14 +141,14 @@ def build_inventory(metadata: dict) -> dict:
                 "collisionAsset": mesh["collisionAsset"],
                 "collisionAssetSha256": mesh["collisionAssetSha256"],
                 "kind": int(mesh["kind"]),
-                "meshIndex": int(mesh["meshIndex"]),
+                "meshIndex": mesh_index,
                 "triangleCount": triangle_count,
                 "unknownTriangles": unknown,
                 "classifiedTriangles": triangle_count - unknown,
                 "instanceCount": instance_count,
                 "worldUnknownTriangles": unknown * instance_count,
                 "semanticHistogram": dict(
-                    sorted(mesh["semanticHistogram"].items())
+                    sorted(histogram.items())
                 ),
             }
         )
@@ -149,6 +211,10 @@ def build_inventory(metadata: dict) -> dict:
     total_unknown = sum(entry["unknownTriangles"] for entry in entries)
     return {
         "collisionSha256": metadata.get("collisionSha256"),
+        "semanticSidecarSha256": semantic_sidecar_sha256,
+        "semanticSource": (
+            "h1sem1" if semantic_histograms is not None else "metadata"
+        ),
         "semanticMode": metadata.get("semanticMode"),
         "totalTriangles": int(metadata.get("totalTriangleCount", 0)),
         "totalUnknownTriangles": total_unknown,
@@ -198,13 +264,34 @@ def main() -> int:
     parser.add_argument("--collision", type=Path, default=None,
                         help="matching z1_collision.bin; adds local AABB "
                              "geometry evidence per mesh")
+    parser.add_argument("--semantics", type=Path, default=None,
+                        help="matching H1SEM1 sidecar; overrides potentially "
+                             "stale metadata semantic histograms")
     parser.add_argument("--json", type=Path, default=None)
     parser.add_argument("--top", type=int, default=25)
     args = parser.parse_args()
 
     metadata = json.loads(args.metadata.read_text())
-    inventory = build_inventory(metadata)
+    semantic_histograms = None
+    semantic_sidecar_sha256 = None
+    if args.semantics:
+        semantic_histograms, semantic_sidecar_sha256 = (
+            semantic_histograms_from_sidecar(
+                metadata, args.semantics.read_bytes()
+            )
+        )
+    inventory = build_inventory(
+        metadata,
+        semantic_histograms=semantic_histograms,
+        semantic_sidecar_sha256=semantic_sidecar_sha256,
+    )
     if args.collision:
+        collision_bytes = args.collision.read_bytes()
+        actual_sha256 = hashlib.sha256(collision_bytes).hexdigest()
+        if actual_sha256 != metadata.get("collisionSha256"):
+            raise ValueError(
+                "collision SHA256 does not match metadata; wrong file?"
+            )
         aabbs = read_mesh_aabbs(args.collision)
         if len(aabbs) != int(metadata["meshCount"]):
             raise ValueError(

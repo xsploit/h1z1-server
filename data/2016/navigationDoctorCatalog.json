@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "legacyValidations": [
+    {
+      "actorFile": "Common_Structures_Houses_House34B.adr",
+      "evidencePaths": [
+        "scripts/validateHouse34BDoors.ts",
+        "scripts/validateHouse34BInstances.ts"
+      ],
+      "note": "Bespoke representative-door and per-placement validation predates the standard model-local route template. Migrate it instead of authoring duplicate evidence."
+    },
+    {
+      "actorFile": "Common_Structures_PoliceStation02.adr",
+      "evidencePaths": [
+        "scripts/validatePvPoliceBasement.ts",
+        "scripts/validatePvPoliceCrowd.ts",
+        "scripts/validatePvPoliceEntrance.ts",
+        "data/2016/navigationValidationRegions.pvEvidence.json"
+      ],
+      "note": "Pleasant Valley police validation is regional/world-space and should eventually be complemented by a reusable model-local template."
+    }
+  ]
+}
