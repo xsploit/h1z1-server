@@ -36,6 +36,7 @@ test("all crowd-agent references are invalidated before streamed tiles change", 
           vehicle.navAgent === undefined;
       },
       isPositionStreamed: () => false,
+      shouldRecycleAgent: () => false,
       createAgent: () => undefined
     },
     _npcs: { npc },
@@ -77,6 +78,7 @@ test("NPC grounding preserves the previous replicated vertical layer", () => {
     navManager: {
       streaming: false,
       crowdHealthy: true,
+      shouldRecycleAgent: () => false,
       isPositionStreamed: () => true
     },
     _npcs: { npc },
@@ -98,6 +100,43 @@ test("NPC grounding preserves the previous replicated vertical layer", () => {
 
   assert.ok(replicatedPosition);
   assert.deepEqual(Array.from(replicatedPosition), [11, 25.75, 12, 0]);
+});
+
+test("a terminal NPC crowd agent is recycled without invalidating the crowd", () => {
+  const staleAgent = {};
+  const replacementAgent = {
+    position: () => ({ x: 10, y: 25, z: 10 })
+  };
+  const npc = {
+    state: { position: new Float32Array([10, 25, 10, 1]) },
+    navAgent: staleAgent,
+    goTo() {},
+    syncIdleIfStopped() {}
+  };
+  let removedAgent: unknown;
+  const server = {
+    navManager: {
+      streaming: false,
+      crowdHealthy: true,
+      shouldRecycleAgent: (agent: unknown) => agent === staleAgent,
+      removeAgent: (agent: unknown) => {
+        removedAgent = agent;
+      },
+      isPositionStreamed: () => true,
+      createAgent: () => replacementAgent
+    },
+    _npcs: { npc },
+    _characters: {},
+    _vehicles: {},
+    getGroundInfo() {
+      return { selection: { height: 25, source: "navmesh" } };
+    }
+  };
+
+  ZoneServer2016.prototype.updatePathfindingPositions.call(server);
+
+  assert.equal(removedAgent, staleAgent);
+  assert.equal(npc.navAgent, replacementAgent);
 });
 
 test("player and vehicle movement never enters the native NPC crowd", () => {

@@ -632,7 +632,7 @@ export class NavManager {
     let upToDate = false;
     let updateFailed = false;
     let updates = 0;
-    const mutationSucceeded = this.mutateNavMesh(() => {
+    const applyTileCacheUpdates = () => {
       while (!upToDate && updates < MAX_TILE_CACHE_UPDATES_PER_TICK) {
         const result = this.tilecache.update(this.navmesh);
         updates++;
@@ -648,7 +648,22 @@ export class NavManager {
         }
         upToDate = result.upToDate;
       }
-    });
+    };
+    let mutationSucceeded = true;
+    if (this._monolithic64) {
+      // DetourCrowd is designed to validate and replan corridors after local
+      // TileCache rebuilds. The complete 64-bit mesh never evicts unrelated
+      // columns, so globally deleting every agent for one door/construction
+      // obstacle is unnecessary and makes public-server churn unscalable.
+      try {
+        applyTileCacheUpdates();
+      } catch (error) {
+        this.markCrowdFault(error, "monolithic tilecache update");
+        mutationSucceeded = false;
+      }
+    } else {
+      mutationSucceeded = this.mutateNavMesh(applyTileCacheUpdates);
+    }
 
     this.traceCrowdOperation(
       "tilecache-update",
@@ -1490,6 +1505,24 @@ export class NavManager {
         }
       })
     );
+  }
+
+  shouldRecycleAgent(agent: CrowdAgent, gamePos: Float32Array): boolean {
+    try {
+      // DetourCrowd cannot recover an agent once checkPathValidity marks it
+      // INVALID. Recycle only that wrapper so the ZoneServer's normal
+      // createAgent retry can place it again when walkable space returns.
+      if (agent.state() === 0) return true;
+      const navPosition = agent.position();
+      return (
+        !Number.isFinite(navPosition.x) ||
+        !Number.isFinite(navPosition.y) ||
+        !Number.isFinite(navPosition.z) ||
+        Math.abs(navPosition.y - gamePos[1]) > MAX_ACTIVE_AGENT_VERTICAL_SNAP
+      );
+    } catch {
+      return true;
+    }
   }
 
   raycast(origin: Float32Array, target: Float32Array) {

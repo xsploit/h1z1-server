@@ -270,6 +270,68 @@ test("tile-cache rebuild clears pending work when it catches up", () => {
   assert.equal(navManager.obstacleUpdatesHealthy, true);
 });
 
+test("monolithic obstacle rebuilds preserve unrelated crowd agents", () => {
+  const navManager = new NavManager();
+  const agent = {} as never;
+  let removedAgents = 0;
+  navManager.navmesh = {} as never;
+  navManager.obstaclesRequestsPending = 1;
+  Object.assign(navManager as object, { _monolithic64: true });
+  navManager.tilecache = {
+    obstacles: new Set(),
+    update: () => ({ success: true, status: 0, upToDate: true })
+  } as never;
+  navManager.crowd = {
+    getAgents: () => [agent],
+    removeAgent: () => {
+      removedAgents++;
+    },
+    update: () => undefined
+  } as never;
+
+  navManager.updt();
+
+  assert.equal(removedAgents, 0);
+  assert.equal(navManager.obstaclesRequestsPending, 0);
+  assert.equal(navManager.crowdHealthy, true);
+});
+
+test("terminal and cross-floor crowd agents are selected for recycling", () => {
+  const navManager = new NavManager();
+  const gamePosition = new Float32Array([10, 25, 10, 1]);
+
+  assert.equal(
+    navManager.shouldRecycleAgent(
+      {
+        state: () => 0,
+        position: () => ({ x: 10, y: 25, z: 10 })
+      } as never,
+      gamePosition
+    ),
+    true
+  );
+  assert.equal(
+    navManager.shouldRecycleAgent(
+      {
+        state: () => 1,
+        position: () => ({ x: 10, y: 28.2, z: 10 })
+      } as never,
+      gamePosition
+    ),
+    true
+  );
+  assert.equal(
+    navManager.shouldRecycleAgent(
+      {
+        state: () => 1,
+        position: () => ({ x: 10, y: 25.75, z: 10 })
+      } as never,
+      gamePosition
+    ),
+    false
+  );
+});
+
 test("a native tile-cache failure disables obstacle updates without stopping the crowd", () => {
   const navManager = new NavManager();
   let crowdUpdates = 0;

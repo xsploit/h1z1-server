@@ -11026,6 +11026,15 @@ export class ZoneServer2016 extends EventEmitter {
       const npc = this._npcs[k];
       if (
         npc.navAgent &&
+        this.navManager.shouldRecycleAgent(npc.navAgent, npc.state.position)
+      ) {
+        runRuntimePhase("path-npc-remove", () =>
+          this.navManager.removeAgent(npc.navAgent!)
+        );
+        npc.navAgent = undefined;
+      }
+      if (
+        npc.navAgent &&
         !this.navManager.isPositionStreamed(npc.state.position)
       ) {
         runRuntimePhase("path-npc-remove", () =>

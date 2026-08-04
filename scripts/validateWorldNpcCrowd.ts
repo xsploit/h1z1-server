@@ -194,6 +194,40 @@ async function main() {
     vehicleAgents++;
   }
 
+  // Keep one agent outside the entity AI so obstacle churn cannot silently
+  // hide a broken Crowd corridor behind an NPC target reset. Its target sits
+  // on the same column as the churned obstacle, forcing DetourCrowd to recover
+  // from the salt-changing TileCache rebuild and continue moving afterward.
+  const probeStartSnap = server.navManager.navMeshQuery.findNearestPoly(
+    {
+      x: centerSnap.nearestPoint.x + 12,
+      y: centerSnap.nearestPoint.y,
+      z: centerSnap.nearestPoint.z
+    },
+    { halfExtents: { x: 10, y: 10, z: 10 } }
+  );
+  if (!probeStartSnap.nearestRef) {
+    throw new Error("failed to place obstacle-recovery probe on navmesh");
+  }
+  const obstacleRecoveryProbe = server.navManager.createAgent(
+    new Float32Array([
+      probeStartSnap.nearestPoint.x,
+      probeStartSnap.nearestPoint.y,
+      probeStartSnap.nearestPoint.z,
+      1
+    ])
+  );
+  if (
+    !obstacleRecoveryProbe ||
+    !obstacleRecoveryProbe.requestMoveTarget(centerSnap.nearestPoint)
+  ) {
+    throw new Error("failed to start obstacle-recovery probe");
+  }
+  wrappers.push(obstacleRecoveryProbe);
+  const obstacleRecoveryProbeStart = obstacleRecoveryProbe.position();
+  let obstacleRecoveryProbeMaxDisplacement = 0;
+  let obstacleRecoveryProbeInvalidSteps = 0;
+
   const maxAgentIndexExclusive =
     process.env.NAV_MONOLITHIC_64 === "1" ? 2000 : 1000;
   const invalidIndexes = wrappers
@@ -267,6 +301,18 @@ async function main() {
       // Exercise the same obstacle-mutation and interpolated crowd-update path
       // as the live server while advancing one deterministic fixed step.
       server.navManager.updt();
+      const probePosition = obstacleRecoveryProbe.position();
+      obstacleRecoveryProbeMaxDisplacement = Math.max(
+        obstacleRecoveryProbeMaxDisplacement,
+        Math.hypot(
+          probePosition.x - obstacleRecoveryProbeStart.x,
+          probePosition.y - obstacleRecoveryProbeStart.y,
+          probePosition.z - obstacleRecoveryProbeStart.z
+        )
+      );
+      if (obstacleRecoveryProbe.state() === 0) {
+        obstacleRecoveryProbeInvalidSteps++;
+      }
       if (!server.navManager.crowdHealthy) {
         throw new Error(`crowd faulted on live update ${i}`);
       }
@@ -307,6 +353,54 @@ async function main() {
   const forceGc = (globalThis as { gc?: () => void }).gc;
   forceGc?.();
   const memoryEnd = process.memoryUsage();
+  const activeAgents = server.navManager.crowd.getActiveAgentCount();
+  const activeCrowdWrappers = server.navManager.crowd.getAgents();
+  const activeCrowdWrapperSet = new Set(activeCrowdWrappers);
+  const retainedOriginalWrappers = wrappers.filter((agent) =>
+    activeCrowdWrapperSet.has(agent)
+  ).length;
+  const currentNpcAgents = Object.values(server._npcs).filter(
+    (npc) => npc.navAgent
+  ).length;
+  const expectedActiveAgents =
+    currentNpcAgents + validationCharacters.length + vehicleWrappers.length + 1;
+  const obstacleRecoveryProbeFinal = obstacleRecoveryProbe.position();
+  const obstacleRecoveryProbeDiagnostics = {
+    start: obstacleRecoveryProbeStart,
+    final: obstacleRecoveryProbeFinal,
+    maxDisplacement: Number(obstacleRecoveryProbeMaxDisplacement.toFixed(3)),
+    invalidSteps: obstacleRecoveryProbeInvalidSteps,
+    finalState: obstacleRecoveryProbe.state(),
+    finalTargetState: obstacleRecoveryProbe.raw.targetState
+  };
+  if (churnObstacles && process.env.NAV_MONOLITHIC_64 === "1") {
+    if (
+      activeAgents !== activeCrowdWrappers.length ||
+      activeAgents !== expectedActiveAgents
+    ) {
+      throw new Error(
+        `obstacle churn lost crowd agents: active=${activeAgents}; wrappers=${activeCrowdWrappers.length}; expected=${expectedActiveAgents}`
+      );
+    }
+    if (currentNpcAgents / npcAgents < 0.99) {
+      throw new Error(
+        `obstacle churn left too many NPCs agentless: current=${currentNpcAgents}; initial=${npcAgents}`
+      );
+    }
+    if (retainedOriginalWrappers / wrappers.length < 0.97) {
+      throw new Error(
+        `obstacle churn replaced too much of the crowd: retained=${retainedOriginalWrappers}/${wrappers.length}`
+      );
+    }
+    if (
+      obstacleRecoveryProbeInvalidSteps > 0 ||
+      obstacleRecoveryProbeMaxDisplacement < 0.25
+    ) {
+      throw new Error(
+        `obstacle-recovery probe failed: ${JSON.stringify(obstacleRecoveryProbeDiagnostics)}`
+      );
+    }
+  }
 
   const report = {
     worldNpcs: Object.keys(server._npcs).length,
@@ -319,14 +413,19 @@ async function main() {
     requestedSoakSeconds: soakSeconds,
     realtimeDelayMs,
     npcAgents,
+    currentNpcAgents,
     vehicleAgents,
     wrapperCount: wrappers.length,
-    activeAgents: server.navManager.crowd.getActiveAgentCount(),
+    activeAgents,
+    expectedActiveAgents,
+    retainedOriginalWrappers,
+    recycledOriginalWrappers: wrappers.length - retainedOriginalWrappers,
     invalidIndexes,
     crowdHealthy: server.navManager.crowdHealthy,
     obstacleUpdatesHealthy: server.navManager.obstacleUpdatesHealthy,
     obstacleAdds,
     obstacleRemovals,
+    obstacleRecoveryProbe: obstacleRecoveryProbeDiagnostics,
     navigationMode:
       process.env.NAV_MONOLITHIC_64 === "1" ? "monolithic64" : "streaming",
     streaming: {

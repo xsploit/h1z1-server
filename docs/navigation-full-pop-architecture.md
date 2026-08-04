@@ -386,20 +386,65 @@ This clears representative static box carving and short deterministic obstacle
 churn; it does not substitute for door-, construction-, and vehicle-specific
 gameplay checks or the two-hour soak.
 
+### Two-hour soak finding and local Crowd recovery
+
+The first installed two-hour, 100-fake-player soak completed 32,262 real-time
+ticks, retained the complete 100,289-column / 104,935-layer mesh, and survived
+1,614 obstacle add/remove cycles without a WASM trap. It was **not** a clean
+pass: the final snapshot contained zero active Crowd agents. The machine-readable
+evidence is
+`work/staging/full-apartments06-v1/installed-distributed-100-player-2h-soak-20260804.json`.
+
+The cause was deterministic. `processPendingObstacleRequests()` routed every
+local TileCache rebuild through `mutateNavMesh()`, which cleared all entity
+agent references and removed every native Crowd agent before rebuilding one
+affected tile. This made one door or construction change a global Crowd outage
+and cannot scale to a populated server.
+
+The monolithic 64-bit path now leaves the Crowd live while
+`tilecache.update(navmesh)` rebuilds the affected tile. Detour changes that
+tile's salt, then `dtCrowd::checkPathValidity()` validates the current polygon,
+target polygon, and corridor before subsequent movement work and requests a
+local replan where necessary. Streaming mutation retains its existing global
+invalidation because it can evict unrelated columns rather than rebuilding a
+tile inside a complete mesh.
+
+Two targeted recovery guards accompany that change:
+
+- an agent that Detour marks terminal `INVALID` is removed individually and
+  retried through the normal floor-aware `createAgent()` path; and
+- an agent whose native recovery would move it more than 1.5 m vertically from
+  its authoritative entity position is likewise recycled, preventing a doorway
+  carve from snapping an NPC to the next story.
+
+The installed follow-up gate populated 1,935 world NPCs and exercised 1,809
+initial wrappers through 50 obstacle add/remove cycles. Native active agents
+matched the 1,800 agents currently referenced by live entities and fixed test
+agents; 1,784 original wrappers remained identical, 25 were recycled locally,
+and the dedicated target-tile probe remained walking, was never invalid, and
+moved 5.631 m. Crowd and obstacle health stayed true, the complete mesh stayed
+resident, and the WASM heap stayed fixed at 667 MiB. The report is
+`work/staging/full-apartments06-v1/installed-obstacle-recovery-recycle-1000x1000-20260804.json`.
+
+This proves local salt-change recovery and disproves global teardown as a
+viable full-pop strategy. A fresh long soak on this corrected lifecycle is
+still required before release.
+
 Candidate A is therefore the preferred full-pop architecture. The remaining
 blockers concern installed-server and gameplay behavior, not reference
 capacity:
 
 - upstream `webidl-dts-gen` still mishandles `unsigned long long[]`, so a
   publishable 64-bit package needs a BigInt-aware declaration path;
-- the opt-in server build has not yet been staged into the installed QuickStart
-  runtime and exercised by a real client;
+- the 64-bit runtime still needs reproducible packaging so Play does not depend
+  on workspace module paths or a hand-staged QuickStart build;
 - door/construction/vehicle obstacle churn must prove that geometry is actually
   blocked and locally replanned, not merely that the API returns success;
 - replication, the complete AI update phase, and separated sound/explosion
   delivery remain outside the standalone benchmark; and
-- the roughly 794 MiB retained RSS needs an explicit host-capacity budget and a
-  two-hour stability soak.
+- the 1.5-2.6 GiB observed process RSS range needs an explicit host-capacity
+  budget, and the corrected local-recovery lifecycle needs a fresh two-hour
+  stability soak.
 
 Opaque handles remain Candidate B's preferred process boundary, but Candidate
 A can proceed with BigInt refs if the high-level wrapper and tests stay
