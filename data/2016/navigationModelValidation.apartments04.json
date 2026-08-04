@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Apartments_Apartments04.adr",
+  "boundsMargin": 18,
+  "maxTerrainDelta": 1.5,
+  "terrainProbes": [
+    [-10, 0, -13.5],
+    [18, 0, -13.5],
+    [-10, 0, 12.5],
+    [18, 0, 12.5]
+  ],
+  "forbiddenProbes": [
+    {
+      "label": "upper roof center must remain non-walkable",
+      "position": [3.2, 21.634, 0.07],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "upper roof west must remain non-walkable",
+      "position": [7.49, 21.634, -3.13],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "upper roof east must remain non-walkable",
+      "position": [11.38, 21.634, -1.69],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "north roof must remain non-walkable",
+      "position": [5.71, 19.418, 11.33],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "south roof must remain non-walkable",
+      "position": [1.66, 19.418, -12.55],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "west roof must remain non-walkable",
+      "position": [-7.58, 19.418, -1.61],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "northwest roof must remain non-walkable",
+      "position": [-2.9, 19.418, 6.23],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "east roof must remain non-walkable",
+      "position": [11.85, 19.418, 1.87],
+      "halfExtents": [0.6, 0.35, 0.6]
+    }
+  ],
+  "transitions": [
+    {
+      "name": "ground stair upper layer seam",
+      "kind": "stairs",
+      "start": [10.3, 2.91, -4.1],
+      "end": [10.3, 3.71, -4.7],
+      "radius": 0.8,
+      "bidirectional": true
+    },
+    {
+      "name": "ground stair rotated tile seam",
+      "kind": "stairs",
+      "start": [10.2, 2.76, -3.89],
+      "end": [10.32, 2.97, -3.3],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "second stair upper layer seam",
+      "kind": "stairs",
+      "start": [10.3, 6.61, -4.1],
+      "end": [10.3, 7.41, -4.7],
+      "radius": 0.8,
+      "bidirectional": true
+    },
+    {
+      "name": "second stair rotated tile seam",
+      "kind": "stairs",
+      "start": [10.2, 6.46, -3.89],
+      "end": [10.32, 6.67, -3.3],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "third stair upper layer seam",
+      "kind": "stairs",
+      "start": [10.3, 10.21, -4.1],
+      "end": [10.3, 11.01, -4.7],
+      "radius": 0.8,
+      "bidirectional": true
+    },
+    {
+      "name": "third stair rotated tile seam",
+      "kind": "stairs",
+      "start": [10.2, 10.16, -3.89],
+      "end": [10.32, 10.37, -3.3],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "fourth stair upper layer seam",
+      "kind": "stairs",
+      "start": [10.3, 13.91, -4.1],
+      "end": [10.3, 14.71, -4.7],
+      "radius": 0.8,
+      "bidirectional": true
+    },
+    {
+      "name": "fourth stair rotated tile seam",
+      "kind": "stairs",
+      "start": [10.2, 13.86, -3.89],
+      "end": [10.32, 14.07, -3.3],
+      "radius": 0.5,
+      "bidirectional": true
+    }
+  ],
+  "routes": [
+    {
+      "label": "north exterior to ground interior",
+      "start": [4, 0, 13.7],
+      "end": [4, 0.05, 11.5]
+    },
+    {
+      "label": "north ground interior to exterior",
+      "start": [4, 0.05, 11.5],
+      "end": [4, 0, 13.7]
+    },
+    {
+      "label": "south exterior to ground interior",
+      "start": [4, 0, -14.7],
+      "end": [4, 0.05, -12]
+    },
+    {
+      "label": "south ground interior to exterior",
+      "start": [4, 0.05, -12],
+      "end": [4, 0, -14.7]
+    },
+    {
+      "label": "west exterior to ground interior",
+      "start": [-11, 0, 0],
+      "end": [-8.5, 0.05, 0]
+    },
+    {
+      "label": "west ground interior to exterior",
+      "start": [-8.5, 0.05, 0],
+      "end": [-11, 0, 0]
+    },
+    {
+      "label": "east exterior to ground interior",
+      "start": [19, 0, 0],
+      "end": [16.5, 0.05, 0]
+    },
+    {
+      "label": "east ground interior to exterior",
+      "start": [16.5, 0.05, 0],
+      "end": [19, 0, 0]
+    },
+    {
+      "label": "ground to second floor",
+      "start": [7.5, 0.05, -2],
+      "end": [10.5, 3.64, -4.4]
+    },
+    {
+      "label": "second to ground floor",
+      "start": [10.5, 3.64, -4.4],
+      "end": [7.5, 0.05, -2]
+    },
+    {
+      "label": "second to third floor",
+      "start": [7.5, 3.64, -2],
+      "end": [10.5, 7.32, -4.4]
+    },
+    {
+      "label": "third to second floor",
+      "start": [10.5, 7.32, -4.4],
+      "end": [7.5, 3.64, -2]
+    },
+    {
+      "label": "third to fourth floor",
+      "start": [7.5, 7.32, -2],
+      "end": [10.5, 10.98, -4.4]
+    },
+    {
+      "label": "fourth to third floor",
+      "start": [10.5, 10.98, -4.4],
+      "end": [7.5, 7.32, -2]
+    },
+    {
+      "label": "fourth to fifth floor",
+      "start": [7.5, 10.98, -2],
+      "end": [10.5, 14.64, -4.4]
+    },
+    {
+      "label": "fifth to fourth floor",
+      "start": [10.5, 14.64, -4.4],
+      "end": [7.5, 10.98, -2]
+    },
+    {
+      "label": "fifth to sixth floor",
+      "start": [7.5, 14.64, -2],
+      "end": [10.5, 18.32, -4.4]
+    },
+    {
+      "label": "sixth to fifth floor",
+      "start": [10.5, 18.32, -4.4],
+      "end": [7.5, 14.64, -2]
+    },
+    {
+      "label": "ground to sixth floor full chain",
+      "start": [7.5, 0.05, -2],
+      "end": [10.5, 18.32, -4.4]
+    },
+    {
+      "label": "sixth to ground floor full chain",
+      "start": [10.5, 18.32, -4.4],
+      "end": [7.5, 0.05, -2]
+    }
+  ]
+}
