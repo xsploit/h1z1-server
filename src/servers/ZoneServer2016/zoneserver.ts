@@ -626,6 +626,8 @@ export class ZoneServer2016 extends EventEmitter {
   aiEnabled!: boolean;
   aiTickRate!: number;
   pathfindingUpdateRate!: number;
+  private npcMovementCollisionRejects = 0;
+  private npcMovementCollisionLastLogAt = 0;
   infectionEnabled!: boolean;
   sounds: Sound[] = [];
 
@@ -2116,6 +2118,11 @@ export class ZoneServer2016 extends EventEmitter {
       );
       await this.initHeightmap();
       this.collisionManager.load();
+      console.log(
+        `[Collision] NPC movement sweep ${
+          process.env.NPC_MOVEMENT_COLLISION === "0" ? "disabled" : "enabled"
+        } (set NPC_MOVEMENT_COLLISION=0 to disable)`
+      );
     }
     if (aiEnabled) {
       this.aiTickRoutine = setInterval(
@@ -11022,6 +11029,7 @@ export class ZoneServer2016 extends EventEmitter {
       );
       if (!this.navManager.crowdHealthy) return;
     }
+    const movementCollisionEnabled = process.env.NPC_MOVEMENT_COLLISION !== "0";
     for (const k in this._npcs) {
       const npc = this._npcs[k];
       if (
@@ -11082,6 +11090,43 @@ export class ZoneServer2016 extends EventEmitter {
             Math.abs(gamePos[0]) > 4096 ||
             Math.abs(gamePos[2]) > 4096
           ) {
+            continue;
+          }
+          if (
+            movementCollisionEnabled &&
+            runRuntimePhase("path-npc-collision", () =>
+              this.collisionManager.movementBlocked(
+                npc.state.position,
+                gamePos,
+                0.3
+              )
+            )
+          ) {
+            runRuntimePhase("path-npc-collision-reset", () => {
+              npc.navAgent!.resetMoveTarget();
+              if (
+                !this.navManager.teleportAgent(
+                  npc.navAgent!,
+                  npc.state.position
+                )
+              ) {
+                this.navManager.removeAgent(npc.navAgent!);
+                npc.navAgent = undefined;
+              }
+              npc.syncIdleIfStopped();
+            });
+            this.npcMovementCollisionRejects =
+              (this.npcMovementCollisionRejects ?? 0) + 1;
+            const now = Date.now();
+            if (now - (this.npcMovementCollisionLastLogAt ?? 0) >= 10_000) {
+              console.log(
+                `[Collision] rejected ${this.npcMovementCollisionRejects} NPC movement ` +
+                  `(latest=${npc.characterId} from=${npc.state.position[0].toFixed(1)},` +
+                  `${npc.state.position[1].toFixed(1)},${npc.state.position[2].toFixed(1)})`
+              );
+              this.npcMovementCollisionRejects = 0;
+              this.npcMovementCollisionLastLogAt = now;
+            }
             continue;
           }
           runRuntimePhase("path-npc-replicate", () => npc.goTo(gamePos));
