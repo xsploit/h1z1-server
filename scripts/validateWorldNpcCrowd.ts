@@ -1,3 +1,6 @@
+import { writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+
 process.env.DISABLE_PLUGINS = "true";
 process.env.FORCE_DISABLE_WS = "true";
 process.env.NAV_STREAMING = "1";
@@ -31,16 +34,32 @@ const spawnedNpcCount = Number(process.argv[5] ?? 500);
 const crowdSteps = Number(process.argv[6] ?? 1000);
 
 async function main() {
-  const { ZoneServer2016 } = compiledRuntime
-    ? require("../out/servers/ZoneServer2016/zoneserver")
-    : await import("../src/servers/ZoneServer2016/zoneserver");
-  const { ModelIds } = compiledRuntime
-    ? require("../out/servers/ZoneServer2016/models/enums")
-    : await import("../src/servers/ZoneServer2016/models/enums");
-  const { createFakeCharacter, createFakeZoneClient } = compiledRuntime
-    ? require("../out/utils/test.utils")
-    : await import("../src/utils/test.utils");
-  const { Raw } = require("recast-navigation");
+  const installedRuntimeRoot = process.env.H1Z1_VALIDATION_RUNTIME_ROOT;
+  const runtimeModule = installedRuntimeRoot
+    ? require(join(installedRuntimeRoot, "out/utils/navigationruntime"))
+    : compiledRuntime
+      ? require("../out/utils/navigationruntime")
+      : await import("../src/utils/navigationruntime");
+  const R = runtimeModule.navigationRuntime;
+  const { ZoneServer2016 } = installedRuntimeRoot
+    ? require(
+        join(installedRuntimeRoot, "out/servers/ZoneServer2016/zoneserver")
+      )
+    : compiledRuntime
+      ? require("../out/servers/ZoneServer2016/zoneserver")
+      : await import("../src/servers/ZoneServer2016/zoneserver");
+  const { ModelIds } = installedRuntimeRoot
+    ? require(
+        join(installedRuntimeRoot, "out/servers/ZoneServer2016/models/enums")
+      )
+    : compiledRuntime
+      ? require("../out/servers/ZoneServer2016/models/enums")
+      : await import("../src/servers/ZoneServer2016/models/enums");
+  const { createFakeCharacter, createFakeZoneClient } = installedRuntimeRoot
+    ? require(join(installedRuntimeRoot, "out/utils/test.utils"))
+    : compiledRuntime
+      ? require("../out/utils/test.utils")
+      : await import("../src/utils/test.utils");
   const server = new ZoneServer2016(
     12117,
     Buffer.from("F70IaxuU8C/w7FPXY1ibXw==", "base64"),
@@ -145,11 +164,15 @@ async function main() {
     vehicleAgents++;
   }
 
+  const maxAgentIndexExclusive =
+    process.env.NAV_MONOLITHIC_64 === "1" ? 2000 : 1000;
   const invalidIndexes = wrappers
     .map((agent) => agent.agentIndex)
     .filter(
       (agentIndex) =>
-        !Number.isInteger(agentIndex) || agentIndex < 0 || agentIndex >= 1000
+        !Number.isInteger(agentIndex) ||
+        agentIndex < 0 ||
+        agentIndex >= maxAgentIndexExclusive
     );
   const aiInternals = server as unknown as {
     _rebuildAiTargetMap(): void;
@@ -160,7 +183,7 @@ async function main() {
   const realDateNow = Date.now;
   let simulatedNow = realDateNow();
   const memoryStart = process.memoryUsage();
-  const wasmHeapStart = Raw.Module.HEAPU8.buffer.byteLength;
+  const wasmHeapStart = R.Raw.Module.HEAPU8.buffer.byteLength;
   const navDiagnostics = server.navManager as unknown as {
     _loadedCols: Set<string>;
     _cacheLoadedCols: Set<string>;
@@ -241,53 +264,58 @@ async function main() {
   forceGc?.();
   const memoryEnd = process.memoryUsage();
 
-  console.log(
-    JSON.stringify({
-      worldNpcs: Object.keys(server._npcs).length,
-      worldVehicles: Object.keys(server._vehicles).length,
-      center: Array.from(center.slice(0, 3)),
-      crowdSteps,
-      npcAgents,
-      vehicleAgents,
-      wrapperCount: wrappers.length,
-      activeAgents: server.navManager.crowd.getActiveAgentCount(),
-      invalidIndexes,
-      crowdHealthy: server.navManager.crowdHealthy,
-      obstacleUpdatesHealthy: server.navManager.obstacleUpdatesHealthy,
-      obstacleAdds,
-      obstacleRemovals,
-      streaming: {
-        loadedColumns: navDiagnostics._loadedCols.size,
-        cachedColumns: navDiagnostics._cacheLoadedCols.size,
-        cachedLayers: navDiagnostics._streamCacheLayerCount,
-        layerCapacity: navDiagnostics._streamCacheCapacity,
-        activeNavMeshTiles,
-        maxNavMeshTiles,
-        maxLayersPerColumn: Array.from(
-          navDiagnostics._streamCacheLayers.values()
-        ).reduce((maximum, layers) => Math.max(maximum, layers.length), 0)
-      },
-      memory: {
-        rssStartMb: Math.round(memoryStart.rss / 1024 / 1024),
-        rssEndMb: Math.round(memoryEnd.rss / 1024 / 1024),
-        heapTotalStartMb: Math.round(memoryStart.heapTotal / 1024 / 1024),
-        heapTotalEndMb: Math.round(memoryEnd.heapTotal / 1024 / 1024),
-        heapUsedStartMb: Math.round(memoryStart.heapUsed / 1024 / 1024),
-        heapUsedEndMb: Math.round(memoryEnd.heapUsed / 1024 / 1024),
-        externalStartMb: Math.round(memoryStart.external / 1024 / 1024),
-        externalEndMb: Math.round(memoryEnd.external / 1024 / 1024),
-        arrayBuffersStartMb: Math.round(memoryStart.arrayBuffers / 1024 / 1024),
-        arrayBuffersEndMb: Math.round(memoryEnd.arrayBuffers / 1024 / 1024),
-        forcedGc: Boolean(forceGc),
-        wasmHeapStartMb: Math.round(wasmHeapStart / 1024 / 1024),
-        wasmHeapEndMb: Math.round(
-          Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024
-        ),
-        wasmResizeHeapAvailable:
-          typeof Raw.Module._emscripten_resize_heap === "function"
-      }
-    })
-  );
+  const report = {
+    worldNpcs: Object.keys(server._npcs).length,
+    worldVehicles: Object.keys(server._vehicles).length,
+    center: Array.from(center.slice(0, 3)),
+    crowdSteps,
+    npcAgents,
+    vehicleAgents,
+    wrapperCount: wrappers.length,
+    activeAgents: server.navManager.crowd.getActiveAgentCount(),
+    invalidIndexes,
+    crowdHealthy: server.navManager.crowdHealthy,
+    obstacleUpdatesHealthy: server.navManager.obstacleUpdatesHealthy,
+    obstacleAdds,
+    obstacleRemovals,
+    navigationMode:
+      process.env.NAV_MONOLITHIC_64 === "1" ? "monolithic64" : "streaming",
+    streaming: {
+      loadedColumns: navDiagnostics._loadedCols.size,
+      cachedColumns: navDiagnostics._cacheLoadedCols.size,
+      cachedLayers: navDiagnostics._streamCacheLayerCount,
+      layerCapacity: navDiagnostics._streamCacheCapacity,
+      activeNavMeshTiles,
+      maxNavMeshTiles,
+      maxLayersPerColumn: Array.from(
+        navDiagnostics._streamCacheLayers.values()
+      ).reduce((maximum, layers) => Math.max(maximum, layers.length), 0)
+    },
+    memory: {
+      rssStartMb: Math.round(memoryStart.rss / 1024 / 1024),
+      rssEndMb: Math.round(memoryEnd.rss / 1024 / 1024),
+      heapTotalStartMb: Math.round(memoryStart.heapTotal / 1024 / 1024),
+      heapTotalEndMb: Math.round(memoryEnd.heapTotal / 1024 / 1024),
+      heapUsedStartMb: Math.round(memoryStart.heapUsed / 1024 / 1024),
+      heapUsedEndMb: Math.round(memoryEnd.heapUsed / 1024 / 1024),
+      externalStartMb: Math.round(memoryStart.external / 1024 / 1024),
+      externalEndMb: Math.round(memoryEnd.external / 1024 / 1024),
+      arrayBuffersStartMb: Math.round(memoryStart.arrayBuffers / 1024 / 1024),
+      arrayBuffersEndMb: Math.round(memoryEnd.arrayBuffers / 1024 / 1024),
+      forcedGc: Boolean(forceGc),
+      wasmHeapStartMb: Math.round(wasmHeapStart / 1024 / 1024),
+      wasmHeapEndMb: Math.round(
+        R.Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024
+      ),
+      wasmResizeHeapAvailable:
+        typeof R.Raw.Module._emscripten_resize_heap === "function"
+    }
+  };
+  const serialized = `${JSON.stringify(report, null, 2)}\n`;
+  if (process.env.NAV_WORLD_CROWD_REPORT) {
+    writeFileSync(resolve(process.env.NAV_WORLD_CROWD_REPORT), serialized);
+  }
+  process.stdout.write(serialized);
   process.exit(server.navManager.crowdHealthy ? 0 : 1);
 }
 
