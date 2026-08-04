@@ -12,10 +12,12 @@ import argparse
 import json
 import math
 import struct
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
 
+@lru_cache(maxsize=4)
 def _read_h1col2_instances(path: Path) -> list[tuple[int, tuple[float, ...]]]:
     raw = path.read_bytes()
     if raw[:8] != b"H1COL2\0\0":
