@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145132 fourth-floor coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145132,
+    "start": [383.5500030517578, 40.5, -945.4000244140625],
+    "end": [383.6666666666667, 40.5, -944.6666666666666],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145134 fourth-ramp coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145134,
+    "start": [414.3500061035156, 40.600006103515625, -902.5500030517578],
+    "end": [413.65000915527344, 40.79999923706055, -902.7999877929688],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145138 fourth-floor coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145138,
+    "start": [-1104.0666910807292, 81.90000915527344, 1816.8666585286458],
+    "end": [-1103.8000081380208, 81.90000915527344, 1817.3333333333333],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 second-ramp eroded-floor seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145130,
+    "start": [157.8000030517578, 33.60000228881836, -1153.2000732421875],
+    "end": [157.8000030517578, 34.30000305175781, -1152.5999755859375],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 third-ramp eroded-floor seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145130,
+    "start": [156.8000030517578, 37.000003814697266, -1153.2000732421875],
+    "end": [156.8000030517578, 37.60000228881836, -1152.5999755859375],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 fourth-floor coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145130,
+    "start": [157.25000381469727, 40.40000534057617, -1147.4000244140625],
+    "end": [157.4000040690104, 40.40000534057617, -1146.6666666666667],
+    "radius": 0.25,
+    "bidirectional": true
+  }
+]

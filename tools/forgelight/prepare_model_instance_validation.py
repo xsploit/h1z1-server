@@ -107,14 +107,24 @@ def prepare(
     if not isinstance(terrain_delta_overrides, dict):
         raise ValueError("terrainDeltaOverrides must be an object")
     parsed_terrain_delta_overrides: dict[int, float] = {}
-    for raw_instance, raw_delta in terrain_delta_overrides.items():
+    for raw_instance, raw_override in terrain_delta_overrides.items():
         try:
             instance = int(raw_instance)
-            delta = float(raw_delta)
         except (TypeError, ValueError) as error:
-            raise ValueError("terrainDeltaOverrides must map instance indices to numbers") from error
+            raise ValueError("terrainDeltaOverrides contains an invalid instance index") from error
         if str(instance) != str(raw_instance) or instance < 0:
             raise ValueError("terrainDeltaOverrides contains an invalid instance index")
+        if not isinstance(raw_override, dict):
+            raise ValueError(
+                "terrainDeltaOverrides must map instance indices to reasoned objects"
+            )
+        reason = raw_override.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("terrainDeltaOverrides requires a non-empty reason")
+        try:
+            delta = float(raw_override["maxDelta"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("terrainDeltaOverrides requires a numeric maxDelta") from error
         if not math.isfinite(delta) or delta < 0:
             raise ValueError("terrainDeltaOverrides contains an invalid delta")
         parsed_terrain_delta_overrides[instance] = delta

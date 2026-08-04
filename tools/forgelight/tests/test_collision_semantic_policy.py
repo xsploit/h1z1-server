@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "fbb6051afaa659455307927b9f9c45c510702fc5a25d4fdca0292c4adccc2705"
+POLICY_SHA256 = "3e361ab5d1272c04c7987b2794865003f1e0a0f2b9553846116aaec9ae7cca46"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,7 +151,7 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 139)
+        self.assertEqual(len(policy.rules), 140)
         self.assertEqual(
             sum(rule.strategy == "uniform" for rule in policy.rules), 97
         )
@@ -163,8 +163,26 @@ class CanonicalPolicyTests(unittest.TestCase):
             34,
         )
         self.assertEqual(
-            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 8
+            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 9
         )
+
+    def test_apartments06_floors_stairs_and_fail_closed_remainder_are_pinned(self):
+        policy = load_semantic_policy(POLICY_PATH)
+        rule = next(
+            rule
+            for rule in policy.rules
+            if rule.actor_file == "Common_Structures_Apartments_Apartments06.adr"
+        )
+        self.assertEqual(rule.strategy, "explicit_triangles")
+        self.assertEqual(rule.triangle_count, 14017)
+        selected = {
+            semantic: sum(end - start + 1 for start, end in ranges)
+            for semantic, ranges in rule.selections
+        }
+        self.assertEqual(selected[SemanticId.FLOOR_EXTERIOR], 58)
+        self.assertEqual(selected[SemanticId.FLOOR_INTERIOR], 543)
+        self.assertEqual(selected[SemanticId.STAIR], 8)
+        self.assertEqual(selected[SemanticId.OBSTACLE_STATIC], 13408)
 
     def test_house36b_reviewed_surfaces_and_fail_closed_remainder_are_pinned(self):
         policy = load_semantic_policy(POLICY_PATH)
@@ -830,7 +848,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         self.assertEqual(
             (uniform_count, surface_count), (97, 34)
         )
-        self.assertEqual(explicit_count, 8)
+        self.assertEqual(explicit_count, 9)
 
 
 if __name__ == "__main__":

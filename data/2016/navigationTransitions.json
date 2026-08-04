@@ -357,6 +357,295 @@
     "bidirectional": true
   },
   {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145135 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1421.0882080078125,
+      73.37068054199219,
+      1821.5079833984375
+    ],
+    "end": [
+      -1421.0882080078125,
+      73.87068054199219,
+      1822.3079833984375
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145135 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1421.0882080078125,
+      75.48068054199219,
+      1819.3079833984375
+    ],
+    "end": [
+      -1421.0882080078125,
+      76.28068054199218,
+      1820.6079833984375
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145135 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1421.0882080078125,
+      76.8306805419922,
+      1821.5079833984375
+    ],
+    "end": [
+      -1421.0882080078125,
+      77.32068054199219,
+      1822.3079833984375
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145135 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1421.0882080078125,
+      80.21068054199219,
+      1821.5079833984375
+    ],
+    "end": [
+      -1421.0882080078125,
+      80.71068054199219,
+      1822.3079833984375
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145137 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1105.18916015625,
+      73.46340057373047,
+      1783.4879638671875
+    ],
+    "end": [
+      -1105.18916015625,
+      73.96340057373047,
+      1784.2879638671875
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145137 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1105.18916015625,
+      75.57340057373047,
+      1781.2879638671875
+    ],
+    "end": [
+      -1105.18916015625,
+      76.37340057373046,
+      1782.5879638671875
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145137 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1105.18916015625,
+      76.92340057373048,
+      1783.4879638671875
+    ],
+    "end": [
+      -1105.18916015625,
+      77.41340057373047,
+      1784.2879638671875
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145137 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1105.18916015625,
+      80.30340057373047,
+      1783.4879638671875
+    ],
+    "end": [
+      -1105.18916015625,
+      80.80340057373047,
+      1784.2879638671875
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145138 fourth-floor coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "start": [
+      -1104.0666910807292,
+      81.90000915527344,
+      1816.8666585286458
+    ],
+    "end": [
+      -1103.8000081380208,
+      81.90000915527344,
+      1817.3333333333333
+    ],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145136 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.965771484375,
+      73.33641693115234,
+      1756.50615234375
+    ],
+    "end": [
+      -1103.965771484375,
+      73.83641693115234,
+      1757.30615234375
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145136 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.965771484375,
+      75.44641693115234,
+      1754.30615234375
+    ],
+    "end": [
+      -1103.965771484375,
+      76.24641693115234,
+      1755.60615234375
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145136 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.965771484375,
+      76.79641693115235,
+      1756.50615234375
+    ],
+    "end": [
+      -1103.965771484375,
+      77.28641693115235,
+      1757.30615234375
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145136 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.965771484375,
+      80.17641693115235,
+      1756.50615234375
+    ],
+    "end": [
+      -1103.965771484375,
+      80.67641693115235,
+      1757.30615234375
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145138 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.806103515625,
+      73.50775787353516,
+      1813.522509765625
+    ],
+    "end": [
+      -1103.806103515625,
+      74.00775787353516,
+      1814.322509765625
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145138 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.806103515625,
+      75.61775787353515,
+      1811.322509765625
+    ],
+    "end": [
+      -1103.806103515625,
+      76.41775787353515,
+      1812.622509765625
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145138 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.806103515625,
+      76.96775787353516,
+      1813.522509765625
+    ],
+    "end": [
+      -1103.806103515625,
+      77.45775787353516,
+      1814.322509765625
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145138 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1103.806103515625,
+      80.34775787353516,
+      1813.522509765625
+    ],
+    "end": [
+      -1103.806103515625,
+      80.84775787353516,
+      1814.322509765625
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
     "name": "Common_Structures_Houses_House36B.adr #146660 south entrance terrain seam",
     "kind": "stairs",
     "source": "model-local-navigation-template",
@@ -629,6 +918,193 @@
     "bidirectional": true
   },
   {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145129 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      155.79444810253017,
+      34.242248611450194,
+      -1191.7562744376123
+    ],
+    "end": [
+      157.09444805803307,
+      35.0422486114502,
+      -1191.7562746122787
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 third-ramp eroded-floor seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "start": [
+      156.8000030517578,
+      37.000003814697266,
+      -1153.2000732421875
+    ],
+    "end": [
+      156.8000030517578,
+      37.60000228881836,
+      -1152.5999755859375
+    ],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 fourth-floor coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "start": [
+      157.25000381469727,
+      40.40000534057617,
+      -1147.4000244140625
+    ],
+    "end": [
+      157.4000040690104,
+      40.40000534057617,
+      -1146.6666666666667
+    ],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      157.33465881347655,
+      32.0199095916748,
+      -1150.3721435546875
+    ],
+    "end": [
+      157.33465881347655,
+      32.5199095916748,
+      -1149.5721435546875
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      157.33465881347655,
+      34.1299095916748,
+      -1152.5721435546875
+    ],
+    "end": [
+      157.33465881347655,
+      34.92990959167481,
+      -1151.2721435546875
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      157.33465881347655,
+      35.479909591674804,
+      -1150.3721435546875
+    ],
+    "end": [
+      157.33465881347655,
+      35.969909591674806,
+      -1149.5721435546875
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      157.33465881347655,
+      38.85990959167481,
+      -1150.3721435546875
+    ],
+    "end": [
+      157.33465881347655,
+      39.35990959167481,
+      -1149.5721435546875
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 second-ramp eroded-floor seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "start": [
+      157.8000030517578,
+      33.60000228881836,
+      -1153.2000732421875
+    ],
+    "end": [
+      157.8000030517578,
+      34.30000305175781,
+      -1152.5999755859375
+    ],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145129 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      157.99444802722735,
+      32.132248611450194,
+      -1191.7562747332017
+    ],
+    "end": [
+      158.79444799984452,
+      32.632248611450194,
+      -1191.7562748406888
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145129 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      157.99444802722735,
+      35.592248611450195,
+      -1191.7562747332017
+    ],
+    "end": [
+      158.79444799984452,
+      36.0822486114502,
+      -1191.7562748406888
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145129 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      157.99444802722735,
+      38.9722486114502,
+      -1191.7562747332017
+    ],
+    "end": [
+      158.79444799984452,
+      39.4722486114502,
+      -1191.7562748406888
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
     "name": "Common_Structures_Houses_House36B.adr #146662 north entrance terrain seam",
     "kind": "stairs",
     "source": "model-local-navigation-template",
@@ -760,6 +1236,312 @@
       264.83130307757233,
       24.311879287719727,
       -542.4318290978895
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145131 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      375.6149894843661,
+      34.22345550537109,
+      -914.5006592032373
+    ],
+    "end": [
+      376.91498943986903,
+      35.023455505371096,
+      -914.500659377904
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145131 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      377.81498940906334,
+      32.11345550537109,
+      -914.5006594988268
+    ],
+    "end": [
+      378.6149893816805,
+      32.61345550537109,
+      -914.500659606314
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145131 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      377.81498940906334,
+      35.57345550537109,
+      -914.5006594988268
+    ],
+    "end": [
+      378.6149893816805,
+      36.063455505371095,
+      -914.500659606314
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145131 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      377.81498940906334,
+      38.953455505371096,
+      -914.5006594988268
+    ],
+    "end": [
+      378.6149893816805,
+      39.453455505371096,
+      -914.500659606314
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145132 fourth-floor coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "start": [
+      383.5500030517578,
+      40.5,
+      -945.4000244140625
+    ],
+    "end": [
+      383.6666666666667,
+      40.5,
+      -944.6666666666666
+    ],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145132 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      383.605029296875,
+      32.12724945068359,
+      -948.3651245117187
+    ],
+    "end": [
+      383.605029296875,
+      32.62724945068359,
+      -947.5651245117188
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145132 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      383.605029296875,
+      34.23724945068359,
+      -950.5651245117188
+    ],
+    "end": [
+      383.605029296875,
+      35.037249450683596,
+      -949.2651245117188
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145132 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      383.605029296875,
+      35.58724945068359,
+      -948.3651245117187
+    ],
+    "end": [
+      383.605029296875,
+      36.077249450683595,
+      -947.5651245117188
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145132 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      383.605029296875,
+      38.967249450683596,
+      -948.3651245117187
+    ],
+    "end": [
+      383.605029296875,
+      39.467249450683596,
+      -947.5651245117188
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145134 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      413.5954697505731,
+      32.148857803344725,
+      -905.4625101820765
+    ],
+    "end": [
+      413.5954694390416,
+      32.648857803344725,
+      -906.2625101820765
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145134 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      413.5954697505731,
+      35.608857803344726,
+      -905.4625101820765
+    ],
+    "end": [
+      413.5954694390416,
+      36.09885780334473,
+      -906.2625101820765
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145134 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      413.5954697505731,
+      38.98885780334473,
+      -905.4625101820765
+    ],
+    "end": [
+      413.5954694390416,
+      39.48885780334473,
+      -906.2625101820765
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145134 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      413.5954706072847,
+      34.258857803344725,
+      -903.2625101820765
+    ],
+    "end": [
+      413.59547010104603,
+      35.05885780334473,
+      -904.5625101820766
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145134 fourth-ramp coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "start": [
+      414.3500061035156,
+      40.600006103515625,
+      -902.5500030517578
+    ],
+    "end": [
+      413.65000915527344,
+      40.79999923706055,
+      -902.7999877929688
+    ],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145133 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      421.14973087329207,
+      32.15095207214355,
+      -945.7799811438662
+    ],
+    "end": [
+      420.3497309006749,
+      32.65095207214355,
+      -945.7799812513533
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145133 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      421.14973087329207,
+      35.610952072143554,
+      -945.7799811438662
+    ],
+    "end": [
+      420.3497309006749,
+      36.100952072143556,
+      -945.7799812513533
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145133 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      421.14973087329207,
+      38.99095207214356,
+      -945.7799811438662
+    ],
+    "end": [
+      420.3497309006749,
+      39.49095207214356,
+      -945.7799812513533
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145133 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      423.3497307979893,
+      34.26095207214355,
+      -945.7799808482766
+    ],
+    "end": [
+      422.0497308424864,
+      35.06095207214356,
+      -945.7799810229433
     ],
     "radius": 0.5,
     "bidirectional": true
@@ -898,6 +1680,210 @@
       2480.3945784332245
     ],
     "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145139 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1945.2505609514171,
+      27.00254699707031,
+      2283.4133782311337
+    ],
+    "end": [
+      1944.4505609787998,
+      27.50254699707031,
+      2283.413378123647
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145139 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1945.2505609514171,
+      30.462546997070312,
+      2283.4133782311337
+    ],
+    "end": [
+      1944.4505609787998,
+      30.952546997070314,
+      2283.413378123647
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145139 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1945.2505609514171,
+      33.842546997070315,
+      2283.4133782311337
+    ],
+    "end": [
+      1944.4505609787998,
+      34.342546997070315,
+      2283.413378123647
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145139 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1947.4505608761142,
+      29.11254699707031,
+      2283.4133785267236
+    ],
+    "end": [
+      1946.1505609206113,
+      29.91254699707031,
+      2283.413378352057
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145140 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1958.1670370223196,
+      29.2117138671875,
+      2313.508384236774
+    ],
+    "end": [
+      1958.1897251573687,
+      30.0117138671875,
+      2314.808186240357
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145140 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1958.2054323277873,
+      27.1017138671875,
+      2315.7080491659135
+    ],
+    "end": [
+      1958.2193942570482,
+      27.6017138671875,
+      2316.5079273219644
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145140 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1958.2054323277873,
+      30.5617138671875,
+      2315.7080491659135
+    ],
+    "end": [
+      1958.2193942570482,
+      31.0517138671875,
+      2316.5079273219644
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145140 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      1958.2054323277873,
+      33.9417138671875,
+      2315.7080491659135
+    ],
+    "end": [
+      1958.2193942570482,
+      34.4417138671875,
+      2316.5079273219644
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145141 ground ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2030.2635004045421,
+      29.453800888061522,
+      2171.3252434655087
+    ],
+    "end": [
+      2029.4635004319248,
+      29.953800888061522,
+      2171.325243358022
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145141 second ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2030.2635004045421,
+      32.91380088806152,
+      2171.3252434655087
+    ],
+    "end": [
+      2029.4635004319248,
+      33.403800888061525,
+      2171.325243358022
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145141 third ramp tile seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2030.2635004045421,
+      36.293800888061526,
+      2171.3252434655087
+    ],
+    "end": [
+      2029.4635004319248,
+      36.793800888061526,
+      2171.325243358022
+    ],
+    "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145141 second ramp lower layer seam",
+    "kind": "stairs",
+    "source": "model-local-navigation-template",
+    "start": [
+      2032.4635003292392,
+      31.56380088806152,
+      2171.3252437610986
+    ],
+    "end": [
+      2031.1635003737363,
+      32.363800888061526,
+      2171.325243586432
+    ],
+    "radius": 0.5,
     "bidirectional": true
   },
   {

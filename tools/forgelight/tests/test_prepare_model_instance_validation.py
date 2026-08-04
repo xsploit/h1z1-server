@@ -138,7 +138,12 @@ class PrepareModelInstanceValidationTests(unittest.TestCase):
             self.assertEqual(admitted_skips, [])
 
             template_payload = json.loads(template.read_text(encoding="utf-8"))
-            template_payload["terrainDeltaOverrides"] = {"0": 8.0}
+            template_payload["terrainDeltaOverrides"] = {
+                "0": {
+                    "maxDelta": 8.0,
+                    "reason": "fixture models an elevated supported placement",
+                }
+            }
             template.write_text(json.dumps(template_payload), encoding="utf-8")
             admitted, admitted_routes, admitted_skips, _, _ = prepare(
                 collision, metadata, template, lambda _x, _z: 10.0
@@ -146,6 +151,11 @@ class PrepareModelInstanceValidationTests(unittest.TestCase):
             self.assertEqual(len(admitted), 1)
             self.assertEqual(len(admitted_routes), 1)
             self.assertEqual(admitted_skips, [])
+
+            template_payload["terrainDeltaOverrides"] = {"0": 8.0}
+            template.write_text(json.dumps(template_payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "reasoned objects"):
+                prepare(collision, metadata, template, lambda _x, _z: 10.0)
 
 
 if __name__ == "__main__":

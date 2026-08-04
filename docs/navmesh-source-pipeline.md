@@ -159,14 +159,16 @@ those two sources into the runtime/full-bake input
 `data/2016/navigationTransitions.json` and records its input/output hashes in
 `data/2016/navigationTransitions.provenance.json`.
 
-For the House36B checkpoint the compiled artifact contains 69 links: five
-authored PV links plus eight reviewed seams at each of eight exact House36B
-placements. Rebuild it after model preparation with:
+The current compiled artifact contains 127 links: five authored PV links, 64
+reviewed House36B links, 52 model-local Apartments06 links, and six narrowly
+scoped Apartments06 placement seams. Rebuild it after model preparation with:
 
 ```powershell
 py -3 tools/forgelight/compile_navigation_transitions.py `
   --authored data/2016/navigationTransitions.authored.json `
   --generated "house36B=C:\path\to\house36b-prepared\transitions.json" `
+  --generated "apartments06=C:\path\to\apartments06-prepared\transitions.json" `
+  --generated "apartments06PlacementSeams=data/2016/navigationTransitions.apartments06.placements.json" `
   --output data/2016/navigationTransitions.json `
   --provenance data/2016/navigationTransitions.provenance.json
 ```

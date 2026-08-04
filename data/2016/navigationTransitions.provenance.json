@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "outputSha256": "91877e9f528bacb2dbc0d0785e5ea69290b4a9306a464442531a922ee108cf0d",
-  "transitionCount": 69,
+  "outputSha256": "a19258f4302081f9a9499ad58f4d67a2b0e91729caba9e2228d38dc0c8c8d905",
+  "transitionCount": 127,
   "authoredSource": {
     "path": "data/2016/navigationTransitions.authored.json",
     "sha256": "600f0a61e8bf485848ac8e09918d02a31e06388ac2b2b2794b9d9c0150a8a49e",
@@ -12,6 +12,16 @@
       "label": "house36B",
       "sha256": "c5652b9640de323106b414d4db2135887fdb2b54e8153fd2454cd1753687475a",
       "transitionCount": 64
+    },
+    {
+      "label": "apartments06",
+      "sha256": "eb0df61715a4f530b5008bef60051129b219082825231821ca6b2ac2f3248d8e",
+      "transitionCount": 52
+    },
+    {
+      "label": "apartments06PlacementSeams",
+      "sha256": "0c8bec474c847428ac914d790611a322956650e05d91bf05693d4f2781f72bb8",
+      "transitionCount": 6
     }
   ]
 }

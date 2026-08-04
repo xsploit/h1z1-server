@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+  "collisionAssetSha256": "e349f482acb532fb00ddc92db275742256d17166a93529306639fba2120e750b",
+  "defaultSemantic": "nav_obstacle_static",
+  "selectors": [
+    {
+      "id": "central-stair-ramp-stack",
+      "semantic": "nav_stair",
+      "centroidBounds": [4.8, 0.4, 2.8, 5.6, 13.7, 4.6],
+      "normalYMax": -0.8,
+      "slopeDegreesMin": 20,
+      "slopeDegreesMax": 40,
+      "areaMax": 5,
+      "minSelectedTriangles": 8,
+      "maxSelectedTriangles": 8
+    },
+    {
+      "id": "ground-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-15, 0.02, -10, 15, 0.18, 10],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 45,
+      "maxSelectedTriangles": 51
+    },
+    {
+      "id": "second-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-15, 3.35, -10, 15, 3.59, 10],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 170,
+      "maxSelectedTriangles": 180
+    },
+    {
+      "id": "third-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-15, 6.8, -10, 15, 6.99, 10],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 160,
+      "maxSelectedTriangles": 169
+    },
+    {
+      "id": "fourth-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-15, 10.2, -10, 15, 10.4, 10],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 135,
+      "maxSelectedTriangles": 143
+    },
+    {
+      "id": "fifth-floor-roof-deck",
+      "semantic": "nav_floor_exterior",
+      "centroidBounds": [-15, 13.6, -10, 15, 13.8, 10],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 50,
+      "maxSelectedTriangles": 58
+    }
+  ]
+}

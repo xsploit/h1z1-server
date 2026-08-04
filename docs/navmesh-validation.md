@@ -68,10 +68,22 @@ The accepted post-classification checkpoint is deliberately recorded
 separately from that historical baseline. The current streamed admission gate
 resolves all eight per-instance regional caches, requires positive mesh
 presence before crediting a forbidden probe, and reports 224/224 routes plus
-120/120 evaluated forbidden-roof probes. The five authored PV links and 64
-generated House36B links are compiled into the provenance-bound canonical
+120/120 evaluated forbidden-roof probes. The five authored PV links, 64
+generated House36B links, 52 generated Apartments06 model links, and six
+evidence-backed Apartments06 placement seams are compiled into the
+provenance-bound canonical
 `data/2016/navigationTransitions.json`; no full-world rebake is required to
 replay this regional evidence.
+
+### Apartments06 measured admission
+
+`data/2016/navigationModelValidation.apartments06.json` expands across all 13
+exact placements. The streamed regional gate proves 182/182 entrance,
+inter-floor, and full-height routes and 208/208 forbidden roof/parapet probes.
+Only six placement-specific seams are retained, each produced from exact
+disconnected polygon-edge evidence with `scripts/diagnoseModelRouteSeam.ts`.
+The regional result is pinned in
+`data/2016/navigationModelEvidence.apartments06.json`.
 
 ## Recoverable runtime and bundle deployment
 

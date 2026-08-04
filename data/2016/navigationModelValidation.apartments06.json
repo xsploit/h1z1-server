@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+  "boundsMargin": 16,
+  "maxTerrainDelta": 1.5,
+  "terrainDeltaOverrides": {
+    "145130": {
+      "maxDelta": 7.0,
+      "reason": "All four probes are uniformly 6.6124 m above raw terrain; the placed structure is supported by authored collision and its full route plus forbidden-surface suite passes."
+    }
+  },
+  "terrainProbes": [
+    [-15.5, 0, 0],
+    [16.5, 0, 0],
+    [0, 0, -10.5],
+    [0, 0, 11]
+  ],
+  "forbiddenProbes": [
+    {
+      "label": "roof 767",
+      "position": [4.81, 16.69, 3.59],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "roof 766",
+      "position": [4.05, 16.69, 1.27],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "roof 711",
+      "position": [3.82, 16.8, 7.59],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "roof 769",
+      "position": [4.99, 16.69, -1.91],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "roof 704",
+      "position": [2.59, 16.8, 3.37],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 781",
+      "position": [-8.16, 14.45, 8.08],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 787",
+      "position": [-4.21, 14.4, -7.86],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 780",
+      "position": [-4.11, 14.43, 7.98],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 786",
+      "position": [-8.27, 14.4, -7.76],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 771",
+      "position": [13.75, 14.4, -3.69],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 770",
+      "position": [13.65, 14.4, -0.75],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 783",
+      "position": [-12.32, 14.43, 5.45],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 785",
+      "position": [-12.33, 14.4, -5.22],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 793",
+      "position": [8.48, 14.4, -6.63],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 784",
+      "position": [-12.23, 14.4, -2.58],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "parapet 782",
+      "position": [-12.22, 14.4, 2.81],
+      "halfExtents": [0.6, 0.35, 0.6]
+    }
+  ],
+  "routes": [
+    {
+      "label": "north exterior to central ramp",
+      "start": [-1.5, 0.05, 9.2],
+      "end": [5.2, 0.1, 0.5]
+    },
+    {
+      "label": "central ramp to north exterior",
+      "start": [5.2, 0.1, 0.5],
+      "end": [-1.5, 0.05, 9.2]
+    },
+    {
+      "label": "southeast exterior to central ramp",
+      "start": [15.2, 0.05, -7.2],
+      "end": [5.2, 0.1, 0.5]
+    },
+    {
+      "label": "central ramp to southeast exterior",
+      "start": [5.2, 0.1, 0.5],
+      "end": [15.2, 0.05, -7.2]
+    },
+    {
+      "label": "ground to second via central ramp",
+      "start": [5.2, 0.1, 0.5],
+      "end": [5.2, 3.5, 6.5]
+    },
+    {
+      "label": "second to ground via central ramp",
+      "start": [5.2, 3.5, 6.5],
+      "end": [5.2, 0.1, 0.5]
+    },
+    {
+      "label": "second to third via central ramp",
+      "start": [5.2, 3.5, 0.5],
+      "end": [5.2, 6.92, 6.5]
+    },
+    {
+      "label": "third to second via central ramp",
+      "start": [5.2, 6.92, 6.5],
+      "end": [5.2, 3.5, 0.5]
+    },
+    {
+      "label": "third to fourth via central ramp",
+      "start": [5.2, 6.92, 0.5],
+      "end": [5.2, 10.34, 6.5]
+    },
+    {
+      "label": "fourth to third via central ramp",
+      "start": [5.2, 10.34, 6.5],
+      "end": [5.2, 6.92, 0.5]
+    },
+    {
+      "label": "fourth to roof deck via central ramp",
+      "start": [5.2, 10.34, 0.5],
+      "end": [5.2, 13.7, 6.5]
+    },
+    {
+      "label": "roof deck to fourth via central ramp",
+      "start": [5.2, 13.7, 6.5],
+      "end": [5.2, 10.34, 0.5]
+    },
+    {
+      "label": "ground to roof deck full chain",
+      "start": [5.2, 0.1, 0.5],
+      "end": [5.2, 13.7, 6.5]
+    },
+    {
+      "label": "roof deck to ground full chain",
+      "start": [5.2, 13.7, 6.5],
+      "end": [5.2, 0.1, 0.5]
+    }
+  ],
+  "transitions": [
+    {
+      "name": "ground ramp tile seam",
+      "kind": "stairs",
+      "start": [5.2, 1.97, 3.7],
+      "end": [5.2, 2.47, 4.5],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "second ramp tile seam",
+      "kind": "stairs",
+      "start": [5.2, 5.43, 3.7],
+      "end": [5.2, 5.92, 4.5],
+      "radius": 0.8,
+      "bidirectional": true
+    },
+    {
+      "name": "second ramp lower layer seam",
+      "kind": "stairs",
+      "start": [5.2, 4.08, 1.5],
+      "end": [5.2, 4.88, 2.8],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "third ramp tile seam",
+      "kind": "stairs",
+      "start": [5.2, 8.81, 3.7],
+      "end": [5.2, 9.31, 4.5],
+      "radius": 0.5,
+      "bidirectional": true
+    }
+  ]
+}

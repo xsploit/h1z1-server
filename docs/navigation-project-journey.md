@@ -1006,14 +1006,59 @@ promote the reviewed rule. Seam links are explicit evidence, not permission to
 make roofs or walls walkable.
 
 The generated House36B transitions are now compiled with the existing world
-transitions into a 69-link provenance-bound full-bake/runtime input. Navigation
+transitions and the Apartments06 transitions into a 127-link provenance-bound
+full-bake/runtime input. Navigation
 Doctor now exits nonzero on failed routes, unverified roof probes, zero prepared
 evidence, or stale pinned inputs. The next highest-impact unclassified building is
-`Common_Structures_Apartments_Apartments06.adr` at 13 placements and 9.369% of
-the ranked composite backlog. Only after several archetypes
-are green should another full-map bake be started. A DT_POLYREF64 comparison
+selected from the remaining ranked composite backlog. A DT_POLYREF64 comparison
 remains valuable because it may remove the 32-bit active-tile ceiling, but it
 does not replace classification, transition, roof, or collision evidence.
+
+### Apartments06 model-oriented checkpoint (2026-08-03)
+
+`Common_Structures_Apartments_Apartments06.adr` is the first multi-storey
+apartment archetype admitted by the regional workflow. It contains 14,017
+triangles and has 13 exact H1COL2 placements. The reviewed, hash-bound semantic
+recipe classifies 543 interior-floor triangles, 58 exterior roof-deck floor
+triangles, and eight central stair-ramp triangles. The remaining 13,408
+triangles are deliberately fail-closed static obstacles; the rule leaves no
+unknown triangles and does not infer walkability from a generic upward-facing
+surface.
+
+The canonical model template proves two exterior entrances, every adjacent
+floor transition in both directions, and the full ground-to-roof-deck chain in
+both directions. Six placement-specific seam links were added only after the
+regional topology doctor found the exact closest polygon edges across
+TileCache layer seams or erosion gaps. A proposed uniform fourth-flight link
+fixed none of the measured failures and was discarded. The retained links are
+0.54-0.92 metres long with a 0.25-metre radius; they are bounded repairs, not
+broad teleports through walls.
+
+One placement (`145130`) is 6.6124 metres above the raw terrain sample at all
+four probes. The default terrain guard remains 1.5 metres; only that exact
+instance receives a reviewed 7.0-metre override. This preserves fail-closed
+behavior for every other placement while acknowledging the structure collision
+that supports the elevated apartment instance.
+
+All 13 regional caches were baked in about 85 seconds, roughly seven seconds
+per placement. The final streamed admission result is 182/182 routes and
+208/208 evaluated forbidden roof/parapet probes, with zero failures, skipped
+instances, or unverified probes. The same three-dimensional validator was then
+re-run against House36B and House12A, which remained 224/224 plus 120/120 and
+572/572 plus 312/312 respectively.
+
+Canonical inputs are:
+
+- `data/2016/navigationSemanticRecipe.apartments06.json`;
+- `data/2016/navigationModelValidation.apartments06.json`;
+- `data/2016/navigationTransitions.apartments06.placements.json`;
+- `data/2016/navigationModelEvidence.apartments06.json`.
+
+Large regional caches and reports remain under
+`work/staging/navigation-doctor-current/apartments06-*`. The reusable
+`scripts/diagnoseModelRouteSeam.ts` tool now turns a failed regional route into
+ranked, exact polygon-edge seam candidates, so another full-world bake is not
+needed while an archetype is being classified and repaired.
 
 The project is no longer a blind experiment. It has a stable streamed runtime,
 native world inputs, semantic classification, targeted validation, a successful

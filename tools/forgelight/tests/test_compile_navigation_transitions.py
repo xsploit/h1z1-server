@@ -82,10 +82,19 @@ class CompileNavigationTransitionsTests(unittest.TestCase):
         provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
 
         self.assertEqual(len(authored), 5)
-        self.assertEqual(len(compiled), 69)
+        self.assertEqual(len(compiled), 127)
         self.assertEqual(
             sum(entry["name"].startswith("Common_Structures_Houses_House36B.adr #") for entry in compiled),
             64,
+        )
+        self.assertEqual(
+            sum(
+                entry["name"].startswith(
+                    "Common_Structures_Apartments_Apartments06.adr #"
+                )
+                for entry in compiled
+            ),
+            58,
         )
         self.assertEqual(
             encode(compile_transitions(authored, compiled[len(authored) :])),
@@ -95,6 +104,20 @@ class CompileNavigationTransitionsTests(unittest.TestCase):
         self.assertEqual(
             provenance["outputSha256"], hashlib.sha256(compiled_raw).hexdigest()
         )
+
+    def test_apartments06_placement_seams_have_explicit_instance_bindings(self):
+        repository = Path(__file__).resolve().parents[3]
+        seams = json.loads(
+            (
+                repository
+                / "data/2016/navigationTransitions.apartments06.placements.json"
+            ).read_text(encoding="utf-8")
+        )
+        actor = "Common_Structures_Apartments_Apartments06.adr"
+        self.assertEqual(len(seams), 6)
+        for seam in seams:
+            self.assertEqual(seam["actorFile"], actor)
+            self.assertIn(f"#{seam['instanceIndex']} ", seam["name"])
 
 
 if __name__ == "__main__":
