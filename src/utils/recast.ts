@@ -12,6 +12,7 @@
 // ======================================================================
 
 import {
+  closeSync,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -23,23 +24,15 @@ import {
   writeFileSync
 } from "node:fs";
 import { join } from "node:path";
-import {
+import type {
   BoxObstacle,
   CrowdAgent,
-  DetourTileCacheParams,
-  getNavMeshPositionsAndIndices,
-  importNavMesh,
-  importTileCache,
-  init as initRecast,
+  Crowd,
   NavMesh,
-  NavMeshParams,
+  NavMeshQuery,
   OffMeshConnectionParams,
-  Raw,
-  statusSucceed,
-  statusToReadableString,
   TileCache,
   TileCacheMeshProcess,
-  UnsignedCharArray,
   Vector3
 } from "recast-navigation";
 
@@ -65,9 +58,12 @@ export function shouldUseStreamingNav(
 export function hasDetourSuccess(status: number): boolean {
   return ((status >>> 0) & 0x40000000) !== 0;
 }
-import { NavMeshQuery } from "recast-navigation";
-import { Crowd } from "recast-navigation";
 import { runRuntimePhase } from "./runtimewatchdog";
+import {
+  loadNavigationRuntime,
+  navigationRuntime as R,
+  selectNavigationRuntime
+} from "./navigationruntime";
 import {
   assertNavigationRuntimeConfiguration,
   NAVIGATION_ARTIFACT_MANIFEST,
@@ -178,7 +174,7 @@ function loadNavigationTransitions(): NavigationTransition[] {
 
 function createNavigationTileCacheMeshProcess(): TileCacheMeshProcess {
   const transitions = loadNavigationTransitions();
-  return new TileCacheMeshProcess((params, polyAreas, polyFlags) => {
+  return new R.TileCacheMeshProcess((params, polyAreas, polyFlags) => {
     for (let i = 0; i < params.polyCount(); ++i) {
       const runtime = runtimeNavigationArea(polyAreas.get(i));
       polyAreas.set(i, runtime.area);
@@ -251,6 +247,22 @@ export function selectStreamingReferenceCapacity(
   };
 }
 
+export function selectMonolithic64ReferenceCapacity(layerCount: number): {
+  meshMaxTiles: number;
+  meshMaxPolys: number;
+  cacheMaxTiles: number;
+} {
+  if (!Number.isSafeInteger(layerCount) || layerCount <= 0) {
+    throw new Error(`[NAV] invalid monolithic layer count ${layerCount}`);
+  }
+  const maxTiles = 2 ** Math.ceil(Math.log2(layerCount));
+  return {
+    meshMaxTiles: maxTiles,
+    meshMaxPolys: 1 << 20,
+    cacheMaxTiles: maxTiles
+  };
+}
+
 export function shouldRecycleStreamingCache(
   currentLayers: number,
   incomingLayers: number,
@@ -317,10 +329,11 @@ export class NavManager {
   private _streamCacheCapacity = STREAM_RUNTIME_CACHE_LAYERS;
   private _streamRuntimeMutationEnabled =
     process.env.NAV_STREAMING_MUTATION === "1";
+  private _monolithic64 = false;
   private _streamRuntimeRecycles = 0;
-  private _streamMeshConfig?: Parameters<typeof NavMeshParams.create>[0];
+  private _streamMeshConfig?: Parameters<typeof R.NavMeshParams.create>[0];
   private _streamCacheConfig?: Parameters<
-    typeof DetourTileCacheParams.create
+    typeof R.DetourTileCacheParams.create
   >[0];
   private _streamAllocator?: any;
   private _streamCompressor?: any;
@@ -411,7 +424,7 @@ export class NavManager {
         !Number.isFinite(position.y) ||
         !Number.isFinite(position.z) ||
         hasCorruptTinyComponent(position) ||
-        targetDistance > MAX_AGENT_TARGET_DISTANCE
+        (!this._monolithic64 && targetDistance > MAX_AGENT_TARGET_DISTANCE)
       ) {
         this.traceCrowdOperation(
           "move-rejected",
@@ -437,7 +450,7 @@ export class NavManager {
     activeAgents: number | string,
     wrapperAgents: number | string
   ): string | undefined {
-    if (!this.streaming) return;
+    if (!this.streaming && !this._monolithic64) return;
     try {
       const logDirectory = join(
         process.env.APPDATA ?? process.cwd(),
@@ -488,7 +501,7 @@ export class NavManager {
   }
 
   private createCrowd(): void {
-    this.crowd = new Crowd(this.navmesh, {
+    this.crowd = new R.Crowd(this.navmesh, {
       maxAgents: this._crowdMaxAgents,
       maxAgentRadius: this._crowdMaxAgentRadius
     });
@@ -570,6 +583,11 @@ export class NavManager {
     return output;
   }
 
+  private closeStreamCacheParts(): void {
+    for (const part of this._streamCacheParts) closeSync(part.fd);
+    this._streamCacheParts = [];
+  }
+
   private mutateNavMesh(
     mutation: () => void,
     beforeMutation?: () => void
@@ -622,7 +640,7 @@ export class NavManager {
           updateFailed = true;
           const unsignedStatus = result.status >>> 0;
           console.error(
-            `[NAV] tilecache update failed: ${statusToReadableString(result.status)} ` +
+            `[NAV] tilecache update failed: ${R.statusToReadableString(result.status)} ` +
               `(status=${result.status}, hex=0x${unsignedStatus.toString(16)}); ` +
               "dynamic obstacle updates disabled"
           );
@@ -666,13 +684,21 @@ export class NavManager {
   }
 
   async loadNav() {
+    const runtimeSelection = selectNavigationRuntime(
+      process.env.NAV_MONOLITHIC_64,
+      process.env.NAV_64_CORE_MODULE,
+      process.env.NAV_64_WASM_MODULE
+    );
+    await loadNavigationRuntime(runtimeSelection);
     const requestedMode = process.env.NAV_STREAMING;
     const storePath = STREAM_CACHE_DIR + "/z1_cache_0.bin";
     const cacheAvailable = existsSync(storePath);
-    if (shouldUseStreamingNav(requestedMode, cacheAvailable)) {
+    const monolithic64 = runtimeSelection.mode === "monolithic64";
+    if (monolithic64 || shouldUseStreamingNav(requestedMode, cacheAvailable)) {
       if (!cacheAvailable) {
         throw new Error(
-          `[NAV] streaming was requested but the cache is missing: ${storePath}`
+          `[NAV] ${monolithic64 ? "monolithic 64-bit navigation" : "streaming"} ` +
+            `was requested but the cache is missing: ${storePath}`
         );
       }
       const verified = await verifyNavigationArtifact({
@@ -688,7 +714,7 @@ export class NavManager {
             (1024 * 1024)
           ).toFixed(1)} MB, provenance=${verified.manifest.provenance.status})`
       );
-      return this.loadNavStreaming();
+      return this.loadNavStreaming(monolithic64);
     }
     console.time("[NAV] Navmesh loaded");
     const mesh_parts: Buffer[] = [];
@@ -711,18 +737,16 @@ export class NavManager {
       console.log(`[NAV] loaded nav cache part ${part}`);
       part++;
     }
-    await initRecast();
-
     const navData = new Uint8Array(Buffer.concat(mesh_parts));
-    const { navMesh } = importNavMesh(navData);
+    const { navMesh } = R.importNavMesh(navData);
     const tcData = new Uint8Array(Buffer.concat(tc_parts));
     const tileCacheMeshProcess = createNavigationTileCacheMeshProcess();
-    const { tileCache } = importTileCache(tcData, tileCacheMeshProcess);
+    const { tileCache } = R.importTileCache(tcData, tileCacheMeshProcess);
     this.navmesh = navMesh;
     this.tilecache = tileCache;
     this._crowdMaxAgents = 2000;
     this._crowdMaxAgentRadius = 2.0;
-    this.navMeshQuery = new NavMeshQuery(this.navmesh);
+    this.navMeshQuery = new R.NavMeshQuery(this.navmesh);
     this.createCrowd();
     console.timeEnd("[NAV] Navmesh loaded");
   }
@@ -732,36 +756,40 @@ export class NavManager {
       throw new Error("[NAV] streaming runtime configuration is unavailable");
     }
 
-    const allocator = new (Raw as any).RecastLinearAllocator(1 << 20);
-    const compressor = new (Raw as any).RecastFastLZCompressor();
+    const allocatorCapacity =
+      process.env.NAV_MONOLITHIC_64 === "1" ? 1n << 20n : 1 << 20;
+    const allocator = new (R.Raw as any).RecastLinearAllocator(
+      allocatorCapacity
+    );
+    const compressor = new (R.Raw as any).RecastFastLZCompressor();
     const meshProcess = createNavigationTileCacheMeshProcess();
-    const tilecache = new TileCache();
+    const tilecache = new R.TileCache();
     if (
       !tilecache.init(
-        DetourTileCacheParams.create(this._streamCacheConfig),
+        R.DetourTileCacheParams.create(this._streamCacheConfig),
         allocator,
         compressor,
         meshProcess
       )
     ) {
-      Raw.destroy(allocator);
-      Raw.destroy(compressor);
-      Raw.destroy(meshProcess.raw);
+      R.Raw.destroy(allocator);
+      R.Raw.destroy(compressor);
+      R.Raw.destroy(meshProcess.raw);
       throw new Error("[NAV] failed to initialize streaming tilecache");
     }
 
-    const navmesh = new NavMesh();
-    if (!navmesh.initTiled(NavMeshParams.create(this._streamMeshConfig))) {
+    const navmesh = new R.NavMesh();
+    if (!navmesh.initTiled(R.NavMeshParams.create(this._streamMeshConfig))) {
       tilecache.destroy();
-      Raw.destroy(allocator);
-      Raw.destroy(compressor);
-      Raw.destroy(meshProcess.raw);
+      R.Raw.destroy(allocator);
+      R.Raw.destroy(compressor);
+      R.Raw.destroy(meshProcess.raw);
       throw new Error("[NAV] failed to initialize streaming navmesh");
     }
 
     this.tilecache = tilecache;
     this.navmesh = navmesh;
-    this.navMeshQuery = new NavMeshQuery(navmesh);
+    this.navMeshQuery = new R.NavMeshQuery(navmesh);
     this._streamAllocator = allocator;
     this._streamCompressor = compressor;
     this._streamMeshProcess = meshProcess;
@@ -773,9 +801,9 @@ export class NavManager {
     this.navMeshQuery?.destroy();
     this.navmesh?.destroy();
     this.tilecache?.destroy();
-    if (this._streamAllocator) Raw.destroy(this._streamAllocator);
-    if (this._streamCompressor) Raw.destroy(this._streamCompressor);
-    if (this._streamMeshProcess) Raw.destroy(this._streamMeshProcess.raw);
+    if (this._streamAllocator) R.Raw.destroy(this._streamAllocator);
+    if (this._streamCompressor) R.Raw.destroy(this._streamCompressor);
+    if (this._streamMeshProcess) R.Raw.destroy(this._streamMeshProcess.raw);
     this._streamAllocator = undefined;
     this._streamCompressor = undefined;
     this._streamMeshProcess = undefined;
@@ -810,9 +838,9 @@ export class NavManager {
   // Streaming mode: index the disk-backed compressed TileCache
   // (z1_cache_*.bin, TSET format from h1emu-recast), build an empty tiled
   // navmesh, and load/materialise layers on demand around players.
-  private async loadNavStreaming() {
-    console.time("[NAV] streaming tilecache loaded");
-    await initRecast();
+  private async loadNavStreaming(monolithic64: boolean = false) {
+    const modeLabel = monolithic64 ? "monolithic64" : "streaming";
+    console.time(`[NAV] ${modeLabel} tilecache loaded`);
     const dir = STREAM_CACHE_DIR;
     const parts = sortTileCacheParts(
       readdirSync(dir).filter((f) => /^z1_cache_\d+\.bin$/.test(f))
@@ -873,9 +901,9 @@ export class NavManager {
     const generatedCacheMaxSimplificationError = rF();
     const generatedCacheMaxTiles = rI();
     const generatedCacheMaxObstacles = rI();
-    const runtimeCapacity = selectStreamingReferenceCapacity(
-      generatedCacheMaxTiles
-    );
+    const runtimeCapacity = monolithic64
+      ? selectMonolithic64ReferenceCapacity(numTiles)
+      : selectStreamingReferenceCapacity(generatedCacheMaxTiles);
     const mesh = {
       orig: meshOrig,
       tileWidth: meshTileWidth,
@@ -907,7 +935,7 @@ export class NavManager {
       generatedMeshMaxPolys !== mesh.maxPolys
     ) {
       console.log(
-        `[NAV] streaming reference capacity adjusted: ` +
+        `[NAV] ${modeLabel} reference capacity adjusted: ` +
           `${generatedMeshMaxTiles}x${generatedMeshMaxPolys} -> ` +
           `${mesh.maxTiles}x${mesh.maxPolys} (tiles x polygons)`
       );
@@ -942,16 +970,105 @@ export class NavManager {
       );
     }
 
-    this._crowdMaxAgents = 1000;
-    this._crowdMaxAgentRadius = 2.5;
+    this._monolithic64 = monolithic64;
+    this._crowdMaxAgents = monolithic64 ? 2000 : 1000;
+    this._crowdMaxAgentRadius = monolithic64 ? 2.0 : 2.5;
     this.initializeStreamingRuntime();
-    this.streaming = true;
-    console.timeEnd("[NAV] streaming tilecache loaded");
+    if (monolithic64) {
+      try {
+        this.materializeMonolithicCache(numTiles);
+        this.closeStreamCacheParts();
+      } catch (error) {
+        this.closeStreamCacheParts();
+        this.destroyStreamingRuntime();
+        throw error;
+      }
+    } else {
+      this.streaming = true;
+    }
+    console.timeEnd(`[NAV] ${modeLabel} tilecache loaded`);
     console.log(
-      `[NAV] streaming tilecache ready (${numTiles} layers indexed, ` +
+      `[NAV] ${modeLabel} tilecache ready (${numTiles} layers indexed, ` +
         `${(storeLength / 1048576) | 0} MB disk-backed, ` +
-        `${this._streamCacheCapacity} layer runtime budget, ` +
-        `${this._streamRuntimeMutationEnabled ? "mutable" : "additive-safe"} mode)`
+        `${this._streamCacheCapacity} layer runtime budget` +
+        (monolithic64
+          ? ", complete-map mode)"
+          : `, ${this._streamRuntimeMutationEnabled ? "mutable" : "additive-safe"} mode)`)
+    );
+  }
+
+  private materializeMonolithicCache(expectedLayers: number): void {
+    const addTileCopy = (this.tilecache as any).addTileCopy;
+    if (typeof addTileCopy !== "function") {
+      throw new Error(
+        "[NAV] 64-bit runtime is missing the Detour-owned addTileCopy API"
+      );
+    }
+
+    let addedLayers = 0;
+    for (const [key, layers] of this._streamCacheLayers) {
+      for (const layer of layers) {
+        const bytes = this.readStreamCacheRange(layer.offset, layer.length);
+        const data = new R.UnsignedCharArray();
+        data.copy(bytes);
+        let result: { status: number };
+        try {
+          result = runRuntimePhase("nav-cache-add-layer", () =>
+            addTileCopy.call(this.tilecache, data)
+          );
+        } finally {
+          data.destroy();
+        }
+        if (!R.statusSucceed(result.status)) {
+          throw new Error(
+            `[NAV] monolithic64 failed to import layer ${addedLayers} for ${key}: ` +
+              R.statusToReadableString(result.status)
+          );
+        }
+        addedLayers++;
+      }
+      this._cacheLoadedCols.add(key);
+      if (addedLayers > 0 && addedLayers % 25000 === 0) {
+        console.log(
+          `[NAV] monolithic64 imported ${addedLayers}/${expectedLayers} layers`
+        );
+      }
+    }
+    if (addedLayers !== expectedLayers) {
+      throw new Error(
+        `[NAV] monolithic64 layer count mismatch: ${addedLayers}/${expectedLayers}`
+      );
+    }
+    this._streamCacheLayerCount = addedLayers;
+
+    let builtColumns = 0;
+    for (const key of this._streamCacheLayers.keys()) {
+      const [tx, tz] = key.split(",").map(Number);
+      const status = runRuntimePhase(
+        "nav-cache-build-column",
+        () => this.tilecache.buildNavMeshTilesAt(tx, tz, this.navmesh),
+        tx,
+        tz
+      );
+      if (!R.statusSucceed(status)) {
+        throw new Error(
+          `[NAV] monolithic64 failed to build column ${key}: ` +
+            R.statusToReadableString(status)
+        );
+      }
+      this._loadedCols.add(key);
+      builtColumns++;
+      if (builtColumns % 25000 === 0) {
+        console.log(
+          `[NAV] monolithic64 built ${builtColumns}/${this._streamCacheLayers.size} columns`
+        );
+      }
+    }
+
+    const wasmBytes = Number(R.Raw.Module.HEAPU8?.byteLength ?? 0);
+    console.log(
+      `[NAV] monolithic64 materialized ${addedLayers} layers in ` +
+        `${builtColumns} columns; WASM heap=${(wasmBytes / 1048576).toFixed(1)} MB`
     );
   }
 
@@ -1063,20 +1180,20 @@ export class NavManager {
             );
             continue;
           }
-          const FREE = (Raw.Detour as any).DT_COMPRESSEDTILE_FREE_DATA ?? 1;
+          const FREE = (R.Raw.Detour as any).DT_COMPRESSEDTILE_FREE_DATA ?? 1;
           let columnLoaded = true;
           for (const layer of layers) {
             const bytes = this.readStreamCacheRange(layer.offset, layer.length);
-            const arr = new UnsignedCharArray();
+            const arr = new R.UnsignedCharArray();
             arr.copy(bytes);
             const result = runRuntimePhase("nav-cache-add-layer", () =>
               this.tilecache.addTile(arr, FREE)
             );
-            if (!statusSucceed(result.status)) {
+            if (!R.statusSucceed(result.status)) {
               columnLoaded = false;
               console.error(
                 `[NAV] failed to load streamed layer for ${k}: ` +
-                  statusToReadableString(result.status)
+                  R.statusToReadableString(result.status)
               );
               break;
             }
@@ -1096,8 +1213,8 @@ export class NavManager {
         );
         if (!hasDetourSuccess(buildStatus)) {
           this._failedStreamCols.add(k);
-          const readableStatus = Raw.Detour
-            ? statusToReadableString(buildStatus)
+          const readableStatus = R.Raw.Detour
+            ? R.statusToReadableString(buildStatus)
             : `status=${buildStatus >>> 0}`;
           const worldX = this._tcOrigX + (tx + 0.5) * this._tcTileWidth;
           const worldZ = this._tcOrigZ + (tz + 0.5) * this._tcTileWidth;
@@ -1389,7 +1506,6 @@ export class NavManager {
 
   updt() {
     const now = Date.now();
-    const timeSinceLastCalled = (now - this.lastTimeCall) / 1000;
     // tilecache carving runs in both modes now: in streaming the obstacles are
     // applied to the materialised window tiles, in normal mode to the whole mesh
     if (this.obstaclesRequestsPending) {
@@ -1407,7 +1523,7 @@ export class NavManager {
     if (!this._crowdHealthy) return;
     try {
       runRuntimePhase("nav-crowd-update", () =>
-        this.crowd.update(this.updateFrequency, timeSinceLastCalled, 1)
+        this.crowd.update(this.updateFrequency)
       );
       if (++this._successfulCrowdUpdates >= 25) {
         this._crowdFaultReported = false;
@@ -1623,7 +1739,7 @@ export class NavManager {
   }
 
   async dumpNavmesh() {
-    const [positions, indices] = getNavMeshPositionsAndIndices(this.navmesh);
+    const [positions, indices] = R.getNavMeshPositionsAndIndices(this.navmesh);
     const stream = createWriteStream("navMeshDump.obj");
 
     for (let i = 0; i < positions.length; i += 3) {

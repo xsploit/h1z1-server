@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   NavManager,
   resolveNavigationTransitionsPath,
+  selectMonolithic64ReferenceCapacity,
   selectNavigationTransitionsForTile,
   selectStreamingReferenceCapacity,
   shouldLoadNavigationTransitions,
@@ -55,6 +56,16 @@ test("streaming trades one tile bit for dense POI polygon capacity", () => {
     meshMaxPolys: 256,
     cacheMaxTiles: 8192
   });
+});
+
+test("64-bit monolithic capacity admits the complete fine cache", () => {
+  assert.deepEqual(selectMonolithic64ReferenceCapacity(104935), {
+    meshMaxTiles: 131072,
+    meshMaxPolys: 1048576,
+    cacheMaxTiles: 131072
+  });
+  assert.throws(() => selectMonolithic64ReferenceCapacity(0));
+  assert.throws(() => selectMonolithic64ReferenceCapacity(1.5));
 });
 
 test("navigation transitions are owned by the tile layer containing their start", () => {
@@ -207,6 +218,7 @@ test("tile-cache rebuild work is bounded per server tick", () => {
   const navManager = new NavManager();
   let tileCacheUpdates = 0;
   let crowdUpdates = 0;
+  let crowdUpdateArgs: unknown[] = [];
   navManager.navmesh = {} as never;
   navManager.obstaclesRequestsPending = 1;
   navManager.tilecache = {
@@ -219,8 +231,9 @@ test("tile-cache rebuild work is bounded per server tick", () => {
   navManager.crowd = {
     getAgents: () => [],
     removeAgent: () => undefined,
-    update: () => {
+    update: (...args: unknown[]) => {
       crowdUpdates++;
+      crowdUpdateArgs = args;
     }
   } as never;
 
@@ -228,6 +241,7 @@ test("tile-cache rebuild work is bounded per server tick", () => {
   assert.equal(tileCacheUpdates, 5);
   assert.equal(navManager.obstaclesRequestsPending, 1);
   assert.equal(crowdUpdates, 1);
+  assert.deepEqual(crowdUpdateArgs, [navManager.updateFrequency]);
   assert.equal(navManager.obstacleUpdatesHealthy, true);
 });
 
