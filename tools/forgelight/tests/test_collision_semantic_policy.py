@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "cf739b3ce38a77ec8ea53986468ee6bc73e2da1bdd640fa341c4ffc763a7f936"
+POLICY_SHA256 = "9ceef8baff547f7fcc54dd8db64df98175f71a0f596d58cc5e72db63ffb6ab03"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,7 +151,7 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 137)
+        self.assertEqual(len(policy.rules), 138)
         self.assertEqual(
             sum(rule.strategy == "uniform" for rule in policy.rules), 97
         )
@@ -163,8 +163,25 @@ class CanonicalPolicyTests(unittest.TestCase):
             34,
         )
         self.assertEqual(
-            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 6
+            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 7
         )
+
+    def test_house36b_reviewed_surfaces_and_fail_closed_remainder_are_pinned(self):
+        policy = load_semantic_policy(POLICY_PATH)
+        rule = next(
+            rule
+            for rule in policy.rules
+            if rule.actor_file == "Common_Structures_Houses_House36B.adr"
+        )
+        self.assertEqual(rule.strategy, "explicit_triangles")
+        self.assertEqual(rule.triangle_count, 30339)
+        selected = {
+            semantic: sum(end - start + 1 for start, end in ranges)
+            for semantic, ranges in rule.selections
+        }
+        self.assertEqual(selected[SemanticId.FLOOR_INTERIOR], 394)
+        self.assertEqual(selected[SemanticId.STAIR], 105)
+        self.assertEqual(selected[SemanticId.OBSTACLE_STATIC], 29840)
 
     def test_house34b_authored_thresholds_are_pinned(self):
         policy = load_semantic_policy(POLICY_PATH)
@@ -544,7 +561,6 @@ class CompatibilityAndClassificationTests(unittest.TestCase):
             "Common_Props_Auto_Mech_FloorJack.adr",
             "Common_Props_IndustrialElements_PlatformCart.adr",
             "Common_Props_Porchlight.adr",
-            "Common_Structures_Houses_House36B.adr",
             "Hospital_Structures_Floor1_Interior.adr",
         )
         for name in names:
@@ -797,7 +813,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         self.assertEqual(
             (uniform_count, surface_count), (97, 34)
         )
-        self.assertEqual(explicit_count, 6)
+        self.assertEqual(explicit_count, 7)
 
 
 if __name__ == "__main__":

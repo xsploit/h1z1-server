@@ -26,11 +26,16 @@ type PreparedModel = {
   instances: number;
   skippedInstances: number;
   routes: number;
+  forbiddenProbes: number;
+  transitions: number;
   validation?: {
     instances: number;
     routes: number;
     passed: number;
     failures: unknown[];
+    forbiddenProbes: number;
+    forbiddenPassed: number;
+    forbiddenFailures: unknown[];
   };
 };
 
@@ -235,6 +240,8 @@ function prepareModels(
       instances: number;
       skippedInstances: number;
       routes: number;
+      forbiddenProbes: number;
+      transitions: number;
     };
     const row: PreparedModel = {
       actorFile: source.template.actorFile,
@@ -254,6 +261,10 @@ function prepareModels(
           validator,
           cacheDirectory,
           join(outputDirectory, "routes.json"),
+          "--transitions",
+          join(outputDirectory, "transitions.json"),
+          "--forbidden",
+          join(outputDirectory, "forbidden.json"),
           "--report",
           reportPath
         ],

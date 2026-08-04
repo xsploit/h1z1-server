@@ -28,6 +28,8 @@ export interface NavigationModelValidationTemplate {
   actorFile: string;
   routes: unknown[];
   terrainProbes?: unknown[];
+  forbiddenProbes?: unknown[];
+  transitions?: unknown[];
 }
 
 export interface NavigationDoctorTemplateSource {
@@ -59,6 +61,8 @@ export interface NavigationDoctorModel {
         path: string;
         routesPerInstance: number;
         terrainProbes: number;
+        forbiddenProbes: number;
+        transitionsPerInstance: number;
       }
     | {
         kind: "legacy-model-validator";
@@ -134,6 +138,10 @@ function validateTemplateSource(source: NavigationDoctorTemplateSource): void {
     throw new Error(`${path} has no model routes`);
   if (template.terrainProbes && !Array.isArray(template.terrainProbes))
     throw new Error(`${path} terrainProbes must be an array`);
+  if (template.forbiddenProbes && !Array.isArray(template.forbiddenProbes))
+    throw new Error(`${path} forbiddenProbes must be an array`);
+  if (template.transitions && !Array.isArray(template.transitions))
+    throw new Error(`${path} transitions must be an array`);
 }
 
 /**
@@ -254,7 +262,9 @@ export function createNavigationDoctorReport(
             kind: "standard-model-template",
             path: source.path,
             routesPerInstance: source.template.routes.length,
-            terrainProbes: source.template.terrainProbes?.length ?? 0
+            terrainProbes: source.template.terrainProbes?.length ?? 0,
+            forbiddenProbes: source.template.forbiddenProbes?.length ?? 0,
+            transitionsPerInstance: source.template.transitions?.length ?? 0
           }
         : legacy
           ? {
@@ -354,7 +364,7 @@ export function renderNavigationDoctorMarkdown(
   ];
   for (const model of report.models.slice(0, boundedLimit)) {
     lines.push(
-      `| ${model.rank} | \`${model.actorFile}\` | ${model.instances} | ${model.worldImpactPercent.toFixed(3)}% | ${model.cumulativeImpactPercent.toFixed(3)}% | ${model.validation?.kind === "standard-model-template" ? `${model.validation.routesPerInstance} routes` : model.validation?.kind === "legacy-model-validator" ? "legacy" : "missing"} | ${model.nextAction} |`
+      `| ${model.rank} | \`${model.actorFile}\` | ${model.instances} | ${model.worldImpactPercent.toFixed(3)}% | ${model.cumulativeImpactPercent.toFixed(3)}% | ${model.validation?.kind === "standard-model-template" ? `${model.validation.routesPerInstance} routes / ${model.validation.forbiddenProbes} forbidden / ${model.validation.transitionsPerInstance} links` : model.validation?.kind === "legacy-model-validator" ? "legacy" : "missing"} | ${model.nextAction} |`
     );
   }
   if (report.unboundTemplates.length) {

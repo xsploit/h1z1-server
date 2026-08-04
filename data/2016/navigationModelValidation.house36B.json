@@ -7,6 +7,75 @@
     [-2.85, 0.0, -11.0],
     [-3.7, 0.0, 12.7]
   ],
+  "forbiddenProbes": [
+    {
+      "label": "north roof must remain non-walkable",
+      "position": [-1.98, 7.96, 8.74],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "northwest roof must remain non-walkable",
+      "position": [-8.98, 7.96, 9.55],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "southwest roof must remain non-walkable",
+      "position": [-9.06, 7.96, -2.7],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "garage roof must remain non-walkable",
+      "position": [8.88, 4.57, -3.72],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "garage front roof must remain non-walkable",
+      "position": [8.87, 4.57, 2.08],
+      "halfExtents": [0.6, 0.35, 0.6]
+    }
+  ],
+  "transitions": [
+    {
+      "name": "south entrance terrain seam",
+      "kind": "stairs",
+      "start": [-2.85, 0.0, -11.0],
+      "end": [-2.85, 0.186, -9.9],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "north entrance upper seam",
+      "kind": "stairs",
+      "start": [-3.7, 0.74, 9.8],
+      "end": [-3.7, 1.07, 9.2],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "interior lower stair seam",
+      "kind": "stairs",
+      "start": [-3.6, 1.285, 3.75],
+      "end": [-3.6, 2.25, 2.5],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "interior upper stair seam",
+      "kind": "stairs",
+      "start": [-3.6, 3.3, 1.0],
+      "end": [-3.6, 3.82, -0.5],
+      "radius": 0.5,
+      "bidirectional": true
+    },
+    {
+      "name": "second-floor landing seam",
+      "kind": "stairs",
+      "start": [-3.6, 3.82, -0.5],
+      "end": [-5.9, 4.37, -0.5],
+      "radius": 0.5,
+      "bidirectional": true
+    }
+  ],
   "routes": [
     {
       "label": "south terrain to lower step",
@@ -116,21 +185,21 @@
     {
       "label": "interior upper flight to second landing",
       "start": [-3.6, 3.3, 1.0],
-      "end": [-3.6, 4.368, 0.25]
+      "end": [-3.6, 3.82, -0.5]
     },
     {
       "label": "second landing to second floor",
-      "start": [-3.6, 4.368, 0.25],
-      "end": [-3.6, 4.37, -0.8]
+      "start": [-3.6, 3.82, -0.5],
+      "end": [-5.9, 4.37, -0.5]
     },
     {
       "label": "second floor to second landing",
-      "start": [-3.6, 4.37, -0.8],
-      "end": [-3.6, 4.368, 0.25]
+      "start": [-5.9, 4.37, -0.5],
+      "end": [-3.6, 3.82, -0.5]
     },
     {
       "label": "second landing to interior upper flight",
-      "start": [-3.6, 4.368, 0.25],
+      "start": [-3.6, 3.82, -0.5],
       "end": [-3.6, 3.3, 1.0]
     },
     {

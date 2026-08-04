@@ -14,11 +14,27 @@ type Route = {
   end: [number, number, number];
 };
 
+type ForbiddenProbe = {
+  instanceIndex: number;
+  label: string;
+  position: [number, number, number];
+  halfExtents: [number, number, number];
+};
+
 const bakeRoot = process.argv[2];
-const routeFiles = process.argv.slice(3);
+const routeFiles: string[] = [];
+let forbiddenPath: string | undefined;
+for (let index = 3; index < process.argv.length; index++) {
+  if (process.argv[index] === "--forbidden") {
+    forbiddenPath = process.argv[++index];
+    if (!forbiddenPath) throw new Error("--forbidden requires a path");
+  } else {
+    routeFiles.push(process.argv[index]);
+  }
+}
 if (!bakeRoot || routeFiles.length === 0) {
   console.error(
-    "Usage: npx tsx scripts/validateHouse34BInstances.ts <bake-root> <routes.json> [...]"
+    "Usage: npx tsx scripts/validateHouse34BInstances.ts <bake-root> <routes.json> [...] [--forbidden <forbidden.json>]"
   );
   process.exit(1);
 }
@@ -42,8 +58,14 @@ async function main() {
     entries.push(route);
     byInstance.set(instance, entries);
   }
+  const forbiddenProbes = forbiddenPath
+    ? (JSON.parse(
+        readFileSync(resolve(forbiddenPath), "utf8")
+      ) as ForbiddenProbe[])
+    : [];
 
   const failures = [];
+  const forbiddenFailures = [];
   let checkedRoutes = 0;
   for (const [instance, instanceRoutes] of [...byInstance].sort(
     ([left], [right]) => left - right
@@ -88,6 +110,25 @@ async function main() {
         });
       }
     }
+    for (const probe of forbiddenProbes.filter(
+      (candidate) => candidate.instanceIndex === instance
+    )) {
+      const nearest = query.findNearestPoly(
+        {
+          x: probe.position[0],
+          y: probe.position[1],
+          z: probe.position[2]
+        },
+        {
+          halfExtents: {
+            x: probe.halfExtents[0],
+            y: probe.halfExtents[1],
+            z: probe.halfExtents[2]
+          }
+        }
+      );
+      if (nearest.nearestRef) forbiddenFailures.push({ ...probe, nearest });
+    }
     query.destroy();
     navMesh.destroy();
   }
@@ -96,10 +137,13 @@ async function main() {
     instances: byInstance.size,
     routes: checkedRoutes,
     passed: checkedRoutes - failures.length,
-    failures
+    failures,
+    forbiddenProbes: forbiddenProbes.length,
+    forbiddenPassed: forbiddenProbes.length - forbiddenFailures.length,
+    forbiddenFailures
   };
   console.log(JSON.stringify(summary, null, 2));
-  if (failures.length) process.exit(1);
+  if (failures.length || forbiddenFailures.length) process.exit(1);
 }
 
 main().catch((error) => {

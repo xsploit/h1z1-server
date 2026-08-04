@@ -24,17 +24,20 @@ function option(name: string): string | undefined {
 
 const cacheDir = process.argv[2];
 const reportPath = option("--report");
+const transitionsPath = option("--transitions");
+const forbiddenPath = option("--forbidden");
+const valueOptions = new Set(["--report", "--transitions", "--forbidden"]);
 const routeFiles = process.argv
   .slice(3)
   .filter((argument, index, arguments_) => {
-    if (argument === "--report") return false;
-    if (index > 0 && arguments_[index - 1] === "--report") return false;
+    if (valueOptions.has(argument)) return false;
+    if (index > 0 && valueOptions.has(arguments_[index - 1])) return false;
     return true;
   });
 
 if (!cacheDir || routeFiles.length === 0) {
   console.error(
-    "Usage: npx tsx scripts/validateModelRoutesStreaming.ts <cache-dir> <routes.json> [...] [--report <report.json>]"
+    "Usage: npx tsx scripts/validateModelRoutesStreaming.ts <cache-dir> <routes.json> [...] [--report <report.json>] [--transitions <transitions.json>] [--forbidden <forbidden.json>]"
   );
   process.exit(1);
 }
@@ -64,7 +67,9 @@ async function main() {
   // DT_OUT_OF_MEMORY failures. Each child gets the exact production streaming
   // loader with a clean bounded runtime, matching a player visiting one POI.
   const failures: unknown[] = [];
+  const forbiddenFailures: unknown[] = [];
   let checkedRoutes = 0;
+  let checkedForbiddenProbes = 0;
   const tempRoot = mkdtempSync(join(tmpdir(), "h1emu-nav-routes-"));
   try {
     let completed = 0;
@@ -74,20 +79,25 @@ async function main() {
       const routesPath = join(tempRoot, `${instance}.routes.json`);
       const instanceReportPath = join(tempRoot, `${instance}.report.json`);
       writeFileSync(routesPath, JSON.stringify(instanceRoutes));
-      const child = spawnSync(
-        process.execPath,
-        [
-          "--import",
-          "tsx",
-          resolve(__dirname, "validateModelInstanceStreaming.ts"),
-          resolve(cacheDir),
-          routesPath,
-          String(instance),
-          "--report",
-          instanceReportPath
-        ],
-        { encoding: "utf8", windowsHide: true, maxBuffer: 16 * 1024 * 1024 }
-      );
+      const childArguments = [
+        "--import",
+        "tsx",
+        resolve(__dirname, "validateModelInstanceStreaming.ts"),
+        resolve(cacheDir),
+        routesPath,
+        String(instance),
+        "--report",
+        instanceReportPath
+      ];
+      if (transitionsPath)
+        childArguments.push("--transitions", resolve(transitionsPath));
+      if (forbiddenPath)
+        childArguments.push("--forbidden", resolve(forbiddenPath));
+      const child = spawnSync(process.execPath, childArguments, {
+        encoding: "utf8",
+        windowsHide: true,
+        maxBuffer: 16 * 1024 * 1024
+      });
       if (!existsSync(instanceReportPath)) {
         throw new Error(
           `streaming validator failed for instance ${instance}: ${
@@ -98,9 +108,13 @@ async function main() {
       const result = JSON.parse(readFileSync(instanceReportPath, "utf8")) as {
         routes: number;
         failures: unknown[];
+        forbiddenProbes: number;
+        forbiddenFailures: unknown[];
       };
       checkedRoutes += result.routes;
       failures.push(...result.failures);
+      checkedForbiddenProbes += result.forbiddenProbes;
+      forbiddenFailures.push(...result.forbiddenFailures);
       completed++;
       if (completed % 10 === 0 || completed === routesByInstance.size) {
         console.error(
@@ -118,12 +132,15 @@ async function main() {
     instances: routesByInstance.size,
     routes: checkedRoutes,
     passed: checkedRoutes - failures.length,
-    failures
+    failures,
+    forbiddenProbes: checkedForbiddenProbes,
+    forbiddenPassed: checkedForbiddenProbes - forbiddenFailures.length,
+    forbiddenFailures
   };
   const encoded = `${JSON.stringify(summary, null, 2)}\n`;
   if (reportPath) writeFileSync(resolve(reportPath), encoded);
   console.log(encoded);
-  if (failures.length) process.exitCode = 1;
+  if (failures.length || forbiddenFailures.length) process.exitCode = 1;
 }
 
 main().catch((error) => {

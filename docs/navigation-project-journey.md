@@ -921,6 +921,58 @@ the proposed file plan is understood, and a new backup is desired.
 
 ## Current bottom line
 
+### House36B model-oriented checkpoint (2026-08-03)
+
+The first Navigation Doctor archetype is now evidence-complete without a
+full-map rebake or deployment. `Common_Structures_Houses_House36B.adr` is a
+kind-0 composite with 30,339 triangles and eight exact H1COL2 placements. Its
+starting artifact passed only 70 of 224 bidirectional model-local route
+segments.
+
+The accepted candidate uses:
+
+- a hash-bound explicit-triangle rule generated from
+  `data/2016/navigationSemanticRecipe.house36B.json`;
+- 394 interior-floor triangles, 105 stair/landing triangles, and 29,840
+  fail-closed static-obstacle triangles;
+- five model-local seam links per placement for voxel gaps that semantic
+  classification cannot safely fill;
+- five forbidden roof probes per placement, including the garage roofs;
+- corrected second-floor evidence that exits the physical stair landing to the
+  side instead of probing through the stairwell opening.
+
+Reclassification reduces the exact H1SEM1 unknown backlog from 411,811 to
+381,472 triangles. House36B contributes zero remaining unknown triangles; the
+30,339-triangle reduction is exact rather than inferred from metadata.
+
+All eight regional candidates were built in roughly seven seconds each. The
+final result is 224/224 routes and 40/40 forbidden-roof probes in both the
+direct navmesh and production streamed TileCache paths. A deliberately broad
+stair selector regressed the result and was discarded; the accepted rule adds
+only the exact upper landing missing from the conservative stair body.
+
+The reproducible artifacts and evidence are under
+`work/staging/navigation-doctor-current/house36b-prepared-final` and
+`work/staging/navigation-doctor-current/house36b-candidate-v5-*`. The
+model-local template now expands exact H1COL2 transforms into regional bounds,
+world routes, forbidden probes, and transitions. The canonical semantic policy
+contains the reviewed House36B rule, but no new full-map cache has been baked
+or installed from it yet.
+
+This establishes the efficient workflow for the remaining repeated building
+archetypes: inventory one model, author conservative semantics, bake only its
+placements, validate direct plus streamed routes and forbidden surfaces, then
+promote the reviewed rule. Seam links are explicit evidence, not permission to
+make roofs or walls walkable.
+
+The next navigation work is to compile the generated House36B transitions with
+the existing world transitions into one provenance-bound full-bake input, add
+the regional result to the admission suite, and repeat the same workflow for
+the next highest-impact unclassified building. Only after several archetypes
+are green should another full-map bake be started. A DT_POLYREF64 comparison
+remains valuable because it may remove the 32-bit active-tile ceiling, but it
+does not replace classification, transition, roof, or collision evidence.
+
 The project is no longer a blind experiment. It has a stable streamed runtime,
 native world inputs, semantic classification, targeted validation, a successful
 full bake, a verified installed artifact, and a measurable 43.9-point route

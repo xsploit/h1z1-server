@@ -71,7 +71,7 @@ def prepare(
     metadata_path: Path,
     template_path: Path,
     sample_terrain: Callable[[float, float], float] | None = None,
-) -> tuple[list[dict], list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict], list[dict], list[dict], list[dict]]:
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     template = json.loads(template_path.read_text(encoding="utf-8"))
     if template.get("schemaVersion") != 1:
@@ -90,6 +90,8 @@ def prepare(
         raise ValueError("boundsMargin must be positive and finite")
 
     routes: list[dict] = []
+    forbidden_probes: list[dict] = []
+    transitions: list[dict] = []
     bakes: list[dict] = []
     skipped: list[dict] = []
     terrain_probes = template.get("terrainProbes", [])
@@ -136,9 +138,38 @@ def prepare(
                     "end": transform_point(route["end"], transform),
                 }
             )
+        for probe in template.get("forbiddenProbes", []):
+            half_extents = probe.get("halfExtents", [0.5, 0.4, 0.5])
+            if len(half_extents) != 3 or any(float(value) <= 0 for value in half_extents):
+                raise ValueError("forbidden probe halfExtents must contain positive values")
+            forbidden_probes.append(
+                {
+                    "instanceIndex": instance_index,
+                    "label": probe["label"],
+                    "position": transform_point(probe["position"], transform),
+                    "halfExtents": [float(value) for value in half_extents],
+                }
+            )
+        for transition in template.get("transitions", []):
+            radius = float(transition.get("radius", 0.5))
+            if not math.isfinite(radius) or radius <= 0:
+                raise ValueError("transition radius must be positive and finite")
+            transitions.append(
+                {
+                    "name": f"{actor_file} #{instance_index} {transition['name']}",
+                    "kind": transition.get("kind", "stairs"),
+                    "source": "model-local-navigation-template",
+                    "actorFile": actor_file,
+                    "instanceIndex": instance_index,
+                    "start": transform_point(transition["start"], transform),
+                    "end": transform_point(transition["end"], transform),
+                    "radius": radius,
+                    "bidirectional": bool(transition.get("bidirectional", True)),
+                }
+            )
     if not bakes and not skipped:
         raise ValueError(f"H1COL2 contains no instances for {actor_file}")
-    return bakes, routes, skipped
+    return bakes, routes, skipped, forbidden_probes, transitions
 
 
 def heightmap_sampler(path: Path) -> Callable[[float, float], float]:
@@ -169,7 +200,7 @@ def main() -> None:
     parser.add_argument("--heightmap", type=Path)
     args = parser.parse_args()
     sampler = heightmap_sampler(args.heightmap) if args.heightmap else None
-    bakes, routes, skipped = prepare(
+    bakes, routes, skipped, forbidden_probes, transitions = prepare(
         args.collision, args.metadata, args.template, sampler
     )
     args.output_directory.mkdir(parents=True, exist_ok=True)
@@ -182,12 +213,20 @@ def main() -> None:
     (args.output_directory / "skipped.json").write_text(
         json.dumps(skipped, indent=2) + "\n", encoding="utf-8"
     )
+    (args.output_directory / "forbidden.json").write_text(
+        json.dumps(forbidden_probes, indent=2) + "\n", encoding="utf-8"
+    )
+    (args.output_directory / "transitions.json").write_text(
+        json.dumps(transitions, indent=2) + "\n", encoding="utf-8"
+    )
     print(
         json.dumps(
             {
                 "instances": len(bakes),
                 "skippedInstances": len(skipped),
                 "routes": len(routes),
+                "forbiddenProbes": len(forbidden_probes),
+                "transitions": len(transitions),
                 "outputDirectory": str(args.output_directory.resolve()),
             }
         )

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Houses_House36B.adr",
+  "collisionAssetSha256": "953f92839ba43c084ac8527e8f49fe754e8e1faa89a939fbab774834b9cca521",
+  "defaultSemantic": "nav_obstacle_static",
+  "selectors": [
+    {
+      "id": "south-exterior-stair",
+      "semantic": "nav_stair",
+      "centroidBounds": [-4.2, 0.1, -10.8, -1.5, 1.05, -8.55],
+      "normalYMax": -0.7,
+      "slopeDegreesMax": 50,
+      "minSelectedTriangles": 20
+    },
+    {
+      "id": "north-exterior-stair",
+      "semantic": "nav_stair",
+      "centroidBounds": [-5.5, 0.1, 9.05, -1.5, 1.1, 12.15],
+      "normalYMax": -0.7,
+      "slopeDegreesMax": 50,
+      "minSelectedTriangles": 15
+    },
+    {
+      "id": "interior-upper-landing",
+      "semantic": "nav_stair",
+      "centroidBounds": [-4.8, 3.7, -0.8, -2.6, 4.1, 0.0],
+      "normalYMax": -0.7,
+      "slopeDegreesMax": 50,
+      "minSelectedTriangles": 1
+    },
+    {
+      "id": "interior-main-stair",
+      "semantic": "nav_stair",
+      "centroidBounds": [-4.3, 1.15, 0.2, -2.9, 4.25, 4.35],
+      "normalYMax": -0.7,
+      "slopeDegreesMax": 50,
+      "minSelectedTriangles": 30
+    },
+    {
+      "id": "main-house-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-12.2, 1.0, -8.6, 4.8, 1.16, 9.6],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 100
+    },
+    {
+      "id": "garage-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [4.7, 1.0, -5.0, 12.9, 1.16, 3.2],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 2
+    },
+    {
+      "id": "second-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-12.2, 4.3, -2.7, 4.8, 4.46, 9.7],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 50
+    }
+  ]
+}

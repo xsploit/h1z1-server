@@ -9,16 +9,35 @@ type Route = {
   end: [number, number, number];
 };
 
+type ForbiddenProbe = {
+  instanceIndex: number;
+  label: string;
+  position: [number, number, number];
+  halfExtents: [number, number, number];
+};
+
 const cacheDir = process.argv[2];
 const routeFile = process.argv[3];
 const instance = Number(process.argv[4]);
 const reportIndex = process.argv.indexOf("--report");
 const reportPath = reportIndex >= 0 ? process.argv[reportIndex + 1] : undefined;
+const transitionsIndex = process.argv.indexOf("--transitions");
+const transitionsPath =
+  transitionsIndex >= 0 ? process.argv[transitionsIndex + 1] : undefined;
+const forbiddenIndex = process.argv.indexOf("--forbidden");
+const forbiddenPath =
+  forbiddenIndex >= 0 ? process.argv[forbiddenIndex + 1] : undefined;
 if (!cacheDir || !routeFile || !Number.isInteger(instance)) {
   console.error(
-    "Usage: npx tsx scripts/validateModelInstanceStreaming.ts <cache-dir> <routes.json> <instance-index> [--report <report.json>]"
+    "Usage: npx tsx scripts/validateModelInstanceStreaming.ts <cache-dir> <routes.json> <instance-index> [--report <report.json>] [--transitions <transitions.json>] [--forbidden <forbidden.json>]"
   );
   process.exit(1);
+}
+if (transitionsIndex >= 0 && !transitionsPath) {
+  throw new Error("--transitions requires a path");
+}
+if (forbiddenIndex >= 0 && !forbiddenPath) {
+  throw new Error("--forbidden requires a path");
 }
 
 function routeInstance(route: Route) {
@@ -31,11 +50,18 @@ async function main() {
   ).filter((route) => routeInstance(route) === instance);
   if (!routes.length)
     throw new Error(`no routes found for instance ${instance}`);
+  const forbiddenProbes = forbiddenPath
+    ? (
+        JSON.parse(
+          readFileSync(resolve(forbiddenPath), "utf8")
+        ) as ForbiddenProbe[]
+      ).filter((probe) => probe.instanceIndex === instance)
+    : [];
 
   process.env.NAV_STREAMING = "1";
   process.env.NAV_CACHE_DIR = resolve(cacheDir);
   process.env.NAV_TRANSITIONS_PATH = resolve(
-    "data/2016/navigationTransitions.json"
+    transitionsPath ?? "data/2016/navigationTransitions.json"
   );
   const { NavManager } = await import("../src/utils/recast");
   const nav = new NavManager();
@@ -88,19 +114,41 @@ async function main() {
       });
     }
   }
+  const forbiddenFailures = [];
+  for (const probe of forbiddenProbes) {
+    const nearest = query.findNearestPoly(
+      {
+        x: probe.position[0],
+        y: probe.position[1],
+        z: probe.position[2]
+      },
+      {
+        halfExtents: {
+          x: probe.halfExtents[0],
+          y: probe.halfExtents[1],
+          z: probe.halfExtents[2]
+        }
+      }
+    );
+    if (nearest.nearestRef) forbiddenFailures.push({ ...probe, nearest });
+  }
 
   const summary = {
     cacheDirectory: resolve(cacheDir),
+    transitionsPath: process.env.NAV_TRANSITIONS_PATH,
     instance,
     streamed,
     routes: routes.length,
     passed: routes.length - failures.length,
-    failures
+    failures,
+    forbiddenProbes: forbiddenProbes.length,
+    forbiddenPassed: forbiddenProbes.length - forbiddenFailures.length,
+    forbiddenFailures
   };
   const encoded = `${JSON.stringify(summary, null, 2)}\n`;
   if (reportPath) writeFileSync(resolve(reportPath), encoded);
   console.log(encoded);
-  if (failures.length) process.exitCode = 1;
+  if (failures.length || forbiddenFailures.length) process.exitCode = 1;
 }
 
 main().catch((error) => {

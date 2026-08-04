@@ -43,13 +43,46 @@ class PrepareModelInstanceValidationTests(unittest.TestCase):
                         "actorFile": "Pilot.adr",
                         "boundsMargin": 2,
                         "routes": [{"label": "door", "start": [0, 0, 0], "end": [1, 0, 0]}],
+                        "forbiddenProbes": [
+                            {
+                                "label": "roof",
+                                "position": [0, 5, 0],
+                                "halfExtents": [0.5, 0.25, 0.5],
+                            }
+                        ],
+                        "transitions": [
+                            {
+                                "name": "door seam",
+                                "start": [0, 0, 0],
+                                "end": [1, 0, 0],
+                                "radius": 0.4,
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
             )
-            bakes, routes, skipped = prepare(collision, metadata, template)
+            bakes, routes, skipped, forbidden, transitions = prepare(
+                collision, metadata, template
+            )
             self.assertEqual(bakes, [{"instanceIndex": 1, "bounds": [6, 16, 14, 25]}])
             self.assertEqual(skipped, [])
+            self.assertEqual(
+                forbidden,
+                [
+                    {
+                        "instanceIndex": 1,
+                        "label": "roof",
+                        "position": [10.0, 7.0, 20.0],
+                        "halfExtents": [0.5, 0.25, 0.5],
+                    }
+                ],
+            )
+            self.assertEqual(len(transitions), 1)
+            self.assertEqual(transitions[0]["instanceIndex"], 1)
+            self.assertEqual(transitions[0]["start"], [10.0, 2.0, 20.0])
+            self.assertEqual(transitions[0]["end"], [11.0, 2.0, 20.0])
+            self.assertEqual(transitions[0]["radius"], 0.4)
             self.assertEqual(routes[0]["instanceIndex"], 1)
             self.assertEqual(routes[0]["start"], [10.0, 2.0, 20.0])
             self.assertEqual(routes[0]["end"], [11.0, 2.0, 20.0])
@@ -82,11 +115,13 @@ class PrepareModelInstanceValidationTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            bakes, routes, skipped = prepare(
+            bakes, routes, skipped, forbidden, transitions = prepare(
                 collision, metadata, template, lambda _x, _z: 10.0
             )
             self.assertEqual(bakes, [])
             self.assertEqual(routes, [])
+            self.assertEqual(forbidden, [])
+            self.assertEqual(transitions, [])
             self.assertEqual(skipped[0]["instanceIndex"], 0)
             self.assertEqual(skipped[0]["reason"], "terrain-height-mismatch")
             self.assertEqual(skipped[0]["terrainDeltas"], [-8.0])

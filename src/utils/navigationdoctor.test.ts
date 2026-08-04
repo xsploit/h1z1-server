@@ -52,7 +52,9 @@ const template: NavigationModelValidationTemplate = {
   schemaVersion: 1,
   actorFile: "Common_Structures_HouseA.adr",
   routes: [{ label: "entrance" }, { label: "stairs" }],
-  terrainProbes: [[0, 0, 0]]
+  terrainProbes: [[0, 0, 0]],
+  forbiddenProbes: [{ label: "roof" }],
+  transitions: [{ name: "door seam" }]
 };
 
 test("navigation doctor ranks composite archetypes and binds reusable probes", () => {
@@ -80,6 +82,8 @@ test("navigation doctor ranks composite archetypes and binds reusable probes", (
   if (validation?.kind !== "standard-model-template")
     assert.fail("expected a standard model template");
   assert.equal(validation.routesPerInstance, 2);
+  assert.equal(validation.forbiddenProbes, 1);
+  assert.equal(validation.transitionsPerInstance, 1);
   assert.equal(report.models[0].nextAction, "run-model-validation");
   assert.equal(report.models[1].cumulativeImpactPercent, 100);
   assert.equal(report.models[1].nextAction, "author-model-template");
@@ -144,6 +148,8 @@ test("House36B evidence covers both entrances and the interior stair", () => {
   ) as NavigationModelValidationTemplate;
   assert.equal(house36B.actorFile, "Common_Structures_Houses_House36B.adr");
   assert.equal(house36B.terrainProbes?.length, 2);
+  assert.equal(house36B.forbiddenProbes?.length, 5);
+  assert.equal(house36B.transitions?.length, 5);
   assert.equal(house36B.routes.length, 28);
   const labels = house36B.routes.map((route) =>
     String((route as { label?: unknown }).label)
