@@ -62,6 +62,15 @@ try {
         'out\utils\navigationareas.js' = 'exports.NavigationArea = { Terrain: 1 };'
         'out\utils\navigationareas.js.map' = '{"version":3}'
         'out\utils\navigationareas.d.ts' = 'export declare enum NavigationArea { Terrain = 1 }'
+        'out\servers\ZoneServer2016\zoneserver.js' = 'require("./entities/npc"); require("./managers/collisionmanager");'
+        'out\servers\ZoneServer2016\zoneserver.js.map' = '{"version":3}'
+        'out\servers\ZoneServer2016\zoneserver.d.ts' = 'export declare class ZoneServer2016 {}'
+        'out\servers\ZoneServer2016\entities\npc.js' = 'exports.Npc = class Npc {};'
+        'out\servers\ZoneServer2016\entities\npc.js.map' = '{"version":3}'
+        'out\servers\ZoneServer2016\entities\npc.d.ts' = 'export declare class Npc {}'
+        'out\servers\ZoneServer2016\managers\collisionmanager.js' = 'exports.CollisionManager = class CollisionManager {};'
+        'out\servers\ZoneServer2016\managers\collisionmanager.js.map' = '{"version":3}'
+        'out\servers\ZoneServer2016\managers\collisionmanager.d.ts' = 'export declare class CollisionManager {}'
     }
     foreach ($entry in $newFiles.GetEnumerator()) {
         Write-TestFile `
@@ -72,13 +81,33 @@ try {
             -Content "old:$($entry.Key)"
     }
 
-    $closure = @(Get-NavigationRuntimeClosure -SourceRoot $sourceRoot)
+    $closure = @(
+        @(
+            'out\utils\recast.js'
+            'out\servers\ZoneServer2016\zoneserver.js'
+        ) |
+            ForEach-Object {
+                Get-NavigationRuntimeClosure `
+                    -SourceRoot $sourceRoot `
+                    -EntryRelativePath $_
+            } |
+            Sort-Object -Unique
+    )
     Assert-True `
         -Condition ($closure.Count -eq $newFiles.Count) `
         -Message "Expected $($newFiles.Count) runtime files, found $($closure.Count)."
     Assert-True `
         -Condition ('out\utils\navigationareas.js' -in $closure) `
         -Message 'The runtime closure omitted navigationareas.js.'
+    Assert-True `
+        -Condition ('out\servers\ZoneServer2016\zoneserver.js' -in $closure) `
+        -Message 'The runtime closure omitted zoneserver.js.'
+    Assert-True `
+        -Condition ('out\servers\ZoneServer2016\entities\npc.js' -in $closure) `
+        -Message 'The runtime closure omitted npc.js.'
+    Assert-True `
+        -Condition ('out\servers\ZoneServer2016\managers\collisionmanager.js' -in $closure) `
+        -Message 'The runtime closure omitted collisionmanager.js.'
 
     $oldHashes = @{}
     foreach ($relativePath in $closure) {

@@ -58,13 +58,30 @@ if (-not $SkipBuild -and -not $Plan) {
     }
 }
 
+$runtimeEntries = @(
+    'out\utils\recast.js'
+    'out\servers\ZoneServer2016\zoneserver.js'
+)
 $runtimeFiles = @(
-    Get-NavigationRuntimeClosure `
-        -SourceRoot $sourceRoot `
-        -EntryRelativePath 'out\utils\recast.js'
+    $runtimeEntries |
+        ForEach-Object {
+            Get-NavigationRuntimeClosure `
+                -SourceRoot $sourceRoot `
+                -EntryRelativePath $_
+        } |
+        Sort-Object -Unique
 )
 if ('out\utils\navigationareas.js' -notin $runtimeFiles) {
     throw 'Navigation runtime closure is incomplete: navigationareas.js is absent.'
+}
+foreach ($requiredRuntimeFile in @(
+        'out\servers\ZoneServer2016\zoneserver.js'
+        'out\servers\ZoneServer2016\entities\npc.js'
+        'out\servers\ZoneServer2016\managers\collisionmanager.js'
+    )) {
+    if ($requiredRuntimeFile -notin $runtimeFiles) {
+        throw "ZoneServer runtime closure is incomplete: $requiredRuntimeFile is absent."
+    }
 }
 
 & npm run navmesh-artifact-check --prefix $sourceRoot -- `
@@ -95,6 +112,11 @@ if ($Plan) {
         BundleFileCount         = $bundleFileCount
         ObsoleteCacheParts      = $obsoleteCacheParts
         IncludesNavigationAreas = 'out\utils\navigationareas.js' -in $runtimeFiles
+        IncludesZoneServer      = 'out\servers\ZoneServer2016\zoneserver.js' -in $runtimeFiles
+        IncludesNpcCollision    = (
+            'out\servers\ZoneServer2016\entities\npc.js' -in $runtimeFiles -and
+            'out\servers\ZoneServer2016\managers\collisionmanager.js' -in $runtimeFiles
+        )
     }
     return
 }
@@ -143,4 +165,9 @@ $manifestValue = Get-Content -Raw -LiteralPath $sourceManifest | ConvertFrom-Jso
     RuntimeFileCount          = $runtimeFiles.Count
     BundleFileCount           = $bundleFileCount
     ObsoleteCachePartsRemoved = $obsoleteCacheParts
+    IncludesZoneServer        = 'out\servers\ZoneServer2016\zoneserver.js' -in $runtimeFiles
+    IncludesNpcCollision      = (
+        'out\servers\ZoneServer2016\entities\npc.js' -in $runtimeFiles -and
+        'out\servers\ZoneServer2016\managers\collisionmanager.js' -in $runtimeFiles
+    )
 } | Format-List
