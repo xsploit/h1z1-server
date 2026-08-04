@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 
 process.env.DISABLE_PLUGINS = "true";
 process.env.FORCE_DISABLE_WS = "true";
+process.env.ENABLE_SAVES = "false";
 process.env.NAV_STREAMING = "1";
 const compiledRuntime = process.argv[7] === "compiled";
 const movementMode = process.argv[9] ?? "static";
