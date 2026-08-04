@@ -2,33 +2,13 @@
   "schemaVersion": 1,
   "actorFile": "Common_Structures_Apartments_Apartments06.adr",
   "inputs": {
-    "collision": {
-      "sha256": "ce8ca93c8b3d3607d829b323580b6cad60723ea46c7f46eb0e8f16ed38656065",
-      "size": 26332088
-    },
     "compiledTransitionProvenance": {
-      "sha256": "50046157ea8d7b021c0c8539bba455ccb89370fa404ff7580fd165f1b4528dfb",
-      "size": 864
+      "sha256": "e964a4ac1a40fdc9a09ffba472d132e07be5225a4a872861e3259f8125ce4bf6",
+      "size": 1131
     },
     "compiledTransitions": {
-      "sha256": "a19258f4302081f9a9499ad58f4d67a2b0e91729caba9e2228d38dc0c8c8d905",
-      "size": 51369
-    },
-    "metadata": {
-      "sha256": "3afe9d6d1ed657fcc2662a14e02579a9cc52703e62d51a2f73fd4847f1d8e390",
-      "size": 340225
-    },
-    "modelForbiddenProbes": {
-      "sha256": "10aa2fac1e13086b371038e29849fc4c3ff1f379b6d47f97e5ec6e1d2c03afb5",
-      "size": 49796
-    },
-    "modelRoutes": {
-      "sha256": "12e66bd7fb39ea457fa1195209c86ac8e8febde7d86cbe32aad2096a85a09c5c",
-      "size": 53453
-    },
-    "modelTransitions": {
-      "sha256": "eb0df61715a4f530b5008bef60051129b219082825231821ca6b2ac2f3248d8e",
-      "size": 27291
+      "sha256": "386481477e016caa9bfb46e2c49242176cfbba7573df4259dc24c7f5dcaa360e",
+      "size": 71976
     },
     "placementSeams": {
       "sha256": "0c8bec474c847428ac914d790611a322956650e05d91bf05693d4f2781f72bb8",
@@ -41,18 +21,6 @@
     "semanticRecipe": {
       "sha256": "ac19d5635a9f0fc2b500192aecc2e2bbad291bb8ace97432383371ae26f0a116",
       "size": 1871
-    },
-    "semanticRule": {
-      "sha256": "3c5f69c5f80b86bcb6df6bcf0ef3dc47a07972e56f2b407d12048dacf0058f37",
-      "size": 18165
-    },
-    "semanticSelectorEvidence": {
-      "sha256": "2307b887d803c8371e25cdc5778276789a984ff2ea6a3028aa3b3482534e9715",
-      "size": 10794
-    },
-    "semanticSidecar": {
-      "sha256": "827cb61bbdfbe54f2e7aa24894ace987bbf5e071702a0810b69bf921daa5d36e",
-      "size": 508976
     },
     "validationTemplate": {
       "sha256": "49adfeb08a44e669ce7327801d9fdaba6a4728866289ccef81888659a3486d67",

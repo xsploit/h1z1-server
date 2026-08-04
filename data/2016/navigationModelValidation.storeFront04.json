@@ -7,6 +7,24 @@
     [-4.2, 0.0, -10.2],
     [-1.5, 0.0, 9.8]
   ],
+  "transitions": [
+    {
+      "name": "stepped entrance threshold seam",
+      "kind": "threshold",
+      "start": [-4.2, 0.22, -9.3],
+      "end": [-4.2, 0.414, -7.8],
+      "radius": 1.0,
+      "bidirectional": true
+    },
+    {
+      "name": "ramped entrance threshold seam",
+      "kind": "threshold",
+      "start": [-1.5, 0.22, 9.0],
+      "end": [-1.5, 0.414, 7.0],
+      "radius": 0.8,
+      "bidirectional": true
+    }
+  ],
   "routes": [
     {
       "label": "stepped entrance exterior to threshold",
@@ -36,11 +54,11 @@
     {
       "label": "ramped entrance threshold to interior",
       "start": [-1.5, 0.22, 9.0],
-      "end": [-1.5, 0.414, 7.8]
+      "end": [-1.5, 0.414, 7.0]
     },
     {
       "label": "ramped entrance interior to threshold",
-      "start": [-1.5, 0.414, 7.8],
+      "start": [-1.5, 0.414, 7.0],
       "end": [-1.5, 0.22, 9.0]
     },
     {

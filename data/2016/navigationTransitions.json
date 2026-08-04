@@ -357,6 +357,40 @@
     "bidirectional": true
   },
   {
+    "name": "Common_Structures_StoreFront04.adr #137737 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1430.6356059307518,
+      71.39088317871094,
+      1846.1843965633664
+    ],
+    "end": [
+      -1430.6181521808344,
+      71.58488317871094,
+      1848.1843202697848
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137737 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1427.776007115343,
+      71.39088317871094,
+      1864.460135914707
+    ],
+    "end": [
+      -1427.789097427781,
+      71.58488317871094,
+      1862.9601931348932
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
     "name": "Common_Structures_Apartments_Apartments06.adr #145135 ground ramp tile seam",
     "kind": "stairs",
     "source": "model-local-navigation-template",
@@ -422,6 +456,312 @@
       1822.3079833984375
     ],
     "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137738 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1366.8961259603261,
+      71.49398681640625,
+      1909.8620592474977
+    ],
+    "end": [
+      -1366.8961242278233,
+      71.68798681640625,
+      1911.8620592474977
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137738 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1364.1961101079232,
+      71.49398681640625,
+      1928.1620569086185
+    ],
+    "end": [
+      -1364.1961114073006,
+      71.68798681640625,
+      1926.6620569086185
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137739 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1340.1017321600677,
+      71.47856781005859,
+      1873.4655023704238
+    ],
+    "end": [
+      -1340.1017323598048,
+      71.6725678100586,
+      1874.9655023704238
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137739 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1337.4017345968598,
+      71.47856781005859,
+      1891.7655027299504
+    ],
+    "end": [
+      -1337.4017343305438,
+      71.6725678100586,
+      1889.7655027299504
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137741 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1328.2006830841547,
+      71.50520965576172,
+      1945.3040759905507
+    ],
+    "end": [
+      -1326.2006831526119,
+      71.69920965576172,
+      1945.3040762592682
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137740 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1323.9861328125,
+      71.49289581298828,
+      1873.45732421875
+    ],
+    "end": [
+      -1323.9861328125,
+      71.68689581298828,
+      1874.95732421875
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137740 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1321.2861328125,
+      71.49289581298828,
+      1891.75732421875
+    ],
+    "end": [
+      -1321.2861328125,
+      71.68689581298828,
+      1889.75732421875
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137741 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1309.9006833477683,
+      71.50520965576172,
+      1942.604078541735
+    ],
+    "end": [
+      -1311.4006832964255,
+      71.69920965576172,
+      1942.6040783401966
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137742 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1244.5194592461824,
+      71.56548950195312,
+      1809.2693364967638
+    ],
+    "end": [
+      -1244.5194590464453,
+      71.75948950195313,
+      1810.7693364967638
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137742 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1241.8194568093902,
+      71.56548950195312,
+      1827.569336137237
+    ],
+    "end": [
+      -1241.8194570757062,
+      71.75948950195313,
+      1825.569336137237
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137743 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1190.852910923934,
+      71.5331103515625,
+      1782.180052769188
+    ],
+    "end": [
+      -1190.8529096682682,
+      71.7271103515625,
+      1784.180052769188
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137745 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1188.2094804525136,
+      71.44838592529297,
+      1846.1457506537477
+    ],
+    "end": [
+      -1188.2094787200108,
+      71.64238592529297,
+      1848.1457506537477
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137743 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1188.152899434591,
+      71.5331103515625,
+      1800.480051074039
+    ],
+    "end": [
+      -1188.1529003763405,
+      71.7271103515625,
+      1798.980051074039
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137745 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1185.5094646001107,
+      71.44838592529297,
+      1864.4457483148685
+    ],
+    "end": [
+      -1185.509465899488,
+      71.64238592529297,
+      1862.9457483148685
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137744 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1180.7732434258699,
+      71.56548950195312,
+      1809.2693364967638
+    ],
+    "end": [
+      -1180.7732432261328,
+      71.75948950195313,
+      1810.7693364967638
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137746 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1180.354296875,
+      71.3964907836914,
+      1873.467822265625
+    ],
+    "end": [
+      -1180.354296875,
+      71.59049078369141,
+      1874.967822265625
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137744 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1178.0732409890777,
+      71.56548950195312,
+      1827.569336137237
+    ],
+    "end": [
+      -1178.0732412553937,
+      71.75948950195313,
+      1825.569336137237
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137746 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -1177.654296875,
+      71.3964907836914,
+      1891.767822265625
+    ],
+    "end": [
+      -1177.654296875,
+      71.59049078369141,
+      1889.767822265625
+    ],
+    "radius": 0.8,
     "bidirectional": true
   },
   {
@@ -663,6 +1003,23 @@
     "bidirectional": true
   },
   {
+    "name": "Common_Structures_StoreFront04.adr #137726 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -262.69962680291417,
+      23.527260513305663,
+      -1039.858226433285
+    ],
+    "end": [
+      -261.199626854257,
+      23.721260513305666,
+      -1039.8582266348233
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
     "name": "Common_Structures_Houses_House36B.adr #146660 interior upper stair seam",
     "kind": "stairs",
     "source": "model-local-navigation-template",
@@ -782,6 +1139,125 @@
     "bidirectional": true
   },
   {
+    "name": "Common_Structures_StoreFront04.adr #137728 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -250.51466019155976,
+      23.497780532836913,
+      -1096.911254298691
+    ],
+    "end": [
+      -250.5146609703885,
+      23.691780532836916,
+      -1094.911254298691
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137728 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -247.81466731784266,
+      23.497780532836913,
+      -1078.611253247272
+    ],
+    "end": [
+      -247.8146667337211,
+      23.691780532836916,
+      -1080.111253247272
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137726 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -244.39962779206553,
+      23.527260513305663,
+      -1042.558228799635
+    ],
+    "end": [
+      -246.39962772360843,
+      23.721260513305666,
+      -1042.5582285309174
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137724 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -229.1111700950852,
+      23.7170703125,
+      -1083.4209286141347
+    ],
+    "end": [
+      -227.80617031141483,
+      23.9110703125,
+      -1083.420928789473
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137725 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -220.0095570902971,
+      23.617069931030272,
+      -1092.4818025783345
+    ],
+    "end": [
+      -220.0095575887476,
+      23.811069931030275,
+      -1091.2018022493169
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137725 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -216.95856166399398,
+      23.617069931030272,
+      -1080.76979837972
+    ],
+    "end": [
+      -216.95856129015607,
+      23.811069931030275,
+      -1081.7297986264832
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137724 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -213.19017317325705,
+      23.7170703125,
+      -1086.6879307444342
+    ],
+    "end": [
+      -214.93017288481755,
+      23.9110703125,
+      -1086.6879305106497
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
     "name": "Common_Structures_Houses_House36B.adr #146661 north entrance terrain seam",
     "kind": "stairs",
     "source": "model-local-navigation-template",
@@ -850,6 +1326,40 @@
     "bidirectional": true
   },
   {
+    "name": "Common_Structures_StoreFront04.adr #137727 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -205.20615799429413,
+      23.687437744140624,
+      -1096.535033595566
+    ],
+    "end": [
+      -205.20615877312287,
+      23.881437744140626,
+      -1094.535033595566
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137727 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -202.50616512057704,
+      23.687437744140624,
+      -1078.235032544147
+    ],
+    "end": [
+      -202.5061645364555,
+      23.881437744140626,
+      -1079.735032544147
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
     "name": "Common_Structures_Houses_House36B.adr #146661 interior lower stair seam",
     "kind": "stairs",
     "source": "model-local-navigation-template",
@@ -915,6 +1425,278 @@
       -820.1675034551084
     ],
     "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137730 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -180.90426242303135,
+      23.749146194458007,
+      -1147.22077526141
+    ],
+    "end": [
+      -179.40426247437418,
+      23.94314619445801,
+      -1147.2207754629483
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137729 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -180.55160129021885,
+      23.78983947753906,
+      -1134.02155651141
+    ],
+    "end": [
+      -179.05160134156168,
+      23.983839477539064,
+      -1134.0215567129483
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137731 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -180.51510226678135,
+      23.824143142700194,
+      -1120.5702625660974
+    ],
+    "end": [
+      -179.01510231812418,
+      24.018143142700197,
+      -1120.5702627676358
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137730 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -162.60426341218272,
+      23.749146194458007,
+      -1149.92077762776
+    ],
+    "end": [
+      -164.60426334372562,
+      23.94314619445801,
+      -1149.9207773590424
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137729 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -162.25160227937022,
+      23.78983947753906,
+      -1136.72155887776
+    ],
+    "end": [
+      -164.25160221091312,
+      23.983839477539064,
+      -1136.7215586090424
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137731 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -162.21510325593272,
+      23.824143142700194,
+      -1123.2702649324474
+    ],
+    "end": [
+      -164.21510318747562,
+      24.018143142700197,
+      -1123.27026466373
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137732 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -140.1044459015376,
+      23.70859405517578,
+      -1029.4738781110118
+    ],
+    "end": [
+      -138.10444596999469,
+      23.902594055175783,
+      -1029.4738778422943
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137732 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -121.8044461651511,
+      23.70859405517578,
+      -1032.1738755598276
+    ],
+    "end": [
+      -123.30444611380828,
+      23.902594055175783,
+      -1032.173875761366
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137734 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -98.64608713688915,
+      23.650620193481444,
+      -1145.7634288922618
+    ],
+    "end": [
+      -96.64608720534625,
+      23.844620193481447,
+      -1145.7634286235443
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137733 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -98.63453623356884,
+      23.654745788574218,
+      -1159.0626232281993
+    ],
+    "end": [
+      -96.63453630202594,
+      23.84874578857422,
+      -1159.0626229594818
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137735 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -92.1185602814204,
+      23.708590240478514,
+      -1132.3673107281993
+    ],
+    "end": [
+      -90.1185603498775,
+      23.902590240478517,
+      -1132.3673104594818
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137734 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -80.34608740050268,
+      23.650620193481444,
+      -1148.4634263410776
+    ],
+    "end": [
+      -81.84608734915986,
+      23.844620193481447,
+      -1148.463426542616
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137733 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -80.33453649718237,
+      23.654745788574218,
+      -1161.762620677015
+    ],
+    "end": [
+      -81.83453644583955,
+      23.84874578857422,
+      -1161.7626208785534
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137735 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -73.81856054503393,
+      23.708590240478514,
+      -1135.067308177015
+    ],
+    "end": [
+      -75.31856049369111,
+      23.902590240478517,
+      -1135.0673083785534
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137736 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -71.72474975585938,
+      23.713030548095702,
+      -1133.4097412109375
+    ],
+    "end": [
+      -71.72474975585938,
+      23.907030548095705,
+      -1131.9097412109375
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137736 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      -69.02474975585938,
+      23.713030548095702,
+      -1115.1097412109375
+    ],
+    "end": [
+      -69.02474975585938,
+      23.907030548095705,
+      -1117.1097412109375
+    ],
+    "radius": 0.8,
     "bidirectional": true
   },
   {
@@ -1816,6 +2598,74 @@
       2316.5079273219644
     ],
     "radius": 0.5,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137747 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      1963.56267178107,
+      27.613125534057616,
+      2087.280079230777
+    ],
+    "end": [
+      1965.0626717297273,
+      27.80712553405762,
+      2087.280079029239
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137748 stepped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      1967.933056640625,
+      27.550930709838866,
+      2158.1755859375
+    ],
+    "end": [
+      1967.933056640625,
+      27.74493070983887,
+      2159.6755859375
+    ],
+    "radius": 1.0,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137748 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      1970.633056640625,
+      27.550930709838866,
+      2176.4755859375
+    ],
+    "end": [
+      1970.633056640625,
+      27.74493070983887,
+      2174.4755859375
+    ],
+    "radius": 0.8,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_StoreFront04.adr #137747 ramped entrance threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      1981.8626707919188,
+      27.613125534057616,
+      2084.5800768644276
+    ],
+    "end": [
+      1979.862670860376,
+      27.80712553405762,
+      2084.580077133145
+    ],
+    "radius": 0.8,
     "bidirectional": true
   },
   {

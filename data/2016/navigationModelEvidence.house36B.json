@@ -2,29 +2,9 @@
   "schemaVersion": 1,
   "actorFile": "Common_Structures_Houses_House36B.adr",
   "inputs": {
-    "collision": {
-      "sha256": "ce8ca93c8b3d3607d829b323580b6cad60723ea46c7f46eb0e8f16ed38656065",
-      "size": 26332088
-    },
     "compiledTransitions": {
-      "sha256": "a19258f4302081f9a9499ad58f4d67a2b0e91729caba9e2228d38dc0c8c8d905",
-      "size": 51369
-    },
-    "metadata": {
-      "sha256": "3afe9d6d1ed657fcc2662a14e02579a9cc52703e62d51a2f73fd4847f1d8e390",
-      "size": 340225
-    },
-    "modelForbiddenProbes": {
-      "sha256": "bb90f83dab4315219694a973e714993cd7a9f544f50056978ec8bf7baaf45a34",
-      "size": 32817
-    },
-    "modelRoutes": {
-      "sha256": "2ee5d1d41b77867483fe0c82d9b3db6fb06599c2c14960d2cba910167bc21d28",
-      "size": 65555
-    },
-    "modelTransitions": {
-      "sha256": "c5652b9640de323106b414d4db2135887fdb2b54e8153fd2454cd1753687475a",
-      "size": 32734
+      "sha256": "386481477e016caa9bfb46e2c49242176cfbba7573df4259dc24c7f5dcaa360e",
+      "size": 71976
     },
     "semanticPolicy": {
       "sha256": "3e361ab5d1272c04c7987b2794865003f1e0a0f2b9553846116aaec9ae7cca46",
@@ -33,10 +13,6 @@
     "semanticRecipe": {
       "sha256": "5df902dd0193deec87f8426de7ed9086bf9ba9a6ca92221716669fbfd4e5f5e2",
       "size": 2204
-    },
-    "semanticSidecar": {
-      "sha256": "827cb61bbdfbe54f2e7aa24894ace987bbf5e071702a0810b69bf921daa5d36e",
-      "size": 508976
     },
     "validationTemplate": {
       "sha256": "ae796f215afe8dbe3d5f64b6847ab1e8367b6b2a233e20d38da4c167fe9da8dd",

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "outputSha256": "a19258f4302081f9a9499ad58f4d67a2b0e91729caba9e2228d38dc0c8c8d905",
-  "transitionCount": 127,
+  "outputSha256": "386481477e016caa9bfb46e2c49242176cfbba7573df4259dc24c7f5dcaa360e",
+  "transitionCount": 177,
   "authoredSource": {
-    "path": "data/2016/navigationTransitions.authored.json",
+    "path": "C:/Users/SUBSECT/Documents/Codex/2026-07-27/https-dev-epicgames-com-documentation-unreal/work/h1z1-pv-nav/data/2016/navigationTransitions.authored.json",
     "sha256": "600f0a61e8bf485848ac8e09918d02a31e06388ac2b2b2794b9d9c0150a8a49e",
     "transitionCount": 5
   },
@@ -22,6 +22,11 @@
       "label": "apartments06PlacementSeams",
       "sha256": "0c8bec474c847428ac914d790611a322956650e05d91bf05693d4f2781f72bb8",
       "transitionCount": 6
+    },
+    {
+      "label": "storeFront04",
+      "sha256": "54327b143700bc78bb2c3b8bbe1bd4b69f5b7fd4e52c12ce966a5713a269ad5c",
+      "transitionCount": 50
     }
   ]
 }
