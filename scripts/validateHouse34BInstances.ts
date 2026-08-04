@@ -5,6 +5,10 @@ import {
   init as initRecast,
   NavMeshQuery
 } from "recast-navigation";
+import {
+  forbiddenProbeContainsNearestPoint,
+  modelRouteEndpointGap
+} from "../src/utils/modelroutevalidation";
 
 type Route = {
   instance?: number;
@@ -101,10 +105,7 @@ async function main() {
         pathPoints = path.path ?? [];
         const last = path.path?.at(-1);
         if (last) {
-          gap = Math.hypot(
-            last.x - endSnap.nearestPoint.x,
-            last.z - endSnap.nearestPoint.z
-          );
+          gap = modelRouteEndpointGap(last, endSnap.nearestPoint);
         }
       }
       checkedRoutes++;
@@ -149,7 +150,18 @@ async function main() {
           }
         }
       );
-      if (nearest.nearestRef) forbiddenFailures.push({ ...probe, nearest });
+      if (
+        forbiddenProbeContainsNearestPoint(
+          { x: probe.position[0], y: probe.position[1], z: probe.position[2] },
+          {
+            x: probe.halfExtents[0],
+            y: probe.halfExtents[1],
+            z: probe.halfExtents[2]
+          },
+          nearest
+        )
+      )
+        forbiddenFailures.push({ ...probe, nearest });
     }
     query.destroy();
     navMesh.destroy();

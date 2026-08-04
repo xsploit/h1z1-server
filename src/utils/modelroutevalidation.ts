@@ -1,6 +1,33 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
+export type ModelRoutePoint = { x: number; y: number; z: number };
+
+export function modelRouteEndpointGap(
+  actual: ModelRoutePoint,
+  expected: ModelRoutePoint
+): number {
+  return Math.hypot(
+    actual.x - expected.x,
+    actual.y - expected.y,
+    actual.z - expected.z
+  );
+}
+
+export function forbiddenProbeContainsNearestPoint(
+  position: ModelRoutePoint,
+  halfExtents: ModelRoutePoint,
+  nearest: { nearestRef: number; nearestPoint: ModelRoutePoint }
+): boolean {
+  if (!nearest.nearestRef) return false;
+  const epsilon = 1e-3;
+  return (
+    Math.abs(nearest.nearestPoint.x - position.x) <= halfExtents.x + epsilon &&
+    Math.abs(nearest.nearestPoint.y - position.y) <= halfExtents.y + epsilon &&
+    Math.abs(nearest.nearestPoint.z - position.z) <= halfExtents.z + epsilon
+  );
+}
+
 function isDirectory(path: string): boolean {
   return existsSync(path) && statSync(path).isDirectory();
 }

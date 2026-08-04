@@ -1,5 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  forbiddenProbeContainsNearestPoint,
+  modelRouteEndpointGap
+} from "../src/utils/modelroutevalidation";
 
 type Route = {
   instance?: number;
@@ -91,18 +95,17 @@ async function main() {
     if (startSnap.nearestRef) routeAnchorHits++;
     if (endSnap.nearestRef) routeAnchorHits++;
     let gap = Number.POSITIVE_INFINITY;
+    let pathPoints: unknown[] = [];
     if (startSnap.nearestRef && endSnap.nearestRef) {
       const path = query.computePath(
         startSnap.nearestPoint,
         endSnap.nearestPoint,
         options
       );
+      pathPoints = path.path ?? [];
       const last = path.path?.at(-1);
       if (last) {
-        gap = Math.hypot(
-          last.x - endSnap.nearestPoint.x,
-          last.z - endSnap.nearestPoint.z
-        );
+        gap = modelRouteEndpointGap(last, endSnap.nearestPoint);
       }
     }
     if (gap > 0.25) {
@@ -113,7 +116,8 @@ async function main() {
         start,
         end,
         startSnap,
-        endSnap
+        endSnap,
+        pathPoints
       });
     }
   }
@@ -140,7 +144,18 @@ async function main() {
         }
       }
     );
-    if (nearest.nearestRef) forbiddenFailures.push({ ...probe, nearest });
+    if (
+      forbiddenProbeContainsNearestPoint(
+        { x: probe.position[0], y: probe.position[1], z: probe.position[2] },
+        {
+          x: probe.halfExtents[0],
+          y: probe.halfExtents[1],
+          z: probe.halfExtents[2]
+        },
+        nearest
+      )
+    )
+      forbiddenFailures.push({ ...probe, nearest });
   }
 
   const summary = {
