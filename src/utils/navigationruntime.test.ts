@@ -7,6 +7,7 @@
 // ======================================================================
 
 import assert from "node:assert";
+import { join } from "node:path";
 import test from "node:test";
 import {
   navigationRuntimeSelectionsMatch,
@@ -22,14 +23,25 @@ test("stock navigation runtime needs no external module paths", () => {
   });
 });
 
-test("64-bit navigation runtime fails closed without both modules", () => {
+test("64-bit navigation runtime uses the bundled package when overrides are absent", () => {
+  assert.deepEqual(
+    selectNavigationRuntime("1", undefined, undefined, "bundled/navigation64"),
+    {
+      mode: "monolithic64",
+      coreModule: join("bundled/navigation64", "core.mjs"),
+      wasmModule: join("bundled/navigation64", "wasm-compat.mjs")
+    }
+  );
+});
+
+test("64-bit navigation runtime fails closed on partial overrides", () => {
   assert.throws(
     () => selectNavigationRuntime("1", undefined, "wasm.mjs"),
-    /NAV_64_CORE_MODULE/
+    /must be supplied together/
   );
   assert.throws(
     () => selectNavigationRuntime("1", "core.mjs", undefined),
-    /NAV_64_CORE_MODULE/
+    /must be supplied together/
   );
 });
 

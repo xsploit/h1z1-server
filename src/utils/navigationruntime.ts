@@ -7,6 +7,7 @@
 // ======================================================================
 
 import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export type NavigationRuntime = typeof import("recast-navigation");
@@ -27,15 +28,20 @@ const importEsm = new Function("specifier", "return import(specifier)") as (
 export function selectNavigationRuntime(
   monolithic64: string | undefined,
   coreModule: string | undefined,
-  wasmModule: string | undefined
+  wasmModule: string | undefined,
+  bundledRuntimeRoot = resolve(__dirname, "../../runtime/navigation64")
 ): NavigationRuntimeSelection {
   if (monolithic64 !== "1") return { mode: "stock" };
-  if (!coreModule || !wasmModule) {
+  if ((coreModule && !wasmModule) || (!coreModule && wasmModule)) {
     throw new Error(
-      "[NAV] NAV_MONOLITHIC_64=1 requires NAV_64_CORE_MODULE and NAV_64_WASM_MODULE"
+      "[NAV] NAV_64_CORE_MODULE and NAV_64_WASM_MODULE must be supplied together"
     );
   }
-  return { mode: "monolithic64", coreModule, wasmModule };
+  return {
+    mode: "monolithic64",
+    coreModule: coreModule ?? join(bundledRuntimeRoot, "core.mjs"),
+    wasmModule: wasmModule ?? join(bundledRuntimeRoot, "wasm-compat.mjs")
+  };
 }
 
 function assertModuleExists(label: string, path: string): void {

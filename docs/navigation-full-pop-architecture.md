@@ -320,23 +320,99 @@ replans; it is not yet a zone-server replication or gameplay-event soak.
 
 ### Opt-in server integration
 
-`work/h1z1-pv-nav` can now select the external 64-bit runtime without replacing
-the stock package or silently mixing ABIs. The required contract is:
+`work/h1z1-pv-nav` can now select the packaged 64-bit runtime without replacing
+the stock dependency or silently mixing ABIs. The installed package contract is:
 
 ```text
 NAV_MONOLITHIC_64=1
-NAV_64_CORE_MODULE=<absolute path to the 64-bit core dist/index.mjs>
-NAV_64_WASM_MODULE=<absolute path to recast-navigation.wasm-compat.js>
 NAV_CACHE_DIR=<directory containing the verified split TSET>
 NAV_ARTIFACT_MANIFEST=<verified artifact manifest>
 ```
 
-The mode fails closed when either module is missing, is not a 64-bit build, or
+The server resolves `runtime/navigation64/core.mjs` and
+`runtime/navigation64/wasm-compat.mjs` relative to the installed `h1z1-server`
+package. `NAV_64_CORE_MODULE` and `NAV_64_WASM_MODULE` remain available as an
+explicit development override, but they must be supplied together. The mode
+fails closed when either packaged module is missing, is not a 64-bit build, or
 differs from the runtime already initialized in the process. It imports all
 compressed layers with Detour-owned copies, materializes every unique column,
 closes the cache file descriptors, creates a 2,000-agent Crowd, and uses the
 non-interpolating one-argument Crowd update. The stock 32-bit path remains the
-default when `NAV_MONOLITHIC_64` is absent.
+default when `NAV_MONOLITHIC_64` is absent or is not `1`.
+
+### Reproducible 64-bit runtime package
+
+The runtime package is deliberately small and separate from the roughly
+619 MiB navigation-data artifact. It contains exactly two executable modules
+and one manifest:
+
+```text
+runtime/navigation64/core.mjs
+runtime/navigation64/wasm-compat.mjs
+runtime/navigation64/runtime-manifest.json
+```
+
+`packageNavigation64Runtime.ts` requires a tracked-clean source checkout,
+imports the source pair, initializes it, and requires `uses64BitPolyRefs()`
+before copying anything. The deterministic manifest records the exact
+`recast-navigation-js` commit, size, and SHA-256 of both modules.
+`verifyNavigation64Runtime.ts` checks manifest identity, exact
+file closure, hashes, imports, and the 64-bit capability again. A QuickStart
+bootstrap repeats the manifest and file-identity checks on every Play launch.
+
+The current staged package is
+`work/staging/navigation64-runtime-v1`, artifact
+`7ec35b7039eb5382528ba44fb2b316c225aed79da933a948e519c970583fe7ad`
+(1,038,203 bytes). Recreate and verify it from the project root with:
+
+```powershell
+$recast = '..\recast-navigation-js'
+$stage = '..\staging\navigation64-runtime-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+npm run nav-runtime64-package -- `
+  --core-module "$recast\packages\recast-navigation-core\dist\index.mjs" `
+  --wasm-module "$recast\packages\recast-navigation-wasm\build-polyref64\recast-navigation.wasm-compat.js" `
+  --recast-navigation-root $recast `
+  --output-root $stage
+npm run nav-runtime64-check -- `
+  --runtime-root "$stage\runtime\navigation64"
+```
+
+Deployment is split into two recoverable operations so a package can be
+verified without changing Play. Both scripts refuse deployment when they detect
+the installed server or when Node process visibility is incomplete, support
+`-Plan`, stage and hash every replacement, retain a timestamped backup, and roll
+back on post-install validation failure. As with any process check, there is a
+small start-after-check race; do not launch Play during deployment:
+
+```powershell
+$quickStart = 'C:\Users\SUBSECT\Documents\H1Z1-2016\H1EmuServerFiles\h1z1-server-QuickStart-master'
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/deployNavigation64Runtime.ps1 `
+  -QuickStartRoot $quickStart `
+  -RuntimeBundleSourceRoot $stage `
+  -Plan
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/deployNavigation64Runtime.ps1 `
+  -QuickStartRoot $quickStart `
+  -RuntimeBundleSourceRoot $stage
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/configureQuickStartNavigation64.ps1 `
+  -QuickStartRoot $quickStart `
+  -Plan
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/configureQuickStartNavigation64.ps1 `
+  -QuickStartRoot $quickStart
+```
+
+The bootstrap sets `NAV_MONOLITHIC_64=1` and forces `NAV_STREAMING=0` only in
+the QuickStart process environment. It does not alter the user's global
+environment. A complete pair of explicit 64-bit module overrides is preserved;
+a partial pair is rejected. Removing its single launcher line, or restoring the
+printed backup, returns Play to the stock default.
+Setting `NAV_MONOLITHIC_64=0` before Play is the cheapest temporary opt-out.
+Because the runtime lives under `node_modules\h1z1-server`, reinstalling or
+updating QuickStart can remove it; rerun the runtime deploy and launcher
+configuration plans after any reinstall.
 
 ### Installed QuickStart startup evidence
 
@@ -363,10 +439,12 @@ module, not the last generic `dist` build (which was correctly rejected as
   the test PID was deliberately stopped.
 
 The combined launcher process retained about 1.59 GiB RSS after world/NPC
-creation. This is the current installed-server memory baseline. The Play
-launcher is not yet permanently switched to 64-bit mode because the external
-64-bit package still needs a reproducible deployment location instead of a
-workspace build path.
+creation. This is the current installed-server memory baseline. The reproducible
+package and QuickStart bootstrap now exist and have passed isolated fixture and
+real-install deployment-plan checks. They remain intentionally undeployed while
+the corrected two-hour soak owns the installed runtime; the next installed
+checkpoint must deploy them and prove that Play logs packaged paths rather than
+workspace module paths.
 
 The installed runtime also passed two non-client behavior gates:
 
@@ -436,8 +514,8 @@ capacity:
 
 - upstream `webidl-dts-gen` still mishandles `unsigned long long[]`, so a
   publishable 64-bit package needs a BigInt-aware declaration path;
-- the 64-bit runtime still needs reproducible packaging so Play does not depend
-  on workspace module paths or a hand-staged QuickStart build;
+- the staged 64-bit runtime package still needs an installed Play smoke after
+  the corrected two-hour soak releases the QuickStart runtime;
 - door/construction/vehicle obstacle churn must prove that geometry is actually
   blocked and locally replanned, not merely that the API returns success;
 - replication, the complete AI update phase, and separated sound/explosion
@@ -509,7 +587,7 @@ make it the most complex fallback.
 
 Current evidence clears the standalone 2,000-agent Crowd, replan, reference
 ABI, full-cache materialization, and clean-teardown portions of these gates. It
-It also clears installed-runtime startup, representative box-carve
+also clears installed-runtime startup, representative box-carve
 effectiveness, and a 1,000-tick/50-obstacle ZoneServer stress. It does not clear
 the 100-player distribution, replication/event delivery, entity-specific
 obstacle behavior, or two-hour soak portions.

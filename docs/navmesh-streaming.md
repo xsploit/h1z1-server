@@ -98,6 +98,13 @@ The deployment script refuses to modify a running installed server, verifies
 the bundle before and after copying the compiled verifier/runtime files, and
 prints the backup directory it created.
 
+This deploys the navigation **data artifact**, not the optional 64-bit Detour
+runtime. The full-population alternative packages and deploys that runtime with
+`nav-runtime64-package`, `nav-runtime64-check`,
+`scripts/deployNavigation64Runtime.ps1`, and
+`scripts/configureQuickStartNavigation64.ps1`; see
+[`navigation-full-pop-architecture.md`](navigation-full-pop-architecture.md#reproducible-64-bit-runtime-package).
+
 The default (coarse) parameters reproduce the stock `data/2016/navData` navmesh
 exactly, which is a good sanity check that the pipeline is set up correctly.
 

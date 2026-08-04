@@ -771,8 +771,7 @@ export class NavManager {
       throw new Error("[NAV] streaming runtime configuration is unavailable");
     }
 
-    const allocatorCapacity =
-      process.env.NAV_MONOLITHIC_64 === "1" ? 1n << 20n : 1 << 20;
+    const allocatorCapacity = this._monolithic64 ? 1n << 20n : 1 << 20;
     const allocator = new (R.Raw as any).RecastLinearAllocator(
       allocatorCapacity
     );

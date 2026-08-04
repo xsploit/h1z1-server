@@ -412,6 +412,7 @@ try {
     $actualClosure = @(Get-NavigationRuntimeClosure -SourceRoot $repositoryRoot)
     foreach ($requiredFile in @(
             'out\utils\recast.js',
+            'out\utils\navigationruntime.js',
             'out\utils\navigationareas.js',
             'out\utils\navigationartifacts.js',
             'out\utils\runtimewatchdog.js'
@@ -426,6 +427,7 @@ try {
         FixtureFiles = $closure.Count
         ActualRuntimeFiles = $actualClosure.Count
         IncludesNavigationAreas = 'out\utils\navigationareas.js' -in $actualClosure
+        IncludesNavigationRuntime = 'out\utils\navigationruntime.js' -in $actualClosure
         PartialFailureRolledBack = $injectedFailure
         ValidationFailureRolledBack = $validationFailure
         BundlePartialFailureRolledBack = $combinedPartialRollback
