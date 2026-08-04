@@ -32,8 +32,27 @@ const center = new Float32Array([
 ]);
 const spawnedNpcCount = Number(process.argv[5] ?? 500);
 const crowdSteps = Number(process.argv[6] ?? 1000);
+const fakePlayerCount = Math.min(
+  100,
+  Math.max(1, Number(process.env.NAV_WORLD_CROWD_FAKE_PLAYERS ?? 1))
+);
+const soakSeconds = Math.max(
+  0,
+  Number(process.env.NAV_WORLD_CROWD_SOAK_SECONDS ?? 0)
+);
+const realtimeDelayMs = Math.max(
+  0,
+  Number(process.env.NAV_WORLD_CROWD_DELAY_MS ?? 0)
+);
 
 async function main() {
+  if (
+    !Number.isSafeInteger(fakePlayerCount) ||
+    !Number.isFinite(soakSeconds) ||
+    !Number.isFinite(realtimeDelayMs)
+  ) {
+    throw new Error("invalid fake-player or soak timing configuration");
+  }
   const installedRuntimeRoot = process.env.H1Z1_VALIDATION_RUNTIME_ROOT;
   const runtimeModule = installedRuntimeRoot
     ? require(join(installedRuntimeRoot, "out/utils/navigationruntime"))
@@ -95,8 +114,13 @@ async function main() {
     : routeToCenter
       ? routeStart
       : center;
+  const initialPlayerPositions = Array.from(
+    { length: fakePlayerCount },
+    (_, index) =>
+      tourWorld ? tourWaypoints[index % tourWaypoints.length] : initialPosition
+  );
   Object.assign(server.navManager as object, { _lastStreamMs: 0 });
-  server.navManager.streamAround([initialPosition]);
+  server.navManager.streamAround(initialPlayerPositions);
 
   const centerSnap = server.navManager.navMeshQuery.findNearestPoly(
     { x: center[0], y: center[1], z: center[2] },
@@ -132,17 +156,22 @@ async function main() {
     centerSnap.nearestPoint.z,
     1
   ]);
-  const playerAgent =
-    server.navManager.createPassiveAgent(initialPosition) ??
-    server.navManager.createPassiveAgent(snappedCenterPosition);
-  if (!playerAgent)
-    throw new Error("failed to create saved-player passive agent");
-  wrappers.push(playerAgent);
-  const validationCharacter = createFakeCharacter(server);
-  createFakeZoneClient(server, validationCharacter);
-  validationCharacter.state.position = initialPosition;
-  validationCharacter.navAgent = playerAgent;
-  validationCharacter.godMode = true;
+  const validationCharacters: ReturnType<typeof createFakeCharacter>[] = [];
+  for (const position of initialPlayerPositions) {
+    const playerAgent =
+      server.navManager.createPassiveAgent(position) ??
+      server.navManager.createPassiveAgent(snappedCenterPosition);
+    if (!playerAgent)
+      throw new Error("failed to create fake-player passive agent");
+    wrappers.push(playerAgent);
+    const character = createFakeCharacter(server);
+    createFakeZoneClient(server, character);
+    character.state.position = position;
+    character.navAgent = playerAgent;
+    character.godMode = true;
+    validationCharacters.push(character);
+  }
+  const validationCharacter = validationCharacters[0];
   for (const npc of Object.values(server._npcs)) {
     const agent =
       npc.navAgent ?? server.navManager.createAgent(npc.state.position);
@@ -194,21 +223,31 @@ async function main() {
   let activeObstacle: ReturnType<typeof server.navManager.addObstacle> = null;
   let obstacleAdds = 0;
   let obstacleRemovals = 0;
+  let completedCrowdSteps = 0;
+  const wallStartedAt = realDateNow();
+  const wallDeadline = soakSeconds
+    ? wallStartedAt + soakSeconds * 1000
+    : Number.POSITIVE_INFINITY;
   Date.now = () => simulatedNow;
   try {
     for (let i = 0; i < crowdSteps; i++) {
+      if (realDateNow() >= wallDeadline) break;
       simulatedNow += 200;
       if (routeToCenter) {
         const progress = Math.min(1, i / Math.max(1, crowdSteps - 1));
-        validationCharacter.state.position = new Float32Array([
-          routeStart[0] + (center[0] - routeStart[0]) * progress,
-          routeStart[1] + (center[1] - routeStart[1]) * progress,
-          routeStart[2] + (center[2] - routeStart[2]) * progress,
-          1
-        ]);
+        for (const character of validationCharacters) {
+          character.state.position = new Float32Array([
+            routeStart[0] + (center[0] - routeStart[0]) * progress,
+            routeStart[1] + (center[1] - routeStart[1]) * progress,
+            routeStart[2] + (center[2] - routeStart[2]) * progress,
+            1
+          ]);
+        }
       } else if (tourWorld) {
-        validationCharacter.state.position =
-          tourWaypoints[Math.floor(i / 200) % tourWaypoints.length];
+        validationCharacters.forEach((character, index) => {
+          character.state.position =
+            tourWaypoints[(Math.floor(i / 200) + index) % tourWaypoints.length];
+        });
       }
       if (churnObstacles && i % 20 === 0) {
         activeObstacle = server.navManager.addObstacle(
@@ -243,6 +282,10 @@ async function main() {
             `tail=${JSON.stringify(activeObstacles.slice(-5))}`
         );
       }
+      completedCrowdSteps = i + 1;
+      if (realtimeDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, realtimeDelayMs));
+      }
     }
   } finally {
     if (activeObstacle) {
@@ -267,8 +310,13 @@ async function main() {
   const report = {
     worldNpcs: Object.keys(server._npcs).length,
     worldVehicles: Object.keys(server._vehicles).length,
+    fakePlayers: validationCharacters.length,
     center: Array.from(center.slice(0, 3)),
-    crowdSteps,
+    requestedCrowdSteps: crowdSteps,
+    crowdSteps: completedCrowdSteps,
+    wallSeconds: Number(((realDateNow() - wallStartedAt) / 1000).toFixed(3)),
+    requestedSoakSeconds: soakSeconds,
+    realtimeDelayMs,
     npcAgents,
     vehicleAgents,
     wrapperCount: wrappers.length,
