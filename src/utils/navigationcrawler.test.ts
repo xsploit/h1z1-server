@@ -47,6 +47,20 @@ test("transition merge deduplicates exact entries and rejects name conflicts", (
     ),
     [existing]
   );
+  assert.deepEqual(
+    mergeNavigationTransitions(
+      [],
+      [
+        {
+          ...existing,
+          source: "model-local-navigation-template",
+          actorFile: "Building.adr",
+          instanceIndex: 7
+        }
+      ]
+    ),
+    [{ ...existing, source: "model-local-navigation-template" }]
+  );
   assert.throws(
     () =>
       mergeNavigationTransitions([existing], [{ ...existing, end: [2, 2, 2] }]),

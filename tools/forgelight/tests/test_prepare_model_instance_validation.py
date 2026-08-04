@@ -87,6 +87,53 @@ class PrepareModelInstanceValidationTests(unittest.TestCase):
             self.assertEqual(routes[0]["start"], [10.0, 2.0, 20.0])
             self.assertEqual(routes[0]["end"], [11.0, 2.0, 20.0])
 
+    def test_prepare_deduplicates_links_for_exact_duplicate_placements(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            collision = root / "z1_collision.bin"
+            metadata = root / "z1_collision.metadata.json"
+            template = root / "template.json"
+            transform = (10, 2, 20, 0, 0, 0, 1, 1, 1, 1, 8, 1, 18, 12, 5, 23)
+            raw = bytearray(b"H1COL2\0\0")
+            raw.extend(struct.pack("<III", 2, 1, 2))
+            raw.extend(struct.pack("<BII", 0, 0, 0))
+            raw.extend(struct.pack("<II", 0, 0))
+            raw.extend(struct.pack("<16f", *transform))
+            raw.extend(struct.pack("<16f", *transform))
+            collision.write_bytes(raw)
+            metadata.write_text(
+                json.dumps({"meshes": [{"actorFile": "Pilot.adr", "meshIndex": 0}]}),
+                encoding="utf-8",
+            )
+            template.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "actorFile": "Pilot.adr",
+                        "transitions": [
+                            {
+                                "name": "stair seam",
+                                "start": [0, 0, 0],
+                                "end": [1, 1, 0],
+                                "radius": 0.5,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            bakes, routes, skipped, forbidden, transitions = prepare(
+                collision, metadata, template
+            )
+
+            self.assertEqual(len(bakes), 2)
+            self.assertEqual(routes, [])
+            self.assertEqual(skipped, [])
+            self.assertEqual(forbidden, [])
+            self.assertEqual(len(transitions), 1)
+            self.assertEqual(transitions[0]["instanceIndex"], 0)
+
     def test_prepare_skips_instances_buried_far_from_terrain(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

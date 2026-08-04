@@ -95,6 +95,7 @@ def prepare(
     routes: list[dict] = []
     forbidden_probes: list[dict] = []
     transitions: list[dict] = []
+    transition_identities: set[str] = set()
     bakes: list[dict] = []
     skipped: list[dict] = []
     terrain_probes = template.get("terrainProbes", [])
@@ -194,19 +195,32 @@ def prepare(
             radius = float(transition.get("radius", 0.5))
             if not math.isfinite(radius) or radius <= 0:
                 raise ValueError("transition radius must be positive and finite")
-            transitions.append(
+            candidate = {
+                "name": f"{actor_file} #{instance_index} {transition['name']}",
+                "kind": transition.get("kind", "stairs"),
+                "source": "model-local-navigation-template",
+                "actorFile": actor_file,
+                "instanceIndex": instance_index,
+                "start": transform_point(transition["start"], transform),
+                "end": transform_point(transition["end"], transform),
+                "radius": radius,
+                "bidirectional": bool(transition.get("bidirectional", True)),
+            }
+            identity = json.dumps(
                 {
-                    "name": f"{actor_file} #{instance_index} {transition['name']}",
-                    "kind": transition.get("kind", "stairs"),
-                    "source": "model-local-navigation-template",
-                    "actorFile": actor_file,
-                    "instanceIndex": instance_index,
-                    "start": transform_point(transition["start"], transform),
-                    "end": transform_point(transition["end"], transform),
-                    "radius": radius,
-                    "bidirectional": bool(transition.get("bidirectional", True)),
-                }
+                    "kind": candidate["kind"],
+                    "start": candidate["start"],
+                    "end": candidate["end"],
+                    "radius": candidate["radius"],
+                    "bidirectional": candidate["bidirectional"],
+                },
+                sort_keys=True,
+                separators=(",", ":"),
             )
+            if identity in transition_identities:
+                continue
+            transition_identities.add(identity)
+            transitions.append(candidate)
     if not bakes and not skipped:
         raise ValueError(f"H1COL2 contains no instances for {actor_file}")
     return bakes, routes, skipped, forbidden_probes, transitions

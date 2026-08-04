@@ -310,31 +310,38 @@ export function mergeNavigationTransitions(
   const result: unknown[] = [];
   const identities = new Map<string, string>();
   for (const transition of [...base, ...model]) {
-    const encoded = stableStringify(transition as JsonValue);
+    if (
+      !transition ||
+      typeof transition !== "object" ||
+      Array.isArray(transition)
+    )
+      throw new Error("navigation transition entries must be objects");
+    const runtimeTransition = Object.fromEntries(
+      Object.entries(transition).filter(([field]) =>
+        [
+          "name",
+          "kind",
+          "source",
+          "start",
+          "end",
+          "radius",
+          "bidirectional"
+        ].includes(field)
+      )
+    );
+    const encoded = stableStringify(runtimeTransition as JsonValue);
     const name =
-      transition &&
-      typeof transition === "object" &&
-      "name" in transition &&
-      typeof transition.name === "string"
-        ? transition.name
+      "name" in runtimeTransition && typeof runtimeTransition.name === "string"
+        ? runtimeTransition.name
         : undefined;
     const key = name ? `name:${name}` : `value:${encoded}`;
-    const comparison =
-      name && transition && typeof transition === "object"
-        ? stableStringify(
-            Object.fromEntries(
-              Object.entries(transition).filter(
-                ([field]) => field !== "actorFile" && field !== "instanceIndex"
-              )
-            ) as JsonValue
-          )
-        : encoded;
+    const comparison = encoded;
     const previous = identities.get(key);
     if (previous === comparison) continue;
     if (previous !== undefined)
       throw new Error(`conflicting navigation transition identity ${key}`);
     identities.set(key, comparison);
-    result.push(transition);
+    result.push(runtimeTransition);
   }
   return result;
 }
