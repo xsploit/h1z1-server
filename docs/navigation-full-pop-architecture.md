@@ -1,6 +1,6 @@
 # Full-population navigation architecture
 
-Status: proposed proof gate; no production claim yet.
+Status: Slice 0 capacity audit complete; no production claim yet.
 
 This document pauses further whole-map semantic grinding until the runtime can
 support a populated public server. The current disk-indexed streamer remains a
@@ -9,14 +9,16 @@ accepted as the final multiplayer architecture.
 
 An adversarial source-and-artifact review found that the previous version of
 this plan started at 64-bit too early. The current baker's 16,384 direct-tile
-limit is a hard-coded policy, not a demonstrated `dtPolyRef32` limit. The first
-job is therefore to measure the real 32-bit capacity and crowd bottlenecks.
+limit is a hard-coded policy, not a demonstrated `dtPolyRef32` limit. Slice 0
+now measures the current fine cache exactly. It rejects a monolithic 32-bit
+materialization of that cache and exposes five independent TileCache
+region-build holes. Population and crowd gates remain unmeasured.
 
 ## Decision order
 
 Evaluate these implementations in order:
 
-0. prove or reject a complete 32-bit monolithic runtime;
+0. prove or reject a complete 32-bit monolithic runtime from measured data;
 1. if 32-bit capacity fails, build a 64-bit monolithic Recast/Detour runtime;
 2. if WASM bindings or memory fail, use a native 64-bit navigation worker;
 3. only if both monolithic options fail, use immutable regional contexts with
@@ -47,18 +49,21 @@ not be called complete or used as capacity proof. The 104,935 count describes
 compressed cache layers; direct-nav completeness is 100,280 non-empty columns
 admitted with zero `addTile` rejections.
 
-The failure is in `work/h1emu-recast/main.cpp`: failed `addTile` calls decrement
-the built count and increment the same counter later labeled empty/water. The
-baker must fail closed before any new artifact can be trusted.
+The failure was in `work/h1emu-recast/main.cpp`: failed `addTile` calls
+decremented the built count and incremented the same counter later labeled
+empty/water. Commit `2646f66` fixes this on the fork: generated, admitted,
+rejected, and empty counts are now distinct, the status is reported, and any
+rejection prevents artifact publication unless the diagnostic-only
+`--allow-partial-navmesh` override is explicit.
 
 ## Slice 0: measure before changing ABI
 
-Slice 0 is the next implementation milestone and the only approved one until
-its report is complete.
+The capacity half of Slice 0 is complete. The population/crowd half remains the
+next approved runtime milestone.
 
 ### 0.1 Make artifact creation fail closed
 
-Update the baker to report these separately:
+The baker now reports these separately:
 
 - geometrically empty/water columns;
 - successfully admitted direct tiles;
@@ -67,12 +72,16 @@ Update the baker to report these separately:
 - configured tile bits, polygon bits, maximum tiles, and maximum polygons per
   tile.
 
-Any direct-tile rejection must produce a non-zero exit unless an explicit
+Any direct-tile rejection produces a non-zero exit unless an explicit
 diagnostic `--allow-partial-navmesh` option was supplied. Artifact manifests
 must record the same counts, configuration, ABI, tool commit, source identity,
 and semantic/transition identities.
 
-### 0.2 Test the two cheaper 32-bit layouts
+The fail-closed contract and its explicit diagnostic override are covered by
+`direct-nav-completeness-fail-closed`; the complete native suite currently
+passes 27/27 tests.
+
+### 0.2 Measured 32-bit capacity
 
 The current builder clamps tile bits to 14:
 
@@ -83,24 +92,54 @@ maxPolys = 1 << (22 - tileBits)
 ```
 
 Detour's actual 32-bit constraint is the 22-bit tile-plus-polygon budget, with
-enough salt bits remaining. Two layouts must be measured before an ABI port:
+enough salt bits remaining. Commit `2646f66` adds a rasterization-free inspector
+that reconstructs every compressed layer through the same Detour stages used
+by `dtTileCache::buildNavMeshTile`: decompress, regions, contours, polygon mesh,
+transition binding, and `dtCreateNavMeshData`.
 
-1. **Current 128-cell tiles, 17/5 layout**: 131,072 tile slots and 32 polygons
-   per tile. This is viable only if every direct tile fits the 32-poly ceiling.
-2. **256-cell tiles, 15/7 layout**: approximately 25,600 world columns, 32,768
-   tile slots, and 128 polygons per tile. This trades larger raster tiles for a
-   much safer polygon allowance.
+The exact Apartments06 result, using all 177 authored transitions, is:
 
-First attempt to materialize the 17/5 direct mesh from the existing 128-cell
-TileCache, whose compressed references and headers are ABI-portable. Do not
-reraster the world merely to measure a slot layout. The 256-cell candidate does
-require new rasterization because it changes tile geometry, but it should be
-run only if the histogram or 17/5 materialization rejects the first layout.
+| Measurement                     |            Result |
+| ------------------------------- | ----------------: |
+| compressed layers               |           104,935 |
+| layers measured successfully    |           104,930 |
+| columns                         |           100,289 |
+| zero-polygon layers             |                32 |
+| polygon p50 / p95 / p99 / max   | 1 / 20 / 54 / 238 |
+| layers above 32 polygons        |             2,496 |
+| layers above 64 / 128 polygons  |          684 / 70 |
+| Detour materialization failures |                 5 |
 
-Acceptance for a 32-bit candidate is exact: all 100,280 expected non-empty
-columns are admitted, no tile exceeds the configured polygon ceiling, there are
-zero rejected tiles, distributed nearest-poly probes pass, and long routes do
-not truncate silently.
+The report is
+`work/staging/navigation-slice0/polycount-17-5.json`. It is deterministic on
+this artifact and completes in about 12 seconds; it is not another raster bake.
+
+The existing fine TSET cannot become one monolithic 32-bit Detour navmesh:
+104,898 non-empty materialized layers require 17 tile bits, while the measured
+maximum of 238 requires 8 polygon bits. The required 25 bits exceed the
+32-bit ABI's 22-bit tile-plus-polygon budget. The proposed 17/5 layout therefore
+fails by 2,496 layers, not merely by total tile count.
+
+A larger **direct-only** raster tile remains a bounded diagnostic question, not
+a production answer. A 256-cell direct grid would nominally use 15/7, but the
+TileCache layer header stores width and height in bytes and cannot represent
+256 cells as-is. It would also use a different tile coordinate system from the
+current 128-cell dynamic-obstacle cache. A regional worst-case direct probe may
+measure whether larger direct tiles fit, but no whole-map 256-cell bake is
+approved unless dynamic-obstacle compatibility is designed first.
+
+Acceptance for any remaining 32-bit candidate is exact: all expected tiles are
+admitted, no tile exceeds the configured polygon ceiling, there are zero
+rejected tiles and zero materialization failures, distributed nearest-poly
+probes pass, dynamic obstacles retain the same coordinate contract, and long
+routes do not truncate silently.
+
+The five current failures are `DT_FAILURE | DT_BUFFER_TOO_SMALL` from region-id
+overflow in `dtBuildTileCacheRegions` at columns `(111,237)`, `(232,261)`,
+`(233,261)`, `(235,262)`, and `(236,262)`. Because
+`buildNavMeshTilesAt()` stops on the first failing layer, these are runtime
+column holes. They must be repaired with bounded local rebakes or a deliberate
+builder change regardless of reference width.
 
 ### 0.3 Remove known crowd overhead and measure the real ceiling
 
@@ -138,9 +177,11 @@ corner-to-corner paths for feasibility and corridor truncation.
 
 ### Slice 0 decision
 
-- If either 32-bit layout passes completeness, path, population, timing, and
-  soak gates, keep the 32-bit ABI and make 64-bit optional research.
-- If both layouts fail on measured reference capacity, proceed to Candidate A.
+- The existing fine cache fails monolithic 32-bit reference capacity; proceed
+  with a bounded Candidate A ABI/consumer spike that reuses the compressed
+  cache rather than rerastering the world.
+- A larger direct-only 32-bit regional probe is optional diagnostic evidence,
+  not permission for a full bake or a production decision.
 - If capacity passes but crowd/replan gates fail, changing reference width does
   not solve the blocker; address crowd scheduling, AI activation, or regional
   crowd ownership before changing ABI.
@@ -165,7 +206,8 @@ distributed soak.
 
 ## Candidate A: conditional 64-bit monolithic WASM
 
-Use this only if Slice 0 proves that no complete 32-bit layout fits.
+Use this now that Slice 0 proves the existing fine cache cannot fit a complete
+monolithic 32-bit reference layout.
 
 Upstream `DT_POLYREF64` provides 28 tile bits and 20 polygon bits. The vendored
 option in `recastnavigation/CMakeLists.txt` is currently unreachable by the
@@ -234,7 +276,7 @@ make it the most complex fallback.
 | Gate                  | Required evidence                                                                                                                          |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Builder integrity     | Empty, admitted, and rejected counts are distinct; any rejection fails the build; the manifest matches the emitted artifact.               |
-| Artifact completeness | All 100,280 expected direct columns are admitted with zero rejections; distributed probes and long routes succeed.                         |
+| Artifact completeness | Every expected tile is admitted with zero rejection or materialization failure; distributed probes and long routes succeed.                |
 | Reference ABI         | Every scalar and array path survives churn-generated references above `2^53`; ABI mismatch fails closed.                                   |
 | Path feasibility      | Representative long paths do not exceed or silently truncate queue/corridor limits.                                                        |
 | Replan latency        | Target-request-to-valid p95/p99 and failure rate pass under synchronized replans at accepted population.                                   |
@@ -256,6 +298,8 @@ make it the most complex fallback.
 - root native build: `work/h1emu-recast/CMakeLists.txt`;
 - measured cache and partial direct artifact:
   `work/staging/full-apartments06-v1/`;
+- exact 32-bit capacity/materialization report:
+  `work/staging/navigation-slice0/polycount-17-5.json`;
 - 100-player default: `data/defaultDatabase/shared/servers.json`;
 - streaming comparison:
   [QuentinGruber/h1z1-server#2840](https://github.com/QuentinGruber/h1z1-server/pull/2840).
