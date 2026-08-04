@@ -1,7 +1,8 @@
 # Full-population navigation architecture
 
-Status: Slice 0 capacity audit and raw 64-bit WASM ABI spike complete; no
-production claim yet.
+Status: Slice 0 capacity audit and standalone 64-bit monolithic WASM consumer
+complete; server integration and population gates remain open. No production
+claim yet.
 
 This document pauses further whole-map semantic grinding until the runtime can
 support a populated public server. The current disk-indexed streamer remains a
@@ -135,12 +136,16 @@ rejected tiles and zero materialization failures, distributed nearest-poly
 probes pass, dynamic obstacles retain the same coordinate contract, and long
 routes do not truncate silently.
 
-The five current failures are `DT_FAILURE | DT_BUFFER_TOO_SMALL` from region-id
-overflow in `dtBuildTileCacheRegions` at columns `(111,237)`, `(232,261)`,
-`(233,261)`, `(235,262)`, and `(236,262)`. Because
-`buildNavMeshTilesAt()` stops on the first failing layer, these are runtime
-column holes. They must be repaired with bounded local rebakes or a deliberate
-builder change regardless of reference width.
+The original five failures were `DT_FAILURE | DT_BUFFER_TOO_SMALL` from
+region-ID overflow in `dtBuildTileCacheRegions` at columns `(111,237)`,
+`(232,261)`, `(233,261)`, `(235,262)`, and `(236,262)`. The overflow happened
+before the normal merge/compaction pass because its temporary monotone region
+IDs were only eight bits. The final serialized layer and contour region IDs
+remain eight bits. Fork commit `xsploit/recastnavigation@875f4a9` widens only
+the temporary sweep, source-grid, neighbour, and remap IDs to 16 bits, then
+fails closed if the compacted final result still exceeds the existing 255
+region limit. This materializes all five columns without changing TSET bytes or
+the final TileCache layer ABI.
 
 ### 0.3 Remove known crowd overhead and measure the real ceiling
 
@@ -225,14 +230,14 @@ This is not a compiler-flag-only change:
 - serialized tile headers change size and acquire padding if raw structs are
   written.
 
-### Raw ABI spike result
+### Standalone 64-bit WASM result
 
 The exact `@recast-navigation/wasm` 0.43.1 source (`gitHead`
 `8769e8b9995f127033af9f6e6eeac3fad7d66201`) now has an isolated fork spike at
 `xsploit/recast-navigation-js`, branch `spike/dt-polyref64-h1emu`, commit
 `5baae6f`.
 
-The spike proves that Emscripten 6.0.5's WebIDL binder can expose
+The initial spike proves that Emscripten 6.0.5's WebIDL binder can expose
 `unsigned long long` through `WASM_BIGINT=1`; an opaque-handle bridge is not
 required merely to cross the JavaScript boundary. The build conditionally
 changes all bound polygon/tile reference scalars, result arrays, raycast paths,
@@ -247,18 +252,50 @@ the normal 32-bit build. Both modes compile and pass executable Node ABI tests:
   them back with `BigInt.asIntN(64)` because the generated boundary represents
   the raw i64 bit pattern as a signed BigInt.
 
-This passes the raw binding feasibility question, not the consumer gate. The
-remaining blockers are explicit:
+The high-level consumer gate is now also proven on the fork branch. Commit
+`40044c7` ports polygon-reference-bearing core wrappers to a runtime-selected
+`number | bigint` surface and covers scalar refs, ref arrays, navmesh queries,
+raycasts, links, corridors, Crowd, and debug drawing. Both 32-bit and 64-bit
+builds pass real solo/tiled generation and query smoke tests; the stock umbrella
+suite remains 5/5 green.
 
-- `@recast-navigation/core` still models refs and ref arrays as `number` /
-  `UnsignedIntArray` and must gain a 64-bit build/runtime surface;
-- upstream `webidl-dts-gen` mishandles `unsigned long long[]`, so the 64-bit
-  package needs a BigInt-aware declaration path;
-- the existing TSET importer trusts its generated 16,384-slot navmesh header,
-  whereas the monolithic consumer must allocate at least 131,072 navmesh slots
-  before materializing all layers; and
-- query-array, raycast, Crowd, dynamic-obstacle churn, and server integration
-  still require behavioral tests on real tiles, not only wrapper bit tests.
+Commit `0299c7b` adds a Detour-owned compressed-layer copy path. It fixes the
+previous allocator mismatch between JavaScript `new[]` storage and
+`DT_COMPRESSEDTILE_FREE_DATA`, lets the caller destroy each temporary wrapper
+immediately, and removes two leaked mesh-process view wrappers per materialized
+layer. Commit `ca3c47f` pins the WASM build to the widened-region dependency
+commit above.
+
+The standalone consumer strictly parses all 22 split TSET files, overrides the
+partial generated header with 131,072 runtime tile slots, imports each layer
+once, and materializes each unique column once. On
+`work/staging/full-apartments06-v1/` it reports:
+
+| Measurement                        |                  Result |
+| ---------------------------------- | ----------------------: |
+| compressed layers imported         |       104,935 / 104,935 |
+| unique columns materialized        |       100,289 / 100,289 |
+| occupied direct navmesh tiles      |                 104,903 |
+| direct polygons                    |                 470,988 |
+| add/materialization failures       |                   0 / 0 |
+| elapsed time                       |                22.833 s |
+| WASM heap / process RSS            |       667.3 / 742.3 MiB |
+| PV PD / military / hospital probes | 3 / 3 valid BigInt refs |
+
+The machine-readable report is
+`work/staging/full-apartments06-v1/monolithic64-wide-regions.json`. This reuses
+the existing compressed bake; it is not another raster bake.
+
+The standalone capacity and map-coverage question therefore passes. The open
+Candidate A blockers are now production integration and load behavior:
+
+- upstream `webidl-dts-gen` still mishandles `unsigned long long[]`, so a
+  publishable 64-bit package needs a BigInt-aware declaration path;
+- the H1 server must load this consumer behind an explicit opt-in without
+  changing the installed/default runtime;
+- dynamic-obstacle churn must be tested without global crowd teardown; and
+- query-array, raycast, Crowd, path/replan latency, memory stability, and event
+  delivery must pass the full-pop gates below.
 
 Opaque handles remain Candidate B's preferred process boundary, but Candidate
 A can proceed with BigInt refs if the high-level wrapper and tests stay
