@@ -5,7 +5,8 @@ import { Npc } from "./npc";
 function makeMeleeFixture(
   targetPosition: Float32Array,
   mountedVehicle = "",
-  vehicleExists = true
+  vehicleExists = true,
+  segmentBlocked = false
 ) {
   let characterHits = 0;
   let vehicleHits = 0;
@@ -36,7 +37,7 @@ function makeMeleeFixture(
             }
           }
         : {},
-    collisionManager: { segmentBlocked: () => false }
+    collisionManager: { segmentBlocked: () => segmentBlocked }
   };
   const npc = {
     server,
@@ -75,6 +76,17 @@ test("NPC melee hits a target inside the impact arc", () => {
   const fixture = makeMeleeFixture(new Float32Array([0, 0, 1, 1]));
   fixture.apply();
   assert.equal(fixture.characterHits, 1);
+});
+
+test("NPC melee cannot damage a target through static collision", () => {
+  const fixture = makeMeleeFixture(
+    new Float32Array([0, 0, 1, 1]),
+    "",
+    true,
+    true
+  );
+  fixture.apply();
+  assert.equal(fixture.characterHits, 0);
 });
 
 test("NPC melee hits the mounted vehicle instead of its occupant", () => {
