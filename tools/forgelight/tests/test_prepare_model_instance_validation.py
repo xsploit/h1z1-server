@@ -126,6 +126,27 @@ class PrepareModelInstanceValidationTests(unittest.TestCase):
             self.assertEqual(skipped[0]["reason"], "terrain-height-mismatch")
             self.assertEqual(skipped[0]["terrainDeltas"], [-8.0])
 
+            admitted, admitted_routes, admitted_skips, _, _ = prepare(
+                collision,
+                metadata,
+                template,
+                lambda _x, _z: 10.0,
+                max_terrain_delta_override=8.0,
+            )
+            self.assertEqual(admitted, [{"instanceIndex": 0, "bounds": [-7, 3, 27, 38]}])
+            self.assertEqual(len(admitted_routes), 1)
+            self.assertEqual(admitted_skips, [])
+
+            template_payload = json.loads(template.read_text(encoding="utf-8"))
+            template_payload["terrainDeltaOverrides"] = {"0": 8.0}
+            template.write_text(json.dumps(template_payload), encoding="utf-8")
+            admitted, admitted_routes, admitted_skips, _, _ = prepare(
+                collision, metadata, template, lambda _x, _z: 10.0
+            )
+            self.assertEqual(len(admitted), 1)
+            self.assertEqual(len(admitted_routes), 1)
+            self.assertEqual(admitted_skips, [])
+
 
 if __name__ == "__main__":
     unittest.main()

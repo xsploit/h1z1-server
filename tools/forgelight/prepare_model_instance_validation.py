@@ -71,6 +71,7 @@ def prepare(
     metadata_path: Path,
     template_path: Path,
     sample_terrain: Callable[[float, float], float] | None = None,
+    max_terrain_delta_override: float | None = None,
 ) -> tuple[list[dict], list[dict], list[dict], list[dict], list[dict]]:
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     template = json.loads(template_path.read_text(encoding="utf-8"))
@@ -95,7 +96,28 @@ def prepare(
     bakes: list[dict] = []
     skipped: list[dict] = []
     terrain_probes = template.get("terrainProbes", [])
-    max_terrain_delta = float(template.get("maxTerrainDelta", 1.5))
+    max_terrain_delta = float(
+        template.get("maxTerrainDelta", 1.5)
+        if max_terrain_delta_override is None
+        else max_terrain_delta_override
+    )
+    if not math.isfinite(max_terrain_delta) or max_terrain_delta < 0:
+        raise ValueError("maxTerrainDelta must be non-negative and finite")
+    terrain_delta_overrides = template.get("terrainDeltaOverrides", {})
+    if not isinstance(terrain_delta_overrides, dict):
+        raise ValueError("terrainDeltaOverrides must be an object")
+    parsed_terrain_delta_overrides: dict[int, float] = {}
+    for raw_instance, raw_delta in terrain_delta_overrides.items():
+        try:
+            instance = int(raw_instance)
+            delta = float(raw_delta)
+        except (TypeError, ValueError) as error:
+            raise ValueError("terrainDeltaOverrides must map instance indices to numbers") from error
+        if str(instance) != str(raw_instance) or instance < 0:
+            raise ValueError("terrainDeltaOverrides contains an invalid instance index")
+        if not math.isfinite(delta) or delta < 0:
+            raise ValueError("terrainDeltaOverrides contains an invalid delta")
+        parsed_terrain_delta_overrides[instance] = delta
     if terrain_probes and sample_terrain is None:
         raise ValueError("terrainProbes require a heightmap terrain sampler")
     for instance_index, (candidate_mesh, transform) in enumerate(
@@ -108,7 +130,13 @@ def prepare(
             world_probe = transform_point(local_probe, transform)
             terrain_y = sample_terrain(world_probe[0], world_probe[2])
             probe_deltas.append(world_probe[1] - terrain_y)
-        if probe_deltas and min(abs(delta) for delta in probe_deltas) > max_terrain_delta:
+        instance_max_terrain_delta = parsed_terrain_delta_overrides.get(
+            instance_index, max_terrain_delta
+        )
+        if (
+            probe_deltas
+            and min(abs(delta) for delta in probe_deltas) > instance_max_terrain_delta
+        ):
             skipped.append(
                 {
                     "instanceIndex": instance_index,
@@ -198,10 +226,19 @@ def main() -> None:
     parser.add_argument("template", type=Path)
     parser.add_argument("output_directory", type=Path)
     parser.add_argument("--heightmap", type=Path)
+    parser.add_argument(
+        "--max-terrain-delta",
+        type=float,
+        help="explicit diagnostic override for the template terrain guard",
+    )
     args = parser.parse_args()
     sampler = heightmap_sampler(args.heightmap) if args.heightmap else None
     bakes, routes, skipped, forbidden_probes, transitions = prepare(
-        args.collision, args.metadata, args.template, sampler
+        args.collision,
+        args.metadata,
+        args.template,
+        sampler,
+        args.max_terrain_delta,
     )
     args.output_directory.mkdir(parents=True, exist_ok=True)
     (args.output_directory / "bakes.json").write_text(
