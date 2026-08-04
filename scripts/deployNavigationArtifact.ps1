@@ -58,19 +58,23 @@ if (-not $SkipBuild -and -not $Plan) {
     }
 }
 
-$runtimeEntries = @(
-    'out\utils\recast.js'
-    'out\servers\ZoneServer2016\zoneserver.js'
-)
 $runtimeFiles = @(
-    $runtimeEntries |
-        ForEach-Object {
-            Get-NavigationRuntimeClosure `
-                -SourceRoot $sourceRoot `
-                -EntryRelativePath $_
-        } |
-        Sort-Object -Unique
+    Get-NavigationRuntimeClosure `
+        -SourceRoot $sourceRoot `
+        -EntryRelativePath 'out\utils\recast.js'
 )
+$zoneServerRuntimeFiles = @(
+    'out\servers\ZoneServer2016\zoneserver.js'
+    'out\servers\ZoneServer2016\zoneserver.js.map'
+    'out\servers\ZoneServer2016\zoneserver.d.ts'
+    'out\servers\ZoneServer2016\entities\npc.js'
+    'out\servers\ZoneServer2016\entities\npc.js.map'
+    'out\servers\ZoneServer2016\entities\npc.d.ts'
+    'out\servers\ZoneServer2016\managers\collisionmanager.js'
+    'out\servers\ZoneServer2016\managers\collisionmanager.js.map'
+    'out\servers\ZoneServer2016\managers\collisionmanager.d.ts'
+)
+$runtimeFiles = @($runtimeFiles + $zoneServerRuntimeFiles | Sort-Object -Unique)
 if ('out\utils\navigationareas.js' -notin $runtimeFiles) {
     throw 'Navigation runtime closure is incomplete: navigationareas.js is absent.'
 }
@@ -79,6 +83,9 @@ foreach ($requiredRuntimeFile in @(
         'out\servers\ZoneServer2016\entities\npc.js'
         'out\servers\ZoneServer2016\managers\collisionmanager.js'
     )) {
+    if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $requiredRuntimeFile) -PathType Leaf)) {
+        throw "ZoneServer runtime file was not built: $requiredRuntimeFile"
+    }
     if ($requiredRuntimeFile -notin $runtimeFiles) {
         throw "ZoneServer runtime closure is incomplete: $requiredRuntimeFile is absent."
     }

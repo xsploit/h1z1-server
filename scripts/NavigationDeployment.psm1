@@ -504,7 +504,8 @@ function Resolve-LocalRuntimeDependency {
     $basePath = [System.IO.Path]::GetFullPath(
         (Join-Path (Split-Path -Parent $Importer) $Request)
     )
-    $candidates = if ([System.IO.Path]::HasExtension($basePath)) {
+    $extension = [System.IO.Path]::GetExtension($basePath)
+    $candidates = if ($extension -in @('.js', '.json', '.node')) {
         @($basePath)
     } else {
         @("$basePath.js", "$basePath.json", (Join-Path $basePath 'index.js'))
@@ -570,8 +571,21 @@ function Get-NavigationRuntimeClosure {
         }
 
         $content = Get-Content -Raw -LiteralPath $module
-        $matches = [regex]::Matches(
+        # Compiled files retain source comments. A commented-out require must
+        # not become a hard deployment dependency (zonepackethandlers contains
+        # historical examples of exactly that shape).
+        $requireScanContent = [regex]::Replace(
             $content,
+            '(?ms)/\*.*?\*/',
+            ''
+        )
+        $requireScanContent = [regex]::Replace(
+            $requireScanContent,
+            '(?m)//.*$',
+            ''
+        )
+        $matches = [regex]::Matches(
+            $requireScanContent,
             'require\(\s*["''](?<request>\.[^"'']+)["'']\s*\)'
         )
         foreach ($match in $matches) {

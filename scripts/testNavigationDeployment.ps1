@@ -62,7 +62,7 @@ try {
         'out\utils\navigationareas.js' = 'exports.NavigationArea = { Terrain: 1 };'
         'out\utils\navigationareas.js.map' = '{"version":3}'
         'out\utils\navigationareas.d.ts' = 'export declare enum NavigationArea { Terrain = 1 }'
-        'out\servers\ZoneServer2016\zoneserver.js' = 'require("./entities/npc"); require("./managers/collisionmanager");'
+        'out\servers\ZoneServer2016\zoneserver.js' = 'require("./entities/npc"); require("./managers/collisionmanager"); require("../GatewayServer/gatewayserver.threaded"); // require("./missing-commented-module");'
         'out\servers\ZoneServer2016\zoneserver.js.map' = '{"version":3}'
         'out\servers\ZoneServer2016\zoneserver.d.ts' = 'export declare class ZoneServer2016 {}'
         'out\servers\ZoneServer2016\entities\npc.js' = 'exports.Npc = class Npc {};'
@@ -71,6 +71,9 @@ try {
         'out\servers\ZoneServer2016\managers\collisionmanager.js' = 'exports.CollisionManager = class CollisionManager {};'
         'out\servers\ZoneServer2016\managers\collisionmanager.js.map' = '{"version":3}'
         'out\servers\ZoneServer2016\managers\collisionmanager.d.ts' = 'export declare class CollisionManager {}'
+        'out\servers\GatewayServer\gatewayserver.threaded.js' = 'exports.GatewayServerThreaded = class GatewayServerThreaded {};'
+        'out\servers\GatewayServer\gatewayserver.threaded.js.map' = '{"version":3}'
+        'out\servers\GatewayServer\gatewayserver.threaded.d.ts' = 'export declare class GatewayServerThreaded {}'
     }
     foreach ($entry in $newFiles.GetEnumerator()) {
         Write-TestFile `
@@ -81,21 +84,30 @@ try {
             -Content "old:$($entry.Key)"
     }
 
+    $recastClosure = @(Get-NavigationRuntimeClosure -SourceRoot $sourceRoot)
+    $zoneServerClosure = @(
+        Get-NavigationRuntimeClosure `
+            -SourceRoot $sourceRoot `
+            -EntryRelativePath 'out\servers\ZoneServer2016\zoneserver.js'
+    )
+    $zoneServerRuntimeFiles = @(
+        'out\servers\ZoneServer2016\zoneserver.js'
+        'out\servers\ZoneServer2016\zoneserver.js.map'
+        'out\servers\ZoneServer2016\zoneserver.d.ts'
+        'out\servers\ZoneServer2016\entities\npc.js'
+        'out\servers\ZoneServer2016\entities\npc.js.map'
+        'out\servers\ZoneServer2016\entities\npc.d.ts'
+        'out\servers\ZoneServer2016\managers\collisionmanager.js'
+        'out\servers\ZoneServer2016\managers\collisionmanager.js.map'
+        'out\servers\ZoneServer2016\managers\collisionmanager.d.ts'
+    )
     $closure = @(
-        @(
-            'out\utils\recast.js'
-            'out\servers\ZoneServer2016\zoneserver.js'
-        ) |
-            ForEach-Object {
-                Get-NavigationRuntimeClosure `
-                    -SourceRoot $sourceRoot `
-                    -EntryRelativePath $_
-            } |
+        $recastClosure + $zoneServerRuntimeFiles |
             Sort-Object -Unique
     )
     Assert-True `
-        -Condition ($closure.Count -eq $newFiles.Count) `
-        -Message "Expected $($newFiles.Count) runtime files, found $($closure.Count)."
+        -Condition ($closure.Count -eq ($newFiles.Count - 3)) `
+        -Message "Expected $($newFiles.Count - 3) deployed runtime files, found $($closure.Count)."
     Assert-True `
         -Condition ('out\utils\navigationareas.js' -in $closure) `
         -Message 'The runtime closure omitted navigationareas.js.'
@@ -108,6 +120,9 @@ try {
     Assert-True `
         -Condition ('out\servers\ZoneServer2016\managers\collisionmanager.js' -in $closure) `
         -Message 'The runtime closure omitted collisionmanager.js.'
+    Assert-True `
+        -Condition ('out\servers\GatewayServer\gatewayserver.threaded.js' -in $zoneServerClosure) `
+        -Message 'The runtime closure omitted a dotted-basename dependency.'
 
     $oldHashes = @{}
     foreach ($relativePath in $closure) {
