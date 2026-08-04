@@ -91,6 +91,7 @@
     "navmesh-pv-police-check": "node tools/forgelight/validate_pv_police_nav.js",
     "navmesh-house34b-door-check": "tsx scripts/validateHouse34BDoors.ts",
     "navmesh-house34b-instances-check": "tsx scripts/validateHouse34BInstances.ts",
+    "navmesh-model-routes-check": "tsx scripts/validateModelRoutesStreaming.ts",
     "navmesh-regions-compare": "tsx scripts/compareNavigationRegions.ts",
     "navmesh-islands-audit": "tsx scripts/auditNavigationIslands.ts",
     "navmesh-islands-compare": "tsx scripts/compareNavigationIslandAudits.ts",

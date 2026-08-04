@@ -25,9 +25,11 @@ const configPath = resolve(
 );
 const reportPath = option("--report");
 const topologyOnly = process.argv.includes("--topology-only");
+const unverifiedCandidate = process.argv.includes("--unverified-candidate");
+const transitionsPath = option("--transitions");
 if (Boolean(cacheDirectory) === Boolean(navmeshPath)) {
   console.error(
-    "Usage: npx tsx scripts/validateNavigationRegions.ts (--cache-dir <dir> | --navmesh <z1_0.bin>) [--config <file>] [--report <file>] [--topology-only]"
+    "Usage: npx tsx scripts/validateNavigationRegions.ts (--cache-dir <dir> | --navmesh <z1_0.bin>) [--config <file>] [--report <file>] [--topology-only] [--unverified-candidate] [--transitions <file>]"
   );
   process.exit(1);
 }
@@ -35,6 +37,13 @@ if (Boolean(cacheDirectory) === Boolean(navmeshPath)) {
 if (cacheDirectory) {
   process.env.NAV_STREAMING = "1";
   process.env.NAV_CACHE_DIR = resolve(cacheDirectory);
+}
+if (transitionsPath) {
+  process.env.NAV_TRANSITIONS_PATH = resolve(transitionsPath);
+} else if (unverifiedCandidate) {
+  process.env.NAV_TRANSITIONS_PATH = resolve(
+    "data/2016/navigationTransitions.json"
+  );
 }
 if (topologyOnly) process.env.NAV_TRANSITIONS = "0";
 
@@ -44,9 +53,8 @@ async function main() {
   let query;
   let nav: InstanceType<typeof NavManager> | undefined;
   if (navmeshPath) {
-    const { importNavMesh, init, NavMeshQuery } = await import(
-      "recast-navigation"
-    );
+    const { importNavMesh, init, NavMeshQuery } =
+      await import("recast-navigation");
     await init();
     navmesh = importNavMesh(
       new Uint8Array(readFileSync(resolve(navmeshPath)))
@@ -54,7 +62,17 @@ async function main() {
     query = new NavMeshQuery(navmesh);
   } else {
     nav = new NavManager();
-    await nav.loadNav();
+    if (unverifiedCandidate) {
+      // A freshly baked candidate cannot have a deployable artifact manifest
+      // until its validation gates pass. Exercise the same disk index,
+      // TileCache mesh process, and runtime materialization without claiming
+      // the candidate is already a verified deployment artifact.
+      await (
+        nav as unknown as { loadNavStreaming(): Promise<void> }
+      ).loadNavStreaming();
+    } else {
+      await nav.loadNav();
+    }
     if (!nav.streaming) throw new Error("streaming cache did not load");
     navmesh = nav.navmesh;
     query = nav.navMeshQuery;

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 type Route = {
@@ -12,9 +12,11 @@ type Route = {
 const cacheDir = process.argv[2];
 const routeFile = process.argv[3];
 const instance = Number(process.argv[4]);
+const reportIndex = process.argv.indexOf("--report");
+const reportPath = reportIndex >= 0 ? process.argv[reportIndex + 1] : undefined;
 if (!cacheDir || !routeFile || !Number.isInteger(instance)) {
   console.error(
-    "Usage: npx tsx scripts/validateModelInstanceStreaming.ts <cache-dir> <routes.json> <instance-index>"
+    "Usage: npx tsx scripts/validateModelInstanceStreaming.ts <cache-dir> <routes.json> <instance-index> [--report <report.json>]"
   );
   process.exit(1);
 }
@@ -32,6 +34,9 @@ async function main() {
 
   process.env.NAV_STREAMING = "1";
   process.env.NAV_CACHE_DIR = resolve(cacheDir);
+  process.env.NAV_TRANSITIONS_PATH = resolve(
+    "data/2016/navigationTransitions.json"
+  );
   const { NavManager } = await import("../src/utils/recast");
   const nav = new NavManager();
   // Regional candidate caches intentionally have no deployable manifest yet.
@@ -41,7 +46,7 @@ async function main() {
   await (
     nav as unknown as { loadNavStreaming(): Promise<void> }
   ).loadNavStreaming();
-  nav.streamAround(
+  const streamed = nav.streamAround(
     routes.flatMap((route) => [
       new Float32Array([...route.start, 1]),
       new Float32Array([...route.end, 1])
@@ -84,18 +89,17 @@ async function main() {
     }
   }
 
-  console.log(
-    JSON.stringify(
-      {
-        instance,
-        routes: routes.length,
-        passed: routes.length - failures.length,
-        failures
-      },
-      null,
-      2
-    )
-  );
+  const summary = {
+    cacheDirectory: resolve(cacheDir),
+    instance,
+    streamed,
+    routes: routes.length,
+    passed: routes.length - failures.length,
+    failures
+  };
+  const encoded = `${JSON.stringify(summary, null, 2)}\n`;
+  if (reportPath) writeFileSync(resolve(reportPath), encoded);
+  console.log(encoded);
   if (failures.length) process.exitCode = 1;
 }
 
