@@ -1,6 +1,7 @@
 # Full-population navigation architecture
 
-Status: Slice 0 capacity audit complete; no production claim yet.
+Status: Slice 0 capacity audit and raw 64-bit WASM ABI spike complete; no
+production claim yet.
 
 This document pauses further whole-map semantic grinding until the runtime can
 support a populated public server. The current disk-indexed streamer remains a
@@ -217,23 +218,56 @@ definitions.
 
 This is not a compiler-flag-only change:
 
-- current direct tiles are 32-bit and must be regenerated or materialized;
+- current direct MSET tiles are 32-bit and must be regenerated or replaced by
+  materializing the portable compressed TSET;
 - `recast-navigation` 0.43.1 exposes references through 32-bit IDL surfaces;
-- WebIDL does not provide a clean complete 64-bit reference API;
 - scalar and array query paths must not silently coerce references to numbers;
 - serialized tile headers change size and acquire padding if raw structs are
   written.
 
-Prefer opaque handles at the JavaScript boundary. If raw 64-bit references are
-temporarily exposed for verification, force at least 32 remove/add cycles on
-the same slot so the salt produces references above JavaScript's exact-integer
-range. Cover `findPath`, `findStraightPath`, `findPolysAroundCircle`,
-`queryPolygons`, `moveAlongSurface`, crowd state, and serialization—not only a
-fresh scalar reference.
+### Raw ABI spike result
 
-Serialization must use explicit little-endian fields, a bumped format version,
-and an ABI tag. Do not `fwrite` a padded `NavMeshTileHeader` containing a
-64-bit reference; uninitialized padding would break deterministic hashes.
+The exact `@recast-navigation/wasm` 0.43.1 source (`gitHead`
+`8769e8b9995f127033af9f6e6eeac3fad7d66201`) now has an isolated fork spike at
+`xsploit/recast-navigation-js`, branch `spike/dt-polyref64-h1emu`, commit
+`5baae6f`.
+
+The spike proves that Emscripten 6.0.5's WebIDL binder can expose
+`unsigned long long` through `WASM_BIGINT=1`; an opaque-handle bridge is not
+required merely to cross the JavaScript boundary. The build conditionally
+changes all bound polygon/tile reference scalars, result arrays, raycast paths,
+link fields, corridor/crowd target refs, and debug-draw refs while preserving
+the normal 32-bit build. Both modes compile and pass executable Node ABI tests:
+
+- 32-bit refs remain JavaScript `number` values;
+- 64-bit refs are JavaScript `bigint` values;
+- encode/decode round-trips `0xffffffffffffffff` exactly;
+- scalar out refs and ref arrays round-trip values above `2^53`; and
+- callers normalize unsigned high-bit refs with `BigInt.asUintN(64)` and pass
+  them back with `BigInt.asIntN(64)` because the generated boundary represents
+  the raw i64 bit pattern as a signed BigInt.
+
+This passes the raw binding feasibility question, not the consumer gate. The
+remaining blockers are explicit:
+
+- `@recast-navigation/core` still models refs and ref arrays as `number` /
+  `UnsignedIntArray` and must gain a 64-bit build/runtime surface;
+- upstream `webidl-dts-gen` mishandles `unsigned long long[]`, so the 64-bit
+  package needs a BigInt-aware declaration path;
+- the existing TSET importer trusts its generated 16,384-slot navmesh header,
+  whereas the monolithic consumer must allocate at least 131,072 navmesh slots
+  before materializing all layers; and
+- query-array, raycast, Crowd, dynamic-obstacle churn, and server integration
+  still require behavioral tests on real tiles, not only wrapper bit tests.
+
+Opaque handles remain Candidate B's preferred process boundary, but Candidate
+A can proceed with BigInt refs if the high-level wrapper and tests stay
+fail-closed.
+
+Direct MSET serialization now uses a distinct version in the raw spike so a
+32-bit and 64-bit reader cannot silently reinterpret each other's tile header.
+Production serialization must still use explicit little-endian fields and an
+ABI tag rather than writing a padded native `NavMeshTileHeader`.
 
 The existing compressed TSET is ABI-portable because compressed tile and
 obstacle references remain 32-bit and its layer headers contain no polygon
