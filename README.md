@@ -58,6 +58,7 @@ So we will see :)
 ## Documentations
 
 - https://quentingruber.github.io/h1z1-server/
+- [Navigation project journey, current state, and roadmap](docs/navigation-project-journey.md)
 
 ## Setup H1Z1
 
