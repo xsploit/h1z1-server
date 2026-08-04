@@ -20,8 +20,6 @@ export const RUNTIME_PHASES = [
   "path-npc-create",
   "path-npc-read",
   "path-npc-ground",
-  "path-npc-collision",
-  "path-npc-collision-reset",
   "path-npc-replicate",
   "path-character-create",
   "path-character-teleport",

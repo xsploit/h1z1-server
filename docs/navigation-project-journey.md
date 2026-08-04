@@ -665,26 +665,29 @@ Before changing navigation again:
 
 ### P1: server-authoritative movement collision and attack line of sight
 
-Initial static-movement status as of 2026-08-03: commit `529b087df` implements
-the first fail-safe. Three torso-height rays approximate a swept 0.3 m NPC
-capsule, extend through the proposed movement, and reject solid H1COL2 wall or
-prop crossings before replication. A rejection keeps the last accepted game
-position, resets the move target, teleports or recreates the Detour agent at
-that safe position, stops the running animation, and emits throttled rejection
-telemetry. Dynamic door-panel meshes are skipped by this static sweep because
-their live state must come from the door/TileCache layer. The guard is enabled
-by default and can be disabled immediately with
-`NPC_MOVEMENT_COLLISION=0`.
+Rejected experiment: commit `529b087df` added a three-ray movement sweep and
+hard reset to the last replicated position. The raw H1COL2 query was fast
+(10,000 real-PV queries in 120.54 ms, about 12.05 microseconds per query), and
+the automated suite passed, but the in-client test correctly rejected the
+design. Live telemetry showed roughly 1,750-2,200 blocked updates every ten
+seconds, repeatedly resetting the same agents. That produced visible jitter
+and rubber-banding. The live movement hook, reset, telemetry, and diagnostic
+sweep were removed; this is preserved here as evidence not to repeat the
+approach. The independent impact-time wall obstruction check for NPC attacks
+remains.
 
-A 10,000-query real-PV H1COL2 benchmark measured 120.54 ms total, or about
-12.05 microseconds per query on the development machine. The full automated
-server suite passed after installation, but an in-client crowd test is still
-required to measure stair/door false positives and actual tick cost.
+The replacement must be a movement controller, not a Boolean reject-and-reset
+loop. It needs a capsule or similarly bounded shape cast, earliest contact,
+contact-normal/tangential sliding, depenetration, stable grounding, and bounded
+dynamic-entity avoidance. Detour should continue planning routes; the movement
+controller should resolve each step without sending the client backward or
+destroying the route target.
 
 The remaining P1 work is:
 
-1. Validate and tune the static sweep in the PV police station, common
-   entrances, stairs, and tight interiors.
+1. Build an offline deterministic movement-controller fixture using real
+   H1COL2 walls, corners, door thresholds, stairs, and tight interiors before
+   reconnecting collision response to live NPC replication.
 2. Bind reviewed dynamic door panels to live door state so closed doors block
    movement while open doors do not.
 3. Add bounded dynamic blockers for nearby drivable vehicles and player-built
@@ -692,12 +695,13 @@ The remaining P1 work is:
    world every tick.
 4. Keep the existing impact-time obstruction test for melee and ranged damage,
    then extend it to relevant dynamic construction/vehicle blockers.
-5. Extend telemetry with aggregate query time and dynamic-blocker counters.
+5. Extend telemetry with aggregate query time, contacts, slides,
+   depenetrations, stuck agents, and dynamic-blocker counters.
 6. Test at the PV wall shortcut, normal doorways, static prop cars, drivable
    vehicles, player construction, and open outdoor terrain.
 
-This is a fail-safe around bad movement. It does not excuse invalid navmesh
-topology; both layers are required.
+Collision response does not excuse invalid navmesh topology; both layers are
+required. No live hard-reset fail-safe should be reintroduced.
 
 ### P2: surgical topology fixes
 
@@ -922,11 +926,12 @@ native world inputs, semantic classification, targeted validation, a successful
 full bake, a verified installed artifact, and a measurable 43.9-point route
 improvement.
 
-Detour route output is now guarded by the first server-authoritative static
-movement sweep, while the existing attack gate remains in place. The immediate
-next evidence is an in-client PV/building test: confirm that walls stop NPCs
-without regressing valid entrances or stairs, and inspect the throttled
-`[Collision] rejected ... NPC movement` telemetry. After that, live doors,
-drivable vehicles, and construction need dynamic blockers. The five remaining
-placement failures and any surviving PV wall shortcut can then be repaired with
-regional evidence. None of those steps requires another full-map bake yet.
+The first server-authoritative static movement sweep was disproved by its live
+test and removed rather than normalized as acceptable jitter. The existing
+impact-time attack obstruction gate remains. Next, movement collision should
+be developed against an offline deterministic fixture and only return to the
+live path after it demonstrates stable slide/contact behavior without route
+resets. Live doors, drivable vehicles, and construction still need bounded
+dynamic blockers. The five remaining placement failures and any surviving PV
+wall shortcut can be repaired with regional evidence. None of those steps
+requires another full-map bake yet.

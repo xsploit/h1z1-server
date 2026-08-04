@@ -52,8 +52,6 @@ const HEADROOM = 2.0;
 // max half-extent of a carved obstacle box, so one large mesh (e.g. a long
 // wall's bounding box) can't carve out a huge chunk of navmesh
 const OBSTACLE_HALF_CAP = 8.0;
-const MOVEMENT_TORSO_HEIGHT = 1.0;
-const MOVEMENT_RAY_START_MARGIN = 0.005;
 
 export interface ObstacleBox {
   id: number; // stable instance id (for add/remove tracking)
@@ -82,9 +80,6 @@ export class CollisionManager {
   private readonly _ray = new Ray();
   private readonly _localRay = new Ray();
   private readonly _hitPoint = new Vector3();
-  private readonly _movementFrom = new Float32Array(4);
-  private readonly _movementTo = new Float32Array(4);
-  private readonly _seenInstances = new Set<number>();
 
   get loaded(): boolean {
     return this._loaded;
@@ -267,13 +262,7 @@ export class CollisionManager {
     return bestY;
   }
 
-  private segmentBlockedInternal(
-    from: Float32Array,
-    to: Float32Array,
-    ignoreDoorPanels: boolean,
-    startMargin: number,
-    endMargin: number
-  ): boolean {
+  segmentBlocked(from: Float32Array, to: Float32Array): boolean {
     if (!this._loaded) return false;
     const dx = to[0] - from[0],
       dy = to[1] - from[1],
@@ -288,16 +277,13 @@ export class CollisionManager {
       cx1 = Math.min(GRID_W - 1, this.cell(Math.max(from[0], to[0]))),
       cz0 = Math.max(0, this.cell(Math.min(from[2], to[2]))),
       cz1 = Math.min(GRID_W - 1, this.cell(Math.max(from[2], to[2])));
-    const seen = this._seenInstances;
-    seen.clear();
+    const seen = new Set<number>();
 
     for (let cx = cx0; cx <= cx1; cx++) {
       for (let cz = cz0; cz <= cz1; cz++) {
         const cell = this._grid[cz * GRID_W + cx];
         if (!cell) continue;
         for (const i of cell) {
-          if (ignoreDoorPanels && this._meshKind[this._instMesh[i]] === 3)
-            continue;
           // Mesh kind describes navigation use, not projectile permeability.
           // A house is tagged walkable because it contains floors and stairs,
           // but the same mesh also contains its walls. Every triangle kind can
@@ -338,68 +324,10 @@ export class CollisionManager {
               hitDx * this._ray.direction.x +
               hitDy * this._ray.direction.y +
               hitDz * this._ray.direction.z;
-          if (
-            distanceAlong > startMargin &&
-            distanceAlong < length - endMargin
-          ) {
+          if (distanceAlong > 0.05 && distanceAlong < length - 0.05) {
             return true;
           }
         }
-      }
-    }
-    return false;
-  }
-
-  segmentBlocked(from: Float32Array, to: Float32Array): boolean {
-    return this.segmentBlockedInternal(from, to, false, 0.05, 0.05);
-  }
-
-  /**
-   * Approximates a swept upright NPC capsule with three torso-height rays.
-   * The rays extend one radius beyond the proposed centre so the NPC stops
-   * before its body crosses a wall instead of waiting for the centre point to
-   * cross it. Door-panel meshes are deliberately skipped here: their live
-   * open/closed state is dynamic and remains owned by TileCache/game entities.
-   */
-  movementBlocked(
-    from: Float32Array,
-    to: Float32Array,
-    radius: number = 0.3
-  ): boolean {
-    if (!this._loaded) return false;
-    const dx = to[0] - from[0],
-      dz = to[2] - from[2],
-      horizontalDistance = Math.sqrt(dx * dx + dz * dz);
-    if (horizontalDistance < 0.001) return false;
-
-    const directionX = dx / horizontalDistance,
-      directionZ = dz / horizontalDistance,
-      lateralX = -directionZ,
-      lateralZ = directionX,
-      lateralRadius = Math.max(0, radius) * 0.75,
-      lookAhead = Math.max(0, radius);
-
-    for (const lateralOffset of [-lateralRadius, 0, lateralRadius]) {
-      this._movementFrom[0] = from[0] + lateralX * lateralOffset;
-      this._movementFrom[1] = from[1] + MOVEMENT_TORSO_HEIGHT;
-      this._movementFrom[2] = from[2] + lateralZ * lateralOffset;
-      this._movementFrom[3] = 1;
-      this._movementTo[0] =
-        to[0] + directionX * lookAhead + lateralX * lateralOffset;
-      this._movementTo[1] = to[1] + MOVEMENT_TORSO_HEIGHT;
-      this._movementTo[2] =
-        to[2] + directionZ * lookAhead + lateralZ * lateralOffset;
-      this._movementTo[3] = 1;
-      if (
-        this.segmentBlockedInternal(
-          this._movementFrom,
-          this._movementTo,
-          true,
-          MOVEMENT_RAY_START_MARGIN,
-          -MOVEMENT_RAY_START_MARGIN
-        )
-      ) {
-        return true;
       }
     }
     return false;

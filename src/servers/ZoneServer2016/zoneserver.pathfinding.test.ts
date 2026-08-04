@@ -79,9 +79,6 @@ test("NPC grounding preserves the previous replicated vertical layer", () => {
       crowdHealthy: true,
       isPositionStreamed: () => true
     },
-    collisionManager: {
-      movementBlocked: () => false
-    },
     _npcs: { npc },
     _characters: {},
     _vehicles: {},
@@ -101,74 +98,6 @@ test("NPC grounding preserves the previous replicated vertical layer", () => {
 
   assert.ok(replicatedPosition);
   assert.deepEqual(Array.from(replicatedPosition), [11, 25.75, 12, 0]);
-});
-
-test("NPC movement collision keeps the last safe position and resets Detour", () => {
-  const previousToggle = process.env.NPC_MOVEMENT_COLLISION;
-  delete process.env.NPC_MOVEMENT_COLLISION;
-  try {
-    let replicated = false;
-    let reset = false;
-    let synchronizedIdle = false;
-    let teleportedTo: Float32Array | undefined;
-    const agent = {
-      position: () => ({ x: 10, y: 25, z: 10.2 }),
-      resetMoveTarget() {
-        reset = true;
-      }
-    };
-    const npc = {
-      characterId: "blocked-npc",
-      state: {
-        position: new Float32Array([10, 25, 10, 1])
-      },
-      navAgent: agent,
-      goTo() {
-        replicated = true;
-      },
-      syncIdleIfStopped() {
-        synchronizedIdle = true;
-      }
-    };
-    const server = {
-      navManager: {
-        streaming: false,
-        crowdHealthy: true,
-        isPositionStreamed: () => true,
-        teleportAgent(_agent: unknown, position: Float32Array) {
-          teleportedTo = new Float32Array(position);
-          return true;
-        }
-      },
-      collisionManager: {
-        movementBlocked(from: Float32Array, to: Float32Array) {
-          assert.deepEqual(Array.from(from), [10, 25, 10, 1]);
-          assert.equal(to[0], 10);
-          assert.equal(to[1], 25);
-          assert.ok(Math.abs(to[2] - 10.2) < 0.0001);
-          assert.equal(to[3], 0);
-          return true;
-        }
-      },
-      _npcs: { npc },
-      _characters: {},
-      _vehicles: {},
-      getGroundInfo() {
-        return { selection: { height: 25, source: "navmesh" } };
-      }
-    };
-
-    ZoneServer2016.prototype.updatePathfindingPositions.call(server);
-
-    assert.equal(replicated, false);
-    assert.equal(reset, true);
-    assert.equal(synchronizedIdle, true);
-    assert.deepEqual(Array.from(teleportedTo!), [10, 25, 10, 1]);
-    assert.deepEqual(Array.from(npc.state.position), [10, 25, 10, 1]);
-  } finally {
-    if (previousToggle === undefined) delete process.env.NPC_MOVEMENT_COLLISION;
-    else process.env.NPC_MOVEMENT_COLLISION = previousToggle;
-  }
 });
 
 test("player and vehicle movement never enters the native NPC crowd", () => {

@@ -86,10 +86,7 @@ test("CollisionManager grounds NPCs and exposes solid obstacles", () => {
           { kind: 1, ...plane },
           // Building actors are kind 0 because they contain walkable floors,
           // but their wall triangles must still block projectiles.
-          { kind: 0, ...wall },
-          // Door panels remain projectile blockers, but movement collision
-          // skips them because the live door state is dynamic.
-          { kind: 3, ...wall }
+          { kind: 0, ...wall }
         ],
         [
           {
@@ -108,12 +105,6 @@ test("CollisionManager grounds NPCs and exposes solid obstacles", () => {
             meshIndex: 2,
             transformAndBounds: [
               0, 0, 0, 0, 0, 0, 1, 1, 1, 1, -1, 0, -0.05, 1, 2, 0.05
-            ]
-          },
-          {
-            meshIndex: 3,
-            transformAndBounds: [
-              5, 0, 0, 0, 0, 0, 1, 1, 1, 1, 4, 0, -0.05, 6, 2, 0.05
             ]
           }
         ]
@@ -137,30 +128,6 @@ test("CollisionManager grounds NPCs and exposes solid obstacles", () => {
       manager.segmentBlocked(
         new Float32Array([3, 1, -2, 1]),
         new Float32Array([3, 1, 2, 1])
-      ),
-      false
-    );
-    assert.strictEqual(
-      manager.movementBlocked(
-        new Float32Array([0, 0, -0.4, 1]),
-        new Float32Array([0, 0, -0.2, 1]),
-        0.3
-      ),
-      true
-    );
-    assert.strictEqual(
-      manager.movementBlocked(
-        new Float32Array([3, 0, -0.4, 1]),
-        new Float32Array([3, 0, -0.2, 1]),
-        0.3
-      ),
-      false
-    );
-    assert.strictEqual(
-      manager.movementBlocked(
-        new Float32Array([5, 0, -0.4, 1]),
-        new Float32Array([5, 0, -0.2, 1]),
-        0.3
       ),
       false
     );
