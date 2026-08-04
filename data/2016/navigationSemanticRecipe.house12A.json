@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Houses_House12A.adr",
+  "collisionAssetSha256": "acfed6b6611fcf3427deca7c7ceeff767b692f833f4f5054e2adf4afa529a006",
+  "defaultSemantic": "nav_obstacle_static",
+  "selectors": [
+    {
+      "id": "main-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-9.2, 0.3, -8.4, 9.1, 0.52, 8.1],
+      "normalYMax": -0.95,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 120,
+      "maxSelectedTriangles": 138
+    },
+    {
+      "id": "entrance-thresholds",
+      "semantic": "nav_threshold",
+      "centroidBounds": [-9.2, 0.05, -8.4, 9.1, 0.3, 8.3],
+      "normalYMax": -0.9,
+      "slopeDegreesMax": 10,
+      "minSelectedTriangles": 40,
+      "maxSelectedTriangles": 52
+    }
+  ]
+}

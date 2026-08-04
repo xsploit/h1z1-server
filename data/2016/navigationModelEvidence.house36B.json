@@ -27,15 +27,15 @@
       "size": 32734
     },
     "semanticPolicy": {
-      "sha256": "c0aa00359e5d8163313061ae8317894aebdbaac367a674c51bc1bdc8dee42a30",
-      "size": 40594
+      "sha256": "fbb6051afaa659455307927b9f9c45c510702fc5a25d4fdca0292c4adccc2705",
+      "size": 41915
     },
     "semanticRecipe": {
       "sha256": "5df902dd0193deec87f8426de7ed9086bf9ba9a6ca92221716669fbfd4e5f5e2",
       "size": 2204
     },
     "semanticSidecar": {
-      "sha256": "a8d8cca3d2b06c7283a212091d5b90df828a9141799ee55fa45e9e106315c108",
+      "sha256": "fc2b2a0a3be41f18e39bc7de105df7463822b8422dd1d1af146027a970c14b40",
       "size": 508976
     },
     "validationTemplate": {

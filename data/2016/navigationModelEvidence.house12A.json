@@ -1,0 +1,316 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Houses_House12A.adr",
+  "inputs": {
+    "collision": {
+      "sha256": "ce8ca93c8b3d3607d829b323580b6cad60723ea46c7f46eb0e8f16ed38656065",
+      "size": 26332088
+    },
+    "compiledTransitions": {
+      "sha256": "91877e9f528bacb2dbc0d0785e5ea69290b4a9306a464442531a922ee108cf0d",
+      "size": 27497
+    },
+    "metadata": {
+      "sha256": "5500799b7d5a82d40cab376a07b6eaa2ee9d360115e166714e5357bbb28a64b1",
+      "size": 343678
+    },
+    "modelForbiddenProbes": {
+      "sha256": "0e854897094cc86dac2547daf2033531b4e4381bcfef28a594e9d19ab658a82a",
+      "size": 83942
+    },
+    "modelRoutes": {
+      "sha256": "64baa01d5602411c4795e42880923b215fdb39c9db8c2598d88341bbe33873ed",
+      "size": 165599
+    },
+    "modelTransitions": {
+      "sha256": "a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f",
+      "size": 4
+    },
+    "semanticPolicy": {
+      "sha256": "fbb6051afaa659455307927b9f9c45c510702fc5a25d4fdca0292c4adccc2705",
+      "size": 41915
+    },
+    "semanticRecipe": {
+      "sha256": "e3aae7d778126cde51cb1a138b574b51fae707fe20723115a4f80596e754c279",
+      "size": 767
+    },
+    "semanticSidecar": {
+      "sha256": "fc2b2a0a3be41f18e39bc7de105df7463822b8422dd1d1af146027a970c14b40",
+      "size": 508976
+    },
+    "validationTemplate": {
+      "sha256": "d02e635e885c7ac4561d894add20123e498be316ff7db1eda682a3ec17439112",
+      "size": 4871
+    }
+  },
+  "streamingCaches": [
+    {
+      "instanceIndex": 125298,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "4a2cffbf77636563ea09d0e513abb74c69c0b67bb7441dafc962824031301945",
+          "size": 20840
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125299,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "2653efddbd344483e2690e921cd541a26849ae9b7d0f79ba56060fd555968c2f",
+          "size": 15119
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125300,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "a3129d515227aa80863181821e7d199285ef92729fd5a8520380219afd3f56b3",
+          "size": 19056
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125301,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "24a2dbda43b02b5601c9ade9b442657fd3bac79a15ddb8fb3c2a7ed33adc7f90",
+          "size": 23000
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125302,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "f0dec4b5be3f4eab46cb37fad79b6743ba7545e09b9ccfef7c6b1f84d35a9993",
+          "size": 20214
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125303,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "e01976e0bb93e54c6784ed4029dea522de93314273263999c1e301f7968e995f",
+          "size": 27054
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125304,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "11dc683cd0c4b3a08e2adca203b0de36945aadd207f583400f3a1cf90b80decb",
+          "size": 20082
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125305,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "b4bbd0d1f12e799edb32ceae848862acc1d34ec5e51eaea556a28d1ea6a59442",
+          "size": 33190
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125306,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "4f46a917e62425fd045d54e09710d7b1c4f341d4bb6d603315d6c38ee97600c6",
+          "size": 29810
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125307,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "55e6f41216184d7bdc345fddecb9333306fd434353b85d5d74b1736c385fa7a3",
+          "size": 25721
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125308,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "7872aa00724aedd5b134300ab0123f4cf0d783c0aae91e72e4f7b0e1151b4c4e",
+          "size": 25651
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125309,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "37dc12a0008ba83d2018af5d3f135533700988c55864134ddb0dcfe1f5a7ee9e",
+          "size": 25854
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125310,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "aa894cdf118de768339f882d4b49e12e04ae9eac80a60f15c9616706d7387460",
+          "size": 24658
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125311,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "0784654aee01feb0feb262c847c5890094ec9f4b40c87dfa6a718ffad87df9dd",
+          "size": 40700
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125312,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "ec150a95c8d3abb0ab9905233e120ff9321cab198b76511a559377f9afdc0256",
+          "size": 26406
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125313,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "b13625f46cb4472af997a099668f8b69663f748c11a2a9e958e785ed35842ba8",
+          "size": 36963
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125314,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "88f5bb2f81231754b0a890fa3f298bf9af78532ad88335eefafa9a2985fa4778",
+          "size": 37606
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125315,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "60be6d51f9c60499197f60d860375246b9ac22689eecdd487a1a039f66b9e2cc",
+          "size": 26954
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125316,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "8662194ab745e611109546a7c7badc0106754e92f9922dfe74e2b7aa43ead56a",
+          "size": 25371
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125317,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "25d679b98af7f2bc997c49c255223363cdc32adc27e112c6a0e33a908e516762",
+          "size": 34110
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125318,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "9c2cfd33f87da083d5111ed2268b4b1822e60bd1d7c697ea695e9f33aea4e5aa",
+          "size": 14613
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125319,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "5afb6339ff9fb3a75fa2fb6ad724a2e35d0eeff0e6302f9709fd9e2aa7c961d9",
+          "size": 21390
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125320,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "a9a89a96b14b56d3d3c8ac18b9bf04da672330cb0f8dee3111a38f707ee3bb43",
+          "size": 22654
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125321,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "a7dd2cf9e035591ecce43581a87ae8fa4bed6acb0213c7727be208e1f586120b",
+          "size": 25675
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125322,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "a5ec87dee82f623cf526c23fc6e1b5b1e4f12e5dbf454e4656dab283c16d22e3",
+          "size": 21194
+        }
+      ]
+    },
+    {
+      "instanceIndex": 125323,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "593ef1c27210fba311279391355bd0623ea851d6c7a37eb69d568aa0b77b1b41",
+          "size": 19585
+        }
+      ]
+    }
+  ],
+  "result": {
+    "instances": 26,
+    "routes": 572,
+    "passed": 572,
+    "forbiddenProbes": 312,
+    "forbiddenEvaluated": 312,
+    "forbiddenPassed": 312
+  }
+}

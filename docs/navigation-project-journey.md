@@ -942,9 +942,10 @@ The accepted candidate uses:
 - corrected second-floor evidence that exits the physical stair landing to the
   side instead of probing through the stairwell opening.
 
-Reclassification reduces the exact H1SEM1 unknown backlog from 411,811 to
-381,472 triangles. House36B contributes zero remaining unknown triangles; the
-30,339-triangle reduction is exact rather than inferred from metadata.
+House36B reclassification reduced the exact H1SEM1 unknown backlog from
+411,811 to 381,472 triangles. The subsequent House12A checkpoint reduces it to
+373,393. Both models contribute zero remaining unknown triangles; the combined
+38,418-triangle reduction is exact rather than inferred from metadata.
 
 All eight regional candidates were built in roughly seven seconds each. The
 final admission result is 224/224 routes and 120/120 evaluated forbidden-roof
@@ -965,13 +966,38 @@ The compact, path-independent evidence record is committed as
 all eight regional cache-part hashes, and the 224/224 plus 120/120 result. The
 larger reproducible artifacts remain under
 `work/staging/navigation-doctor-current/house36b-prepared-area4v2` and
-`work/staging/navigation-doctor-current/house36b-noapron-regions`, with final
-streaming and doctor reports named `house36b-noapron-streaming.json` and
-`house36b-doctor-noapron.*`. The
+`work/staging/navigation-doctor-current/house36b-final-policy-regions`, with the
+combined-policy streaming report named `house36b-final-policy-streaming.json`
+and the doctor reports named `house36b-doctor-noapron.*`. The
 model-local template expands exact H1COL2 transforms into regional bounds,
 world routes, forbidden probes, and transitions. The canonical semantic policy
-contains the reviewed House36B rule, but no new full-map cache has been baked
-or installed from it yet.
+contains the reviewed House36B and House12A rules, but no new full-map cache has
+been baked or installed from them yet.
+
+### House12A model-oriented checkpoint (2026-08-03)
+
+`Common_Structures_Houses_House12A.adr` is the second admitted archetype: 8,079
+triangles across 26 exact H1COL2 placements, representing 10.8% of the ranked
+composite backlog. Geometry review proved that it is single-storey. Its only
+large near-horizontal band is the floor at local y 0.30-0.52; a clean dead band
+above y 0.52 separates that floor from trim, ceilings, and the roof.
+
+The promoted hash-bound recipe selects 138 interior-floor triangles and 52
+threshold/pad triangles, leaving 7,889 triangles fail-closed as static
+obstacles. It deliberately has no area cap: 23 legitimate floor triangles span
+more than five metres and account for 57% of the floor. It also adds no manual
+links; all four 0.17-metre entrance rises connect natively under the human
+profile.
+
+The regional bake covered all 26 placements in 174 seconds. Admission proves
+all four entrances in both directions plus long cross-building connectivity:
+572/572 streamed routes passed. Twelve distributed roof probes per placement
+also passed, for 312/312 evaluated non-walkable probes. No placement was
+skipped, every placement resolved a distinct cache, and the same candidate
+caches accepted the initially ambiguous west pad without a rebake. The compact
+input and cache identities are pinned by
+`data/2016/navigationModelEvidence.house12A.json`; larger artifacts remain
+under `work/staging/navigation-doctor-current/house12a-*`.
 
 This establishes the efficient workflow for the remaining repeated building
 archetypes: inventory one model, author conservative semantics, bake only its
@@ -982,9 +1008,9 @@ make roofs or walls walkable.
 The generated House36B transitions are now compiled with the existing world
 transitions into a 69-link provenance-bound full-bake/runtime input. Navigation
 Doctor now exits nonzero on failed routes, unverified roof probes, zero prepared
-evidence. The next navigation work is to add
-the compact regional result to the admission suite and repeat the workflow for
-the next highest-impact unclassified building. Only after several archetypes
+evidence, or stale pinned inputs. The next highest-impact unclassified building is
+`Common_Structures_Apartments_Apartments06.adr` at 13 placements and 9.369% of
+the ranked composite backlog. Only after several archetypes
 are green should another full-map bake be started. A DT_POLYREF64 comparison
 remains valuable because it may remove the 32-bit active-tile ceiling, but it
 does not replace classification, transition, roof, or collision evidence.
