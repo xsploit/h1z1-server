@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_Houses_House36B.adr",
+  "boundsMargin": 18,
+  "maxTerrainDelta": 1.5,
+  "terrainProbes": [
+    [-2.85, 0.0, -11.0],
+    [-3.7, 0.0, 12.7]
+  ],
+  "routes": [
+    {
+      "label": "south terrain to lower step",
+      "start": [-2.85, 0.0, -11.0],
+      "end": [-2.85, 0.186, -9.9]
+    },
+    {
+      "label": "south lower step to middle step",
+      "start": [-2.85, 0.186, -9.9],
+      "end": [-2.85, 0.534, -9.35]
+    },
+    {
+      "label": "south middle step to upper step",
+      "start": [-2.85, 0.534, -9.35],
+      "end": [-2.85, 0.925, -8.8]
+    },
+    {
+      "label": "south upper step to interior",
+      "start": [-2.85, 0.925, -8.8],
+      "end": [-2.85, 1.105, -7.8]
+    },
+    {
+      "label": "south interior to upper step",
+      "start": [-2.85, 1.105, -7.8],
+      "end": [-2.85, 0.925, -8.8]
+    },
+    {
+      "label": "south upper step to middle step",
+      "start": [-2.85, 0.925, -8.8],
+      "end": [-2.85, 0.534, -9.35]
+    },
+    {
+      "label": "south middle step to lower step",
+      "start": [-2.85, 0.534, -9.35],
+      "end": [-2.85, 0.186, -9.9]
+    },
+    {
+      "label": "south lower step to terrain",
+      "start": [-2.85, 0.186, -9.9],
+      "end": [-2.85, 0.0, -11.0]
+    },
+    {
+      "label": "north terrain to lower landing",
+      "start": [-3.7, 0.0, 12.7],
+      "end": [-3.7, 0.212, 11.3]
+    },
+    {
+      "label": "north lower landing to first step",
+      "start": [-3.7, 0.212, 11.3],
+      "end": [-3.7, 0.4, 10.45]
+    },
+    {
+      "label": "north first step to middle step",
+      "start": [-3.7, 0.4, 10.45],
+      "end": [-3.7, 0.74, 9.8]
+    },
+    {
+      "label": "north middle step to upper step",
+      "start": [-3.7, 0.74, 9.8],
+      "end": [-3.7, 1.07, 9.2]
+    },
+    {
+      "label": "north upper step to interior",
+      "start": [-3.7, 1.07, 9.2],
+      "end": [-3.7, 1.105, 8.4]
+    },
+    {
+      "label": "north interior to upper step",
+      "start": [-3.7, 1.105, 8.4],
+      "end": [-3.7, 1.07, 9.2]
+    },
+    {
+      "label": "north upper step to middle step",
+      "start": [-3.7, 1.07, 9.2],
+      "end": [-3.7, 0.74, 9.8]
+    },
+    {
+      "label": "north middle step to first step",
+      "start": [-3.7, 0.74, 9.8],
+      "end": [-3.7, 0.4, 10.45]
+    },
+    {
+      "label": "north first step to lower landing",
+      "start": [-3.7, 0.4, 10.45],
+      "end": [-3.7, 0.212, 11.3]
+    },
+    {
+      "label": "north lower landing to terrain",
+      "start": [-3.7, 0.212, 11.3],
+      "end": [-3.7, 0.0, 12.7]
+    },
+    {
+      "label": "main floor to interior stair foot",
+      "start": [-3.6, 1.118, 4.8],
+      "end": [-3.6, 1.285, 3.75]
+    },
+    {
+      "label": "interior stair foot to lower flight",
+      "start": [-3.6, 1.285, 3.75],
+      "end": [-3.6, 2.25, 2.5]
+    },
+    {
+      "label": "interior lower flight to upper flight",
+      "start": [-3.6, 2.25, 2.5],
+      "end": [-3.6, 3.3, 1.0]
+    },
+    {
+      "label": "interior upper flight to second landing",
+      "start": [-3.6, 3.3, 1.0],
+      "end": [-3.6, 4.368, 0.25]
+    },
+    {
+      "label": "second landing to second floor",
+      "start": [-3.6, 4.368, 0.25],
+      "end": [-3.6, 4.37, -0.8]
+    },
+    {
+      "label": "second floor to second landing",
+      "start": [-3.6, 4.37, -0.8],
+      "end": [-3.6, 4.368, 0.25]
+    },
+    {
+      "label": "second landing to interior upper flight",
+      "start": [-3.6, 4.368, 0.25],
+      "end": [-3.6, 3.3, 1.0]
+    },
+    {
+      "label": "interior upper flight to lower flight",
+      "start": [-3.6, 3.3, 1.0],
+      "end": [-3.6, 2.25, 2.5]
+    },
+    {
+      "label": "interior lower flight to stair foot",
+      "start": [-3.6, 2.25, 2.5],
+      "end": [-3.6, 1.285, 3.75]
+    },
+    {
+      "label": "interior stair foot to main floor",
+      "start": [-3.6, 1.285, 3.75],
+      "end": [-3.6, 1.118, 4.8]
+    }
+  ]
+}

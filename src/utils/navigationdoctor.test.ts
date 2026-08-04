@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   createNavigationDoctorReport,
@@ -135,4 +136,20 @@ test("navigation doctor rejects duplicate and malformed model evidence", () => {
     () => createNavigationDoctorReport(malformed, []),
     /instanceCount must be a non-negative integer/
   );
+});
+
+test("House36B evidence covers both entrances and the interior stair", () => {
+  const house36B = JSON.parse(
+    readFileSync("data/2016/navigationModelValidation.house36B.json", "utf8")
+  ) as NavigationModelValidationTemplate;
+  assert.equal(house36B.actorFile, "Common_Structures_Houses_House36B.adr");
+  assert.equal(house36B.terrainProbes?.length, 2);
+  assert.equal(house36B.routes.length, 28);
+  const labels = house36B.routes.map((route) =>
+    String((route as { label?: unknown }).label)
+  );
+  assert(labels.some((label) => label.startsWith("south terrain")));
+  assert(labels.some((label) => label.startsWith("north terrain")));
+  assert(labels.some((label) => label.includes("interior upper flight")));
+  assert(labels.some((label) => label.includes("second floor")));
 });

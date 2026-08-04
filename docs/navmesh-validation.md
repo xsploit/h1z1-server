@@ -48,6 +48,22 @@ fresh bounded Recast process so distant-model iteration cannot exhaust one
 mutable WASM TileCache. The doctor never bakes, composes, deploys, or changes
 game/server files.
 
+### House36B measured baseline
+
+`data/2016/navigationModelValidation.house36B.json` captures two exterior
+stair chains and the main-floor-to-second-floor staircase in model-local
+coordinates. The points come from exact H1COL2 triangle evidence rather than
+visual estimates. Transforming the template found all 8 world placements and
+produced 224 bidirectional route segments without skipping a terrain-mismatched
+instance.
+
+Against collision `ce8ca93c8b3d3607d829b323580b6cad60723ea46c7f46eb0e8f16ed38656065`
+and the currently tested full-world cache, only 70/224 segments pass. All 80
+interior-stair segments fail (10 segments across 8 placements), the north
+entrance mostly fails, and the south entrance is only partly connected. This
+is the pinned pre-classification baseline for a bounded House36B candidate;
+it demonstrates missing topology without authorizing a full-world bake.
+
 ## Recoverable runtime and bundle deployment
 
 `scripts/deployNavigationArtifact.ps1` deploys a compiled navigation runtime
