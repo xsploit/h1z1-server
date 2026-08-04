@@ -548,14 +548,27 @@ This clears the server-side Crowd lifecycle and deterministic two-hour-equivalen
 obstacle/churn gate. It does not replace multi-client replication, event
 delivery, or entity-specific gameplay checks.
 
+After commit `b899e4320`, the verified runtime closure and unchanged navigation
+artifact were transactionally installed with backup
+`nav-artifact-contract-20260804-155919`. Packaged 64-bit runtime artifact
+`7ec35b7039eb5382528ba44fb2b316c225aed79da933a948e519c970583fe7ad`
+was installed with backup `navigation64-runtime-20260804-155931`, and the
+QuickStart launcher/bootstrap was installed with backup
+`navigation64-launcher-20260804-155932`. Installed file hashes matched the
+staged package and compiled runtime exactly. A server-only QuickStart smoke then
+selected the installed `runtime/navigation64` core and WASM modules, verified
+artifact `4b8368d7afdb72fdfe3ae73a7bc5a521dbe3caf860ce1d384f199f7cc42a2e2b`,
+materialized all 104,935 layers / 100,289 columns with the 667.3 MiB WASM heap,
+loaded the heightmap, collision, plugins, loot tables, and world NPC population,
+and reached `Server is ready and accepting connections.` The smoke server was
+then stopped without launching the game client.
+
 Candidate A is therefore the preferred full-pop architecture. The remaining
-blockers concern installed-server and gameplay behavior, not reference
+blockers concern packaging polish and gameplay behavior, not reference
 capacity:
 
 - upstream `webidl-dts-gen` still mishandles `unsigned long long[]`, so a
   publishable 64-bit package needs a BigInt-aware declaration path;
-- the staged 64-bit runtime package still needs an installed Play smoke proving
-  the launcher selects only packaged module paths;
 - door/construction/vehicle obstacle churn must prove that geometry is actually
   blocked and locally replanned, not merely that the API returns success;
 - replication, the complete AI update phase, and separated sound/explosion
