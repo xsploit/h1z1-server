@@ -14,7 +14,7 @@ import {
   statSync,
   writeFileSync
 } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 export const NAVIGATION_CRAWL_SCHEMA_VERSION = 1 as const;
 
@@ -214,6 +214,44 @@ export function bakeCacheIsComplete(
   );
 }
 
+/** Find a completed interrupted bake that can be promoted into the cache. */
+export function findRecoverableBakeCache(
+  cacheDirectory: string,
+  expectedKey: string
+): string | undefined {
+  const parent = dirname(cacheDirectory);
+  if (!existsSync(parent)) return undefined;
+  const prefix = `${basename(cacheDirectory)}.tmp-`;
+  return readdirSync(parent)
+    .filter((name) => name.startsWith(prefix))
+    .sort()
+    .map((name) => join(parent, name))
+    .find((candidate) => bakeCacheIsComplete(candidate, expectedKey));
+}
+
+function retryableRenameError(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("code" in error)) return false;
+  return ["EACCES", "EBUSY", "EPERM"].includes(String(error.code));
+}
+
+async function promoteBakeCache(
+  temporary: string,
+  cacheDirectory: string,
+  expectedKey: string
+): Promise<void> {
+  const delays = [0, 25, 50, 100, 200, 400, 800];
+  for (const delay of delays) {
+    if (bakeCacheIsComplete(cacheDirectory, expectedKey)) return;
+    if (delay > 0) await new Promise((fulfill) => setTimeout(fulfill, delay));
+    try {
+      renameSync(temporary, cacheDirectory);
+      return;
+    } catch (error) {
+      if (!retryableRenameError(error) || delay === delays.at(-1)) throw error;
+    }
+  }
+}
+
 /** Run bounded asynchronous work while preserving input/result order. */
 export async function runBounded<T, R>(
   values: T[],
@@ -367,6 +405,30 @@ function bakeOne(
     });
 
   mkdirSync(resolve(job.cacheDirectory, ".."), { recursive: true });
+  const recoverable = findRecoverableBakeCache(job.cacheDirectory, job.key);
+  if (recoverable) {
+    return promoteBakeCache(recoverable, job.cacheDirectory, job.key)
+      .then(() => {
+        materializeModelView(job);
+        return {
+          key: job.key,
+          actorFile: job.actorFile,
+          instanceIndex: job.instanceIndex,
+          state: "cache-hit" as const,
+          cacheDirectory: job.cacheDirectory,
+          seconds: (Date.now() - started) / 1000
+        };
+      })
+      .catch((error: unknown) => ({
+        key: job.key,
+        actorFile: job.actorFile,
+        instanceIndex: job.instanceIndex,
+        state: "failed" as const,
+        cacheDirectory: job.cacheDirectory,
+        seconds: (Date.now() - started) / 1000,
+        error: `failed to recover completed bake ${recoverable}: ${error instanceof Error ? error.message : String(error)}`
+      }));
+  }
   const temporary = `${job.cacheDirectory}.tmp-${process.pid}-${randomBytes(4).toString("hex")}`;
   mkdirSync(temporary, { recursive: true });
   const logPath = join(temporary, "bake.log");
@@ -400,10 +462,16 @@ function bakeOne(
   ];
   return new Promise((fulfill) => {
     let settled = false;
+    let descriptorClosed = false;
+    const closeDescriptor = (): void => {
+      if (descriptorClosed) return;
+      descriptorClosed = true;
+      closeSync(descriptor);
+    };
     const finish = (result: RegionalBakeResult): void => {
       if (settled) return;
       settled = true;
-      closeSync(descriptor);
+      closeDescriptor();
       fulfill(result);
     };
     const child = spawn(baker, arguments_, {
@@ -422,7 +490,7 @@ function bakeOne(
         error: error.message
       });
     });
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       if (settled) return;
       if (code !== 0) {
         finish({
@@ -455,16 +523,32 @@ function bakeOne(
         });
         return;
       }
-      renameSync(temporary, job.cacheDirectory);
-      materializeModelView(job);
-      finish({
-        key: job.key,
-        actorFile: job.actorFile,
-        instanceIndex: job.instanceIndex,
-        state: "built",
-        cacheDirectory: job.cacheDirectory,
-        seconds: (Date.now() - started) / 1000
-      });
+      // Windows will not rename a directory while this process still holds its
+      // bake.log descriptor. Close it before cache promotion, then tolerate a
+      // short-lived scanner/AV handle with bounded retries.
+      closeDescriptor();
+      try {
+        await promoteBakeCache(temporary, job.cacheDirectory, job.key);
+        materializeModelView(job);
+        finish({
+          key: job.key,
+          actorFile: job.actorFile,
+          instanceIndex: job.instanceIndex,
+          state: "built",
+          cacheDirectory: job.cacheDirectory,
+          seconds: (Date.now() - started) / 1000
+        });
+      } catch (error) {
+        finish({
+          key: job.key,
+          actorFile: job.actorFile,
+          instanceIndex: job.instanceIndex,
+          state: "failed",
+          cacheDirectory: job.cacheDirectory,
+          seconds: (Date.now() - started) / 1000,
+          error: `failed to promote completed bake ${temporary}: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
     });
   });
 }

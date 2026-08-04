@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   bakeCacheIsComplete,
   createRegionalBakeKey,
+  findRecoverableBakeCache,
   mergeNavigationTransitions,
   runBounded,
   stableStringify
@@ -65,6 +66,24 @@ test("cache completion requires matching manifest, nav, and cache parts", () => 
   writeFileSync(join(root, "z1_cache_0.bin"), "cache");
   assert.equal(bakeCacheIsComplete(root, "wrong"), false);
   assert.equal(bakeCacheIsComplete(root, "right"), true);
+});
+
+test("completed interrupted bake cache is recoverable and incomplete cache is ignored", () => {
+  const root = mkdtempSync(join(tmpdir(), "nav-crawl-recovery-test-"));
+  const cache = join(root, "abc123");
+  const incomplete = `${cache}.tmp-100-deadbeef`;
+  const complete = `${cache}.tmp-200-feedface`;
+  mkdirSync(incomplete, { recursive: true });
+  writeFileSync(join(incomplete, "bake-manifest.json"), "{}");
+  mkdirSync(complete, { recursive: true });
+  writeFileSync(
+    join(complete, "bake-manifest.json"),
+    JSON.stringify({ schemaVersion: 1, key: "abc123" })
+  );
+  writeFileSync(join(complete, "z1_0.bin"), "nav");
+  writeFileSync(join(complete, "z1_cache_0.bin"), "cache");
+  assert.equal(findRecoverableBakeCache(cache, "abc123"), complete);
+  assert.equal(findRecoverableBakeCache(cache, "wrong"), undefined);
 });
 
 test("runBounded preserves order and enforces concurrency", async () => {
