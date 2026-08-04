@@ -368,6 +368,24 @@ launcher is not yet permanently switched to 64-bit mode because the external
 64-bit package still needs a reproducible deployment location instead of a
 workspace build path.
 
+The installed runtime also passed two non-client behavior gates:
+
+- a real TileCache box changed a previously clear ray to `t=0.4362564`; removing
+  it restored the clear ray and left zero registered obstacles; and
+- a full ZoneServer validation created 596 zombies, 151 bandits, 37 rabbits,
+  102 deer, 31 wolves, 18 bears, 62 vehicles, and 1,000 additional NPCs, then
+  ran 1,000 AI/pathfinding ticks while touring the map and completing 50
+  obstacle add/remove cycles.
+
+That stress run retained 1,788 active agents, reported no invalid agent indexes,
+kept Crowd and obstacle health true, and kept the WASM heap fixed at 667 MiB.
+With forced JavaScript GC, process RSS ended at 2,065 MiB and JavaScript heap
+usage ended at 334 MiB. The machine-readable report is
+`work/staging/full-apartments06-v1/installed-world-crowd-1000x1000-gc-20260804.json`.
+This clears representative static box carving and short deterministic obstacle
+churn; it does not substitute for door-, construction-, and vehicle-specific
+gameplay checks or the two-hour soak.
+
 Candidate A is therefore the preferred full-pop architecture. The remaining
 blockers concern installed-server and gameplay behavior, not reference
 capacity:
@@ -446,8 +464,10 @@ make it the most complex fallback.
 
 Current evidence clears the standalone 2,000-agent Crowd, replan, reference
 ABI, full-cache materialization, and clean-teardown portions of these gates. It
-does not clear the 100-player distribution, replication/event delivery,
-installed-runtime, obstacle-effectiveness, or two-hour soak portions.
+It also clears installed-runtime startup, representative box-carve
+effectiveness, and a 1,000-tick/50-obstacle ZoneServer stress. It does not clear
+the 100-player distribution, replication/event delivery, entity-specific
+obstacle behavior, or two-hour soak portions.
 
 ## Audited surfaces
 
@@ -471,6 +491,8 @@ installed-runtime, obstacle-effectiveness, or two-hour soak portions.
   `work/h1z1-pv-nav/src/utils/navigationruntime.ts`;
 - repeatable server-side benchmark entry point:
   `work/h1z1-pv-nav/scripts/benchmarkNavigationFullPopulation.ts`.
+- installed ZoneServer Crowd/obstacle stress report:
+  `work/staging/full-apartments06-v1/installed-world-crowd-1000x1000-gc-20260804.json`.
 
 ## What this architecture does not solve
 
