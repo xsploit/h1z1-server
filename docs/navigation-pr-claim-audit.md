@@ -33,7 +33,7 @@ be claimed as part of the navigation diff.
 
 - TypeScript build passes.
 - Oxlint passes.
-- Focused navigation and ZoneServer tests pass 18/18, with one intentional
+- Focused navigation and ZoneServer tests pass 27/27, with one intentional
   Mongo test skip.
 - Real-cache server startup under bundled Node 24.18.0 succeeds.
 - The loader imports 104,935/104,935 compressed layers and builds
@@ -166,15 +166,13 @@ because it predated valid fake-client registration and native despawn churn.
 
 ## Test-suite truth
 
-The latest full test command reports 87 pass, 4 fail, and 5 skip. The four
-reported failures are parent/subtest output for two unrelated local fixtures:
+The latest full test command reports 89 pass, 2 fail, and 5 skip. The two
+reported failures are parent/subtest output for one unrelated local fixture:
+`plugins/TestPlugin/plugin.js` cannot load its absent `./out/plugin` build.
 
-- `plugins/TestPlugin/plugin.js` cannot load its absent `./out/plugin` build;
-- the local H1Emu world-data `vehicles.json` is truncated and fails JSON parse.
-
-Focused navigation and ZoneServer tests pass 18/18 with one Mongo skip; build
+Focused navigation and ZoneServer tests pass 27/27 with one Mongo skip; build
 and oxlint pass. The PR must not present the full suite as green or silently
-modify those unrelated fixtures inside the navigation change.
+modify that unrelated fixture inside the navigation change.
 
 ## Dependency truth
 
