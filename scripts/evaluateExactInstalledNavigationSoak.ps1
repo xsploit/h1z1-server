@@ -37,6 +37,11 @@ Require ($report.crowdHealthy -eq $true) 'Crowd health latch is false'
 Require ($report.obstacleUpdatesHealthy -eq $true) 'obstacle-update health latch is false'
 Require ($report.nativeNpcChurn.created -eq $report.nativeNpcChurn.deleted) "native churn diverged: $($report.nativeNpcChurn.created)/$($report.nativeNpcChurn.deleted)"
 Require ($report.nativeNpcChurn.afterChurnAgents -eq $report.nativeNpcChurn.baselineAgents) "native Crowd did not return to baseline after churn: $($report.nativeNpcChurn.afterChurnAgents)/$($report.nativeNpcChurn.baselineAgents)"
+Require ($report.crowdCapacityProbe.enabled -eq $true) 'native Crowd capacity probe was not enabled'
+Require ($report.crowdCapacityProbe.created -eq ($report.crowdCapacityProbe.capacity - $report.crowdCapacityProbe.baselineAgents)) 'native Crowd capacity probe did not fill every available slot'
+Require ($report.crowdCapacityProbe.overflowRejected -eq $true) 'native Crowd overflow was not rejected'
+Require ($report.crowdCapacityProbe.afterProbeAgents -eq $report.crowdCapacityProbe.baselineAgents) 'native Crowd did not return to baseline after the capacity probe'
+Require ($report.crowdCapacityProbe.rejectedAgentDelta -eq 1) 'capacity probe did not record exactly one rejected agent'
 Require ($report.nativeNpcChurn.peakUtilization -le 0.9) "Crowd peak exceeded 90%: $($report.nativeNpcChurn.peakUtilization)"
 Require ($report.streaming.activeNavMeshTiles -le ($report.streaming.maxNavMeshTiles * 0.9)) "navmesh tile use exceeded 90%: $($report.streaming.activeNavMeshTiles)/$($report.streaming.maxNavMeshTiles)"
 Require ($report.memoryTelemetry.gcAvailable -eq $true) 'forced-GC telemetry was unavailable'
@@ -49,11 +54,14 @@ foreach ($sample in $samples) {
   Require ($sample.crowdHealthy -eq $true) "Crowd unhealthy at $($sample.wallSeconds)s"
   Require ($sample.obstacleUpdatesHealthy -eq $true) "obstacle updates unhealthy at $($sample.wallSeconds)s"
   Require ($sample.agentUtilization -le 0.9) "Crowd exceeded 90% at $($sample.wallSeconds)s"
+  Require ($sample.wasmUtilization -le 0.9) "WASM linear memory exceeded 90% at $($sample.wallSeconds)s"
   Require ($sample.pendingObstacleRequests -eq 0) "obstacle requests pending at $($sample.wallSeconds)s: $($sample.pendingObstacleRequests)"
 }
 
 $wasmSizes = @($samples | Select-Object -ExpandProperty wasmHeapMb -Unique)
 Require ($wasmSizes.Count -eq 1) "WASM linear-memory allocation changed during the run: $($wasmSizes -join ',') MiB"
+Require ($report.memory.wasmMemory.maximumMb -eq 2048) "unexpected WASM maximum memory: $($report.memory.wasmMemory.maximumMb) MiB"
+Require (@($report.memory.wasmMemory.growthEvents).Count -eq 0) 'WASM linear memory grew after the post-load baseline'
 
 $faultPattern = 'memory access out of bounds|crowd disabled|tilecache update failed|Unhandled rejection|RuntimeError|Aborted\('
 Require (-not ($stdout -match $faultPattern)) 'stdout contains a navigation/WASM fault signature'
@@ -102,6 +110,9 @@ $evaluation = [ordered]@{
   navTileUtilization = [math]::Round($report.streaming.activeNavMeshTiles / $report.streaming.maxNavMeshTiles, 4)
   compressedLayersWithoutActiveTile = $report.streaming.compressedLayersWithoutActiveTile
   wasmHeapSizesMb = $wasmSizes
+  wasmMaximumMb = $report.memory.wasmMemory.maximumMb
+  wasmEndUtilization = $report.memory.wasmMemory.endUtilization
+  wasmGrowthEvents = @($report.memory.wasmMemory.growthEvents)
   postWarmupSamples = $steadySamples.Count
   rssSlopeMbPerHour = $rssSlopeMbPerHour
   rssEndVsBaselineRatio = $rssEndVsBaselineRatio

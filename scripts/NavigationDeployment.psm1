@@ -18,6 +18,46 @@ function Get-NavigationFileSha256 {
     }
 }
 
+function Get-NavigationTreeDigest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Root
+    )
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path
+    $records = @(
+        Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
+            ForEach-Object {
+                [pscustomobject]@{
+                    Path = Get-RelativePathCompat `
+                        -BasePath $resolvedRoot `
+                        -Path $_.FullName
+                    Bytes = $_.Length
+                    Sha256 = Get-NavigationFileSha256 -Path $_.FullName
+                }
+            } |
+            Sort-Object Path
+    )
+    $payload = ($records | ForEach-Object {
+            "$($_.Path)`0$($_.Bytes)`0$($_.Sha256)"
+        }) -join "`n"
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = ([System.BitConverter]::ToString(
+                $algorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($payload))
+            )).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $algorithm.Dispose()
+    }
+    [pscustomobject]@{
+        Root = $resolvedRoot
+        FileCount = $records.Count
+        Sha256 = $digest
+        Files = $records
+    }
+}
+
 function Get-NavigationPropertyValue {
     param(
         [AllowNull()]
@@ -836,6 +876,7 @@ function Invoke-NavigationRuntimeReplacement {
 
 Export-ModuleMember -Function @(
     'Get-NavigationFileSha256',
+    'Get-NavigationTreeDigest',
     'Get-NavigationBundleFileRecords',
     'Get-NavigationRuntimeClosure',
     'New-NavigationDeploymentFilePlan',

@@ -59,6 +59,10 @@ const npcChurnWaveSize = Math.max(
   0,
   Number(process.env.NAV_WORLD_CROWD_NPC_CHURN_SIZE ?? 0)
 );
+const capacityProbeEnabled = process.env.NAV_WORLD_CROWD_CAPACITY_PROBE === "1";
+const wasmInitialPages = Number(process.env.NAV_WORLD_WASM_INITIAL_PAGES);
+const wasmMaximumPages = Number(process.env.NAV_WORLD_WASM_MAXIMUM_PAGES);
+const wasmPageBytes = 65536;
 
 function processMemorySnapshot() {
   const memory = process.memoryUsage();
@@ -78,7 +82,11 @@ async function main() {
     !Number.isFinite(realtimeDelayMs) ||
     !Number.isFinite(memorySampleSeconds) ||
     !Number.isSafeInteger(npcChurnWaves) ||
-    !Number.isSafeInteger(npcChurnWaveSize)
+    !Number.isSafeInteger(npcChurnWaveSize) ||
+    !Number.isSafeInteger(wasmInitialPages) ||
+    !Number.isSafeInteger(wasmMaximumPages) ||
+    wasmInitialPages < 1 ||
+    wasmMaximumPages < wasmInitialPages
   ) {
     throw new Error("invalid fake-player or soak timing configuration");
   }
@@ -290,8 +298,13 @@ async function main() {
   let obstacleRecoveryProbeMaxDisplacement = 0;
   let obstacleRecoveryProbeInvalidSteps = 0;
 
-  const maxAgentIndexExclusive =
-    process.env.NAV_MONOLITHIC_64 === "1" ? 2000 : 1000;
+  const crowdMaxAgents = Number(
+    (server.navManager as unknown as { crowdCapacity?: number }).crowdCapacity
+  );
+  if (!Number.isSafeInteger(crowdMaxAgents) || crowdMaxAgents < 1) {
+    throw new Error("installed NavManager does not expose Crowd capacity");
+  }
+  const maxAgentIndexExclusive = crowdMaxAgents;
   const invalidIndexes = wrappers
     .map((agent) => agent.agentIndex)
     .filter(
@@ -326,8 +339,46 @@ async function main() {
   let obstacleAdds = 0;
   let obstacleRemovals = 0;
   let completedCrowdSteps = 0;
-  const crowdMaxAgents = server.navManager.crowd.maxAgents ?? 2000;
   const churnBaselineAgents = server.navManager.crowd.getActiveAgentCount();
+  const capacityProbeAgents: NonNullable<
+    ReturnType<typeof server.navManager.createAgent>
+  >[] = [];
+  const rejectedBeforeCapacityProbe = Number(
+    (
+      server.navManager as unknown as {
+        rejectedAgentCount?: number;
+      }
+    ).rejectedAgentCount ?? 0
+  );
+  let capacityOverflowRejected = false;
+  if (capacityProbeEnabled) {
+    const availableSlots = crowdMaxAgents - churnBaselineAgents;
+    if (availableSlots < 1) {
+      throw new Error(
+        `Crowd has no capacity-probe headroom: active=${churnBaselineAgents}; max=${crowdMaxAgents}`
+      );
+    }
+    for (let index = 0; index < availableSlots; index++) {
+      const agent = server.navManager.createAgent(snappedCenterPosition);
+      if (!agent) break;
+      capacityProbeAgents.push(agent);
+    }
+    capacityOverflowRejected =
+      server.navManager.createAgent(snappedCenterPosition) === undefined;
+    for (const agent of capacityProbeAgents) {
+      if (!server.navManager.removeAgent(agent)) {
+        throw new Error("capacity probe failed to release a native Crowd slot");
+      }
+    }
+  }
+  const capacityAfterAgents = server.navManager.crowd.getActiveAgentCount();
+  const rejectedAfterCapacityProbe = Number(
+    (
+      server.navManager as unknown as {
+        rejectedAgentCount?: number;
+      }
+    ).rejectedAgentCount ?? 0
+  );
   let churnCreated = 0;
   let churnDeleted = 0;
   let churnPeakAgents = churnBaselineAgents;
@@ -398,14 +449,37 @@ async function main() {
     beforeGc: ReturnType<typeof processMemorySnapshot>;
     afterGc: ReturnType<typeof processMemorySnapshot> | null;
     wasmHeapMb: number;
+    wasmMaximumMb: number;
+    wasmUtilization: number;
   }> = [];
+  const wasmGrowthEvents: Array<{
+    wallSeconds: number;
+    fromMb: number;
+    toMb: number;
+  }> = [];
+  let lastWasmHeapMb = Math.round(wasmHeapStart / 1024 / 1024);
   const sampleMemory = (label: "start" | "periodic" | "end") => {
     const beforeGc = processMemorySnapshot();
     const gc = (globalThis as { gc?: () => void }).gc;
     if (forceGcMemorySamples) gc?.();
+    const wallSeconds = Number(
+      ((realDateNow() - wallStartedAt) / 1000).toFixed(3)
+    );
+    const wasmHeapMb = Math.round(
+      R.Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024
+    );
+    const wasmMaximumMb = (wasmMaximumPages * wasmPageBytes) / 1048576;
+    if (memorySamples.length > 0 && wasmHeapMb !== lastWasmHeapMb) {
+      wasmGrowthEvents.push({
+        wallSeconds,
+        fromMb: lastWasmHeapMb,
+        toMb: wasmHeapMb
+      });
+    }
+    lastWasmHeapMb = wasmHeapMb;
     memorySamples.push({
       label,
-      wallSeconds: Number(((realDateNow() - wallStartedAt) / 1000).toFixed(3)),
+      wallSeconds,
       simulatedSeconds: Number(
         ((simulatedNow - simulatedStartedAt) / 1000).toFixed(3)
       ),
@@ -425,9 +499,9 @@ async function main() {
       obstacleUpdatesHealthy: server.navManager.obstacleUpdatesHealthy,
       beforeGc,
       afterGc: forceGcMemorySamples && gc ? processMemorySnapshot() : null,
-      wasmHeapMb: Math.round(
-        R.Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024
-      )
+      wasmHeapMb,
+      wasmMaximumMb,
+      wasmUtilization: Number((wasmHeapMb / wasmMaximumMb).toFixed(4))
     });
   };
   let nextMemorySampleAt = memorySampleSeconds
@@ -586,6 +660,19 @@ async function main() {
       `NPC churn accounting diverged: created=${churnCreated}; deleted=${churnDeleted}`
     );
   }
+  if (capacityProbeEnabled) {
+    const expectedCapacityProbeAgents = crowdMaxAgents - churnBaselineAgents;
+    if (
+      capacityProbeAgents.length !== expectedCapacityProbeAgents ||
+      !capacityOverflowRejected ||
+      capacityAfterAgents !== churnBaselineAgents ||
+      rejectedAfterCapacityProbe - rejectedBeforeCapacityProbe !== 1
+    ) {
+      validationFailures.push(
+        `Crowd capacity boundary probe failed: created=${capacityProbeAgents.length}/${expectedCapacityProbeAgents}; overflowRejected=${capacityOverflowRejected}; final=${capacityAfterAgents}/${churnBaselineAgents}; rejectedDelta=${rejectedAfterCapacityProbe - rejectedBeforeCapacityProbe}`
+      );
+    }
+  }
   if (churnPeakAgents > crowdMaxAgents * 0.9) {
     validationFailures.push(
       `NPC churn exceeded 90% Crowd capacity: peak=${churnPeakAgents}; max=${crowdMaxAgents}`
@@ -639,6 +726,16 @@ async function main() {
       afterChurnAgents: churnAfterAgents,
       maxAgents: crowdMaxAgents,
       peakUtilization: Number((churnPeakAgents / crowdMaxAgents).toFixed(4))
+    },
+    crowdCapacityProbe: {
+      enabled: capacityProbeEnabled,
+      baselineAgents: churnBaselineAgents,
+      capacity: crowdMaxAgents,
+      created: capacityProbeAgents.length,
+      overflowRejected: capacityOverflowRejected,
+      afterProbeAgents: capacityAfterAgents,
+      rejectedAgentDelta:
+        rejectedAfterCapacityProbe - rejectedBeforeCapacityProbe
     },
     center: Array.from(center.slice(0, 3)),
     requestedCrowdSteps: crowdSteps,
@@ -713,8 +810,20 @@ async function main() {
       wasmHeapEndMb: Math.round(
         R.Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024
       ),
-      wasmResizeHeapAvailable:
-        typeof R.Raw.Module._emscripten_resize_heap === "function"
+      wasmMemory: {
+        initialPages: wasmInitialPages,
+        maximumPages: wasmMaximumPages,
+        pageBytes: wasmPageBytes,
+        initialMb: (wasmInitialPages * wasmPageBytes) / 1048576,
+        maximumMb: (wasmMaximumPages * wasmPageBytes) / 1048576,
+        endUtilization: Number(
+          (
+            R.Raw.Module.HEAPU8.buffer.byteLength /
+            (wasmMaximumPages * wasmPageBytes)
+          ).toFixed(4)
+        ),
+        growthEvents: wasmGrowthEvents
+      }
     },
     memoryTelemetry: {
       sampleSeconds: memorySampleSeconds,

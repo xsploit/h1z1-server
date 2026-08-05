@@ -12,6 +12,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'NavigationDeployment.psm1') -Force
 
 if ($DurationSeconds -lt 1) { throw 'DurationSeconds must be positive.' }
 if ($FakePlayers -lt 1 -or $FakePlayers -gt 100) {
@@ -29,8 +30,10 @@ $corePath = Join-Path $runtimeRoot 'runtime\navigation64\core.mjs'
 $wasmPath = Join-Path $runtimeRoot 'runtime\navigation64\wasm-compat.mjs'
 $validatorPath = Join-Path $PSScriptRoot 'validateWorldNpcCrowd.ts'
 $workerPath = Join-Path $PSScriptRoot 'runExactInstalledNavigationSoakWorker.ps1'
-$cleanRecastPath = Join-Path $CleanWorktree 'out\utils\recast.js'
-$installedRecastPath = Join-Path $runtimeRoot 'out\utils\recast.js'
+$memoryInspectorPath = Join-Path $PSScriptRoot 'inspectEmbeddedWasmMemory.mjs'
+$cleanOutPath = Join-Path $CleanWorktree 'out'
+$installedOutPath = Join-Path $runtimeRoot 'out'
+$runtimeManifestPath = Join-Path $runtimeRoot 'runtime\navigation64\runtime-manifest.json'
 
 foreach ($requiredPath in @(
   $nodePath,
@@ -40,8 +43,10 @@ foreach ($requiredPath in @(
   $wasmPath,
   $validatorPath,
   $workerPath,
-  $cleanRecastPath,
-  $installedRecastPath
+  $memoryInspectorPath,
+  $cleanOutPath,
+  $installedOutPath,
+  $runtimeManifestPath
 )) {
   if (-not (Test-Path -LiteralPath $requiredPath)) {
     throw "Required soak input is missing: $requiredPath"
@@ -53,10 +58,36 @@ if ($LASTEXITCODE -ne 0) { throw 'Failed to inspect the clean PR worktree.' }
 if ($cleanStatus) { throw "Clean PR worktree has uncommitted changes:`n$cleanStatus" }
 $cleanCommit = (& git -C $CleanWorktree rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Failed to resolve the clean PR commit.' }
-$cleanHash = (Get-FileHash -LiteralPath $cleanRecastPath -Algorithm SHA256).Hash
-$installedHash = (Get-FileHash -LiteralPath $installedRecastPath -Algorithm SHA256).Hash
-if ($cleanHash -ne $installedHash) {
-  throw "Installed server does not match clean PR recast.js: installed=$installedHash clean=$cleanHash"
+$cleanOutTree = Get-NavigationTreeDigest -Root $cleanOutPath
+$installedOutTree = Get-NavigationTreeDigest -Root $installedOutPath
+if ($cleanOutTree.FileCount -ne $installedOutTree.FileCount -or
+    $cleanOutTree.Sha256 -ne $installedOutTree.Sha256) {
+  throw "Installed out tree does not exactly match the clean PR build: installed=$($installedOutTree.FileCount)/$($installedOutTree.Sha256) clean=$($cleanOutTree.FileCount)/$($cleanOutTree.Sha256)"
+}
+
+$runtimeManifest = Get-Content $runtimeManifestPath -Raw | ConvertFrom-Json
+foreach ($file in @($runtimeManifest.files)) {
+  $runtimeFilePath = Join-Path (Split-Path $runtimeManifestPath -Parent) $file.path
+  if (-not (Test-Path -LiteralPath $runtimeFilePath -PathType Leaf)) {
+    throw "Manifested navigation64 runtime file is missing: $($file.path)"
+  }
+  $actual = Get-Item -LiteralPath $runtimeFilePath
+  $actualHash = Get-NavigationFileSha256 -Path $runtimeFilePath
+  if ($actual.Length -ne [long]$file.size -or $actualHash -ne $file.sha256) {
+    throw "Manifested navigation64 runtime file failed integrity verification: $($file.path)"
+  }
+}
+$runtimeManifestHash = Get-NavigationFileSha256 -Path $runtimeManifestPath
+$memoryDescriptorOutput = & $nodePath $memoryInspectorPath $wasmPath
+if ($LASTEXITCODE -ne 0) {
+  throw 'Failed to inspect the navigation64 WebAssembly memory section.'
+}
+$memoryDescriptor = ($memoryDescriptorOutput -join "`n") | ConvertFrom-Json
+if ($memoryDescriptor.initialPages -lt 1 -or
+    $memoryDescriptor.maximumPages -lt $memoryDescriptor.initialPages -or
+    $memoryDescriptor.memory64 -ne $false -or
+    $memoryDescriptor.shared -ne $false) {
+  throw "Unsupported navigation64 WebAssembly memory descriptor: $memoryDescriptorOutput"
 }
 
 $conflicts = Get-CimInstance Win32_Process | Where-Object {
@@ -93,6 +124,9 @@ $env:NAV_WORLD_CROWD_MEMORY_SAMPLE_SECONDS = [string]$MemorySampleSeconds
 $env:NAV_WORLD_CROWD_FORCE_GC_SAMPLES = '1'
 $env:NAV_WORLD_CROWD_NPC_CHURN_WAVES = [string]$NpcChurnWaves
 $env:NAV_WORLD_CROWD_NPC_CHURN_SIZE = [string]$NpcChurnWaveSize
+$env:NAV_WORLD_CROWD_CAPACITY_PROBE = '1'
+$env:NAV_WORLD_WASM_INITIAL_PAGES = [string]$memoryDescriptor.initialPages
+$env:NAV_WORLD_WASM_MAXIMUM_PAGES = [string]$memoryDescriptor.maximumPages
 $env:NAV_WORLD_CROWD_REPORT = $reportPath
 
 $workerArguments = @(
@@ -125,7 +159,6 @@ $process = Start-Process -FilePath 'powershell.exe' `
   -WindowStyle Hidden `
   -PassThru
 
-$runtimeManifest = Get-Content (Join-Path $runtimeRoot 'runtime\navigation64\runtime-manifest.json') -Raw | ConvertFrom-Json
 $metadata = [ordered]@{
   schemaVersion = 1
   runName = $RunName
@@ -135,8 +168,12 @@ $metadata = [ordered]@{
   cleanCommit = $cleanCommit
   cleanWorktree = $CleanWorktree
   installedRuntimeRoot = $runtimeRoot
-  installedRecastSha256 = $installedHash.ToLowerInvariant()
+  cleanOutFileCount = $cleanOutTree.FileCount
+  cleanOutTreeSha256 = $cleanOutTree.Sha256
+  installedOutTreeSha256 = $installedOutTree.Sha256
+  navigation64RuntimeManifestSha256 = $runtimeManifestHash
   navigation64ArtifactId = $runtimeManifest.artifactId
+  wasmMemoryDescriptor = $memoryDescriptor
   fakePlayers = $FakePlayers
   extraNpcs = $ExtraNpcs
   npcChurnWaves = $NpcChurnWaves

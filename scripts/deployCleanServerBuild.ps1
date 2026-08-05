@@ -132,6 +132,19 @@ $replacementCount = @($relativePaths | Where-Object {
         Test-Path -LiteralPath (Join-Path $installed $_) -PathType Leaf
     }).Count
 $creationCount = $relativePaths.Count - $replacementCount
+$sourcePathSet = [System.Collections.Generic.HashSet[string]]::new(
+    [System.StringComparer]::OrdinalIgnoreCase
+)
+foreach ($relativePath in $relativePaths) { [void]$sourcePathSet.Add($relativePath) }
+$obsoleteRelativePaths = @(
+    Get-ChildItem -LiteralPath $installedOut -Recurse -File |
+        ForEach-Object {
+            Get-RelativePathForDeployment -BasePath $installed -Path $_.FullName
+        } |
+        Where-Object { -not $sourcePathSet.Contains($_) } |
+        Sort-Object -Unique
+)
+$sourceTree = Get-NavigationTreeDigest -Root $sourceOut
 $keySourceHash = Get-NavigationFileSha256 -Path (
     Join-Path $sourceRoot 'out\utils\recast.js'
 )
@@ -149,6 +162,8 @@ if ($Plan) {
         CompiledFiles        = $relativePaths.Count
         FilesReplaced        = $replacementCount
         FilesCreated         = $creationCount
+        StaleFilesRemoved    = $obsoleteRelativePaths.Count
+        SourceOutTreeSha256  = $sourceTree.Sha256
         SourceRecastSha256   = $keySourceHash
         InstalledRecastSha256 = $keyInstalledHash
     } | Format-List
@@ -168,15 +183,47 @@ if ([System.IO.Path]::GetPathRoot($stageRoot) -ne
 }
 
 try {
-    New-NavigationDeploymentStage `
-        -SourceRoot $sourceRoot `
+    $filePlan = @(
+        foreach ($relativePath in $relativePaths) {
+            $sourcePath = Join-Path $sourceRoot $relativePath
+            [pscustomobject]@{
+                RelativePath = $relativePath
+                SourcePath = $sourcePath
+                Action = if (Test-Path -LiteralPath (Join-Path $installed $relativePath) -PathType Leaf) {
+                    'Replace'
+                } else {
+                    'Create'
+                }
+                Bytes = (Get-Item -LiteralPath $sourcePath).Length
+                Sha256 = Get-NavigationFileSha256 -Path $sourcePath
+                Kind = 'clean-server-build'
+            }
+        }
+        foreach ($relativePath in $obsoleteRelativePaths) {
+            $obsoletePath = Join-Path $installed $relativePath
+            [pscustomobject]@{
+                RelativePath = $relativePath
+                SourcePath = $null
+                Action = 'Remove'
+                Bytes = (Get-Item -LiteralPath $obsoletePath).Length
+                Sha256 = $null
+                Kind = 'stale-compiled-output'
+            }
+        }
+    )
+    New-NavigationDeploymentStageFromPlan `
         -StageRoot $stageRoot `
-        -RelativePaths $relativePaths
+        -FilePlan $filePlan
 
     $postReplaceValidation = {
         $installedRecast = Join-Path $installed 'out\utils\recast.js'
         if ((Get-NavigationFileSha256 -Path $installedRecast) -ne $keySourceHash) {
             throw 'Installed recast.js does not match the clean source build.'
+        }
+        $installedTree = Get-NavigationTreeDigest -Root $installedOut
+        if ($installedTree.FileCount -ne $sourceTree.FileCount -or
+            $installedTree.Sha256 -ne $sourceTree.Sha256) {
+            throw "Installed out tree does not exactly match the clean source build: installed=$($installedTree.FileCount)/$($installedTree.Sha256) source=$($sourceTree.FileCount)/$($sourceTree.Sha256)"
         }
         & node $verifier $installed
         if ($LASTEXITCODE -ne 0) {
@@ -185,12 +232,11 @@ try {
     }.GetNewClosure()
 
     Assert-QuickStartIdle
-    $null = Invoke-NavigationRuntimeReplacement `
-        -SourceRoot $sourceRoot `
+    $null = Invoke-NavigationFileReplacement `
         -StageRoot $stageRoot `
         -DestinationRoot $installed `
         -BackupRoot $backupRoot `
-        -RelativePaths $relativePaths `
+        -FilePlan $filePlan `
         -PostReplaceValidation $postReplaceValidation
 } finally {
     if (Test-Path -LiteralPath $stageRoot -PathType Container) {
@@ -204,6 +250,8 @@ try {
     SourceCommit        = $sourceCommit
     Installed           = $installed
     CompiledFiles       = $relativePaths.Count
+    StaleFilesRemoved   = $obsoleteRelativePaths.Count
+    OutTreeSha256       = $sourceTree.Sha256
     RecastSha256        = $keySourceHash
     Backup              = $backupRoot
 } | Format-List
