@@ -19,6 +19,7 @@ $sourceRoot = (Resolve-Path -LiteralPath $ServerSourceRoot).Path
 $installed = Join-Path $quickStart 'node_modules\h1z1-server'
 $sourceOut = Join-Path $sourceRoot 'out'
 $installedOut = Join-Path $installed 'out'
+$verifier = Join-Path $PSScriptRoot 'verifyCleanServerBuild.js'
 
 function Assert-QuickStartIdle {
     $processes = @(Get-CimInstance Win32_Process)
@@ -71,6 +72,9 @@ foreach ($requiredPath in @($installed, $sourceOut, $installedOut)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Container)) {
         throw "Required directory was not found: $requiredPath"
     }
+}
+if (-not (Test-Path -LiteralPath $verifier -PathType Leaf)) {
+    throw "Clean server verifier was not found: $verifier"
 }
 
 $sourcePackage = Get-Content -Raw -LiteralPath (
@@ -174,11 +178,7 @@ try {
         if ((Get-NavigationFileSha256 -Path $installedRecast) -ne $keySourceHash) {
             throw 'Installed recast.js does not match the clean source build.'
         }
-        & node -e (
-            'const p=require(process.argv[1]);' +
-            'if(typeof p.ZoneServer2016!=="function")process.exit(1);' +
-            'console.log("clean server module load passed");'
-        ) $installed
+        & node $verifier $installed
         if ($LASTEXITCODE -ne 0) {
             throw 'Installed clean server module failed to load.'
         }
