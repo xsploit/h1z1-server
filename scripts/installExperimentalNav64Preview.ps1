@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$QuickStartRoot,
 
-    [string]$PackageRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$PackageRoot,
 
     [string]$NavigationDataRoot,
 
@@ -11,6 +11,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+if ([string]::IsNullOrWhiteSpace($PackageRoot)) {
+    $PackageRoot = Split-Path -Parent $PSScriptRoot
+}
 
 function Get-Sha256([string]$Path) {
     (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
