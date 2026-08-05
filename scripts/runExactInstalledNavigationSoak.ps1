@@ -28,6 +28,7 @@ $transitionsPath = Join-Path $runtimeRoot 'data\2016\navigationTransitions.json'
 $corePath = Join-Path $runtimeRoot 'runtime\navigation64\core.mjs'
 $wasmPath = Join-Path $runtimeRoot 'runtime\navigation64\wasm-compat.mjs'
 $validatorPath = Join-Path $PSScriptRoot 'validateWorldNpcCrowd.ts'
+$workerPath = Join-Path $PSScriptRoot 'runExactInstalledNavigationSoakWorker.ps1'
 $cleanRecastPath = Join-Path $CleanWorktree 'out\utils\recast.js'
 $installedRecastPath = Join-Path $runtimeRoot 'out\utils\recast.js'
 
@@ -38,6 +39,7 @@ foreach ($requiredPath in @(
   $corePath,
   $wasmPath,
   $validatorPath,
+  $workerPath,
   $cleanRecastPath,
   $installedRecastPath
 )) {
@@ -76,6 +78,7 @@ $reportPath = "$prefix.json"
 $stdoutPath = "$prefix.out.log"
 $stderrPath = "$prefix.err.log"
 $metadataPath = "$prefix.run.json"
+$resultPath = "$prefix.result.json"
 
 $env:H1Z1_VALIDATION_RUNTIME_ROOT = $runtimeRoot
 $env:NAV_MONOLITHIC_64 = '1'
@@ -92,26 +95,33 @@ $env:NAV_WORLD_CROWD_NPC_CHURN_WAVES = [string]$NpcChurnWaves
 $env:NAV_WORLD_CROWD_NPC_CHURN_SIZE = [string]$NpcChurnWaveSize
 $env:NAV_WORLD_CROWD_REPORT = $reportPath
 
-$arguments = @(
-  '--expose-gc',
-  '--import',
-  'tsx',
+$workerArguments = @(
+  '-NoProfile',
+  '-ExecutionPolicy',
+  'Bypass',
+  '-File',
+  ('"{0}"' -f $workerPath),
+  '-NodePath',
+  ('"{0}"' -f $nodePath),
+  '-WorkingDirectory',
+  ('"{0}"' -f (Split-Path $PSScriptRoot -Parent)),
+  '-ValidatorPath',
   ('"{0}"' -f $validatorPath),
-  '966.83',
-  '14',
-  '-2691.36',
-  [string]$ExtraNpcs,
-  '20000000',
-  'compiled',
+  '-CachePath',
   ('"{0}"' -f $cachePath),
-  'tour',
-  'churn'
+  '-ExtraNpcs',
+  [string]$ExtraNpcs,
+  '-StdoutPath',
+  ('"{0}"' -f $stdoutPath),
+  '-StderrPath',
+  ('"{0}"' -f $stderrPath),
+  '-ReportPath',
+  ('"{0}"' -f $reportPath),
+  '-ResultPath',
+  ('"{0}"' -f $resultPath)
 )
-$process = Start-Process -FilePath $nodePath `
-  -ArgumentList $arguments `
-  -WorkingDirectory (Split-Path $PSScriptRoot -Parent) `
-  -RedirectStandardOutput $stdoutPath `
-  -RedirectStandardError $stderrPath `
+$process = Start-Process -FilePath 'powershell.exe' `
+  -ArgumentList $workerArguments `
   -WindowStyle Hidden `
   -PassThru
 
@@ -135,6 +145,7 @@ $metadata = [ordered]@{
   reportPath = $reportPath
   stdoutPath = $stdoutPath
   stderrPath = $stderrPath
+  resultPath = $resultPath
 }
 $metadata | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $metadataPath -Encoding utf8
 

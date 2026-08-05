@@ -326,7 +326,7 @@ async function main() {
   let obstacleAdds = 0;
   let obstacleRemovals = 0;
   let completedCrowdSteps = 0;
-  const crowdMaxAgents = server.navManager.crowd.maxAgents;
+  const crowdMaxAgents = server.navManager.crowd.maxAgents ?? 2000;
   const churnBaselineAgents = server.navManager.crowd.getActiveAgentCount();
   let churnCreated = 0;
   let churnDeleted = 0;
