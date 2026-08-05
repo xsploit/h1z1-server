@@ -21,8 +21,10 @@ mutable streaming invalidates Crowd polygon references during tile eviction
 unless every native reference is coordinated. Those limitations matter for
 distributed players and distant sound/explosion events.
 
-The 64-bit path is opt-in. Stock H1Emu behavior remains the default when
-`NAV_MONOLITHIC_64` is not `1`.
+The 64-bit path is opt-in. The stock navmesh/TileCache data path remains the
+default when `NAV_MONOLITHIC_64` is not `1`. Shared obstacle-accounting and
+fault-containment fixes do apply in both modes; do not describe stock behavior
+as wholly unchanged.
 
 ## Exact source map
 
@@ -53,25 +55,24 @@ The pull request target is `QuentinGruber/h1z1-server:dev`, not `master`.
 
 ## Runtime and artifact
 
-The currently installed QuickStart runtime has already demonstrated the
-complete-map 64-bit startup path in the real server, but it is the experimental
-`feat/navigation-batch-crawler` build rather than the exact clean
-`feat/monolithic64-navmesh` package proposed for upstream. The installed
-`out/utils/recast.js` hash is
-`6F2563EED255E42E91A5CEEDD0592C9951E0697098B26BECE6D3C92BB7CD525C`,
-matching the experimental worktree; the clean integration's corresponding hash
-is `7303BBDC90D7BB7653A180A31E88A70F9E896B044AF5B3F5F4BCC2FBDD875930`.
-The installed runtime demonstrated:
+QuickStart now contains the exact compiled clean six-commit server build. The
+installed `out/utils/recast.js` hash is
+`7303BBDC90D7BB7653A180A31E88A70F9E896B044AF5B3F5F4BCC2FBDD875930`,
+byte-identical to `work/h1z1-nav64-dev-pr` at `296c6e409`. The recoverable
+pre-deployment backup is `clean-server-build-20260804-230233`. The separately
+installed Survivor Encounters plugin is not part of the PR diff.
+
+The exact installed runtime demonstrated:
 
 - 104,935 compressed layers;
 - 100,289 materialized columns;
 - 131,072 tile slots and 1,048,576 polygons per tile reference capacity;
-- 667.3 MiB fixed WASM heap after load;
+- approximately 667.3 MiB of WASM linear memory after load;
 - approximately 17.6 seconds to import and materialize the full cache;
 - heightmap, collision, plugins, loot tables, world NPCs, and PvE startup all
   complete afterward.
 
-The installed log identified runtime artifact
+The launcher-verified runtime artifact is
 `4b8368d7afdb72fdfe3ae73a7bc5a521dbe3caf860ce1d384f199f7cc42a2e2b` as
 26 files / 619.3 MB with `runtime-only` provenance. `runtime-only` means the
 installed files are hash-verified and playable, not that the complete baker
@@ -109,11 +110,9 @@ does not prove the link is unnecessary for every possible NPC route.
 
 ## What the client has proved
 
-The real 2016 client has shown that the experimental 64-bit complete-map
-runtime loads and NPC navigation remains active while traveling through
-Pleasant Valley. This proves the architecture and candidate artifact can run in
-the client, not that the exact clean six-commit `dev` integration has already
-been client-tested. The tested experimental candidate supports:
+The real 2016 client has now launched against the hash-verified clean
+six-commit server integration. NPC navigation remained active while traveling
+through Pleasant Valley. The tested clean candidate supports:
 
 - road to Pleasant Valley police-station front entrance;
 - police basement to main floor;
@@ -156,12 +155,13 @@ not be folded into the focused 64-bit navigation pull request.
 ## Scale evidence and remaining gate
 
 Focused unit tests, TypeScript build, lint, real-cache materialization, and the
-transition-route verification pass. A corrected synthetic full-pop validator
-creates 100 fake character entities with passive Crowd agents plus the
-generated NPC and vehicle population,
-retains native Crowd wrapper accounting, churns dynamic obstacles, checks a
-recovery probe, watches the fixed WASM heap, and fails on Crowd or obstacle
-faults. It does not create 100 network clients and therefore does not test
+transition-route verification pass. A corrected synthetic scale validator
+creates 100 registered fake character entities with passive Crowd agents plus
+the generated NPC and vehicle population, retains native Crowd wrapper
+accounting, performs repeated native NPC spawn/batch-despawn waves, churns
+dynamic obstacles, checks a recovery probe, samples process memory before and
+after forced GC, records Crowd/tile/obstacle headroom, and fails on Crowd or
+obstacle faults. It does not create 100 network clients and therefore does not test
 login/session handling, packet replication, bandwidth, client prediction, or
 remote visibility.
 
@@ -172,41 +172,38 @@ TypeScript 5-era configuration fails under the workspace TypeScript 6 compiler
 Crowd, and obstacle tests pass. Do not misreport that fixture failure as a
 navigation regression or silently modify it inside the navigation PR.
 
-The externally logged 40,000-step, 100-synthetic-character obstacle-churn run
-passed on the clean integration. Its 0.2-second update step represents 8,000
-seconds of simulated Crowd time, but it completed in 1,497.179 seconds of wall
-time. It is therefore an accelerated stress run, not a two-hour wall-clock
-public-server soak. It recorded:
+The older externally logged 40,000-step run is withdrawn as final-branch
+evidence. It ran before the final transition commits, used invalid fake damage
+targets, and performed no native NPC despawn churn. Its strongest narrow,
+historical result is that RSS moved only from 1,768 MiB at step 5,000 to
+1,777 MiB at step 40,000 after warm-up while processing 8,000 seconds of
+simulated Crowd time in 1,497.179 seconds. It does not prove the final branch,
+real clients, or public-server scale.
 
-- 1,553 active agents / wrappers / expected agents;
-- 1,438 current NPCs and 1,438 NPC agents;
-- all 1,438 surviving initial NPC wrappers retained;
-- 2,000 obstacle additions and 2,000 removals;
+A corrected short exact-install smoke has since proved:
+
+- 100/100 fake characters resolve through the server client registry;
+- no `CharacterId not found` damage spam;
+- 20 native NPC churn waves of 50 agents each return to the exact baseline;
 - healthy Crowd and obstacle updates;
-- a recovery probe that moved 21.424 m with zero invalid steps;
-- a fixed 667 MiB WASM heap;
-- RSS from 1,117 MiB to 1,796 MiB while the JavaScript heap grew under the
-  deliberately synthetic AI/damage workload;
+- process-memory samples run with `--expose-gc` and record before/after GC;
+- approximately 667 MiB of WASM linear memory during the smoke;
 - validator pass and process exit code 0.
 
-The stderr file contained only H1Emu's unconditional clean-exit
-`h1z1-server version` footer; there was no exception, rejection, WASM trap, or
-fault latch. The final report is
-`work/staging/full-apartments06-v1/clean-dev-monolithic64-40000-20260804.json`.
-The fixed WASM heap is good evidence against native heap growth in this run,
-but the RSS increase means this single run does not prove leak-free or
-indefinitely bounded process memory.
+That smoke is a harness qualification, not a duration result. A guarded
+external launcher now refuses to overlap a live H1Emu server and is prepared
+to run the exact installed bytes for two wall-clock hours with durable stdout,
+stderr, JSON, PID, commit, file-hash, and runtime-artifact metadata. The current
+live client/server session correctly blocked it. The two-hour result remains
+pending.
 
-A post-transition 1,000-step smoke then passed on `296c6e409` with 100 fake
-character/Crowd entities, 1,435 NPC agents, 15 vehicle agents, exact
-1,551-agent accounting, 50 obstacle add/remove cycles, a 16.175 m
-recovery-probe displacement, fixed 667 MiB WASM heap, 176/177 transition
-admission, and exit code 0. The report is
-`clean-dev-transition-100-player-1000-20260804.json` in the same directory.
+The WASM heap grows from its initial allocation to the loaded value, so an
+unchanged `HEAPU8` size during a soak must not be described as “fixed heap” or
+free-memory proof. Native allocator free space is not currently exported.
 
-The remaining pull-request readiness work is an exact-build QuickStart/client
-smoke of the clean six-commit integration, a final diff/truth review, and the
-user's explicit approval to open it.
+The remaining pull-request readiness work is the corrected two-hour run, a
+decision on fail-closed operator visibility, a final diff/evidence review, and
+the user's explicit approval to open it.
 
 ## Dependency pull requests
 
