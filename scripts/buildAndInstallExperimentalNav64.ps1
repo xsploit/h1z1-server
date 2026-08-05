@@ -187,11 +187,17 @@ if ($pydmodHead -ne $PYDMOD_COMMIT) {
 
 if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
     Invoke-Logged 'create Python environment' 'py' @('-3.12', '-m', 'venv', (Join-Path $pydmod '.nav64-venv')) $work $setupLog
+}
+& $venvPython -c 'import DbgPack, cnkdec, numba, numpy, PIL, scipy' *> $null
+$pythonEnvironmentReady = $LASTEXITCODE -eq 0
+if (-not $pythonEnvironmentReady) {
     Invoke-Logged 'upgrade pip' $venvPython @('-m', 'pip', 'install', '--upgrade', 'pip') $pydmod $setupLog
     Invoke-Logged 'install Python dependencies' $venvPython @('-m', 'pip', 'install', 'numpy', 'scipy', 'pygltflib', 'Pillow', 'aabbtree', 'bitstruct', 'numpy-stl', 'numba') $pydmod $setupLog
     Invoke-Logged 'install DbgPack' $venvPython @('-m', 'pip', 'install', (Join-Path $pydmod 'dbg-pack')) $pydmod $setupLog
     Invoke-Logged 'install pinned CNK decoder' $venvPython @('-m', 'pip', 'install', $cnkWheel) $pydmod $setupLog
 }
+& $venvPython -c 'import DbgPack, cnkdec, numba, numpy, PIL, scipy'
+if ($LASTEXITCODE -ne 0) { throw 'The isolated Python exporter environment failed its import check.' }
 
 $extractionOutputs = @($collision, $metadata, $instanceIds, $semantics)
 $missingExtractionOutputs = @($extractionOutputs | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })

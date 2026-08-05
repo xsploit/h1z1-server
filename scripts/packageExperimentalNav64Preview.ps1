@@ -81,6 +81,7 @@ Copy-Item -LiteralPath (Join-Path $bakerSource 'recastnavigation\License.txt') -
 $cnkWheel = @(Get-ChildItem -LiteralPath $pythonWheelSource -Filter 'pycnkdec-0.0.1-cp312-cp312-win_amd64.whl' -File)
 if ($cnkWheel.Count -ne 1) { throw 'Expected exactly one pinned CPython 3.12 pycnkdec wheel.' }
 Copy-Item -LiteralPath $cnkWheel[0].FullName -Destination (Join-Path $stage 'tooling\python\pycnkdec-0.0.1-cp312-cp312-win_amd64.whl')
+Copy-Item -LiteralPath (Join-Path $pythonWheelSource 'LICENSE.pycnkdec.txt') -Destination (Join-Path $stage 'tooling\python\LICENSE.pycnkdec.txt')
 Copy-Item -LiteralPath (Join-Path $repo 'docs\experimental-nav64-preview.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination (Join-Path $stage 'LICENSE')
 
