@@ -45,12 +45,40 @@ const realtimeDelayMs = Math.max(
   0,
   Number(process.env.NAV_WORLD_CROWD_DELAY_MS ?? 0)
 );
+const memorySampleSeconds = Math.max(
+  0,
+  Number(process.env.NAV_WORLD_CROWD_MEMORY_SAMPLE_SECONDS ?? 0)
+);
+const forceGcMemorySamples =
+  process.env.NAV_WORLD_CROWD_FORCE_GC_SAMPLES === "1";
+const npcChurnWaves = Math.max(
+  0,
+  Number(process.env.NAV_WORLD_CROWD_NPC_CHURN_WAVES ?? 0)
+);
+const npcChurnWaveSize = Math.max(
+  0,
+  Number(process.env.NAV_WORLD_CROWD_NPC_CHURN_SIZE ?? 0)
+);
+
+function processMemorySnapshot() {
+  const memory = process.memoryUsage();
+  return {
+    rssMb: Math.round(memory.rss / 1024 / 1024),
+    heapTotalMb: Math.round(memory.heapTotal / 1024 / 1024),
+    heapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
+    externalMb: Math.round(memory.external / 1024 / 1024),
+    arrayBuffersMb: Math.round(memory.arrayBuffers / 1024 / 1024)
+  };
+}
 
 async function main() {
   if (
     !Number.isSafeInteger(fakePlayerCount) ||
     !Number.isFinite(soakSeconds) ||
-    !Number.isFinite(realtimeDelayMs)
+    !Number.isFinite(realtimeDelayMs) ||
+    !Number.isFinite(memorySampleSeconds) ||
+    !Number.isSafeInteger(npcChurnWaves) ||
+    !Number.isSafeInteger(npcChurnWaveSize)
   ) {
     throw new Error("invalid fake-player or soak timing configuration");
   }
@@ -120,8 +148,17 @@ async function main() {
     (_, index) =>
       tourWorld ? tourWaypoints[index % tourWaypoints.length] : initialPosition
   );
-  Object.assign(server.navManager as object, { _lastStreamMs: 0 });
-  server.navManager.streamAround(initialPlayerPositions);
+  const optionalStreamingManager = server.navManager as unknown as {
+    _lastStreamMs?: number;
+    streamAround?: (positions: Float32Array[]) => void;
+  };
+  if (process.env.NAV_MONOLITHIC_64 !== "1") {
+    if (typeof optionalStreamingManager.streamAround !== "function") {
+      throw new Error("streaming validation requires NavManager.streamAround");
+    }
+    optionalStreamingManager._lastStreamMs = 0;
+    optionalStreamingManager.streamAround(initialPlayerPositions);
+  }
 
   const centerSnap = server.navManager.navMeshQuery.findNearestPoly(
     { x: center[0], y: center[1], z: center[2] },
@@ -163,7 +200,7 @@ async function main() {
     1
   ]);
   const validationCharacters: ReturnType<typeof createFakeCharacter>[] = [];
-  for (const position of initialPlayerPositions) {
+  for (const [index, position] of initialPlayerPositions.entries()) {
     const playerAgent =
       server.navManager.createPassiveAgent(position) ??
       server.navManager.createPassiveAgent(snappedCenterPosition);
@@ -171,11 +208,28 @@ async function main() {
       throw new Error("failed to create fake-player passive agent");
     wrappers.push(playerAgent);
     const character = createFakeCharacter(server);
-    createFakeZoneClient(server, character);
+    const client = createFakeZoneClient(server, character);
+    delete server._clients[client.sessionId];
+    client.sessionId = 100_000 + index;
+    client.character = character;
+    client.firstLoading = false;
+    client.isLoading = false;
+    client.isSynced = true;
+    server._clients[client.sessionId] = client;
     character.state.position = position;
     character.navAgent = playerAgent;
+    character.initialized = true;
     character.godMode = true;
     validationCharacters.push(character);
+  }
+  const registeredFakeClients = validationCharacters.filter(
+    (character) =>
+      server.getClientByCharId(character.characterId)?.character === character
+  ).length;
+  if (registeredFakeClients !== validationCharacters.length) {
+    throw new Error(
+      `fake-client registry mismatch: registered=${registeredFakeClients}; expected=${validationCharacters.length}`
+    );
   }
   const validationCharacter = validationCharacters[0];
   for (const npc of Object.values(server._npcs)) {
@@ -254,23 +308,132 @@ async function main() {
   const tickNpcFsms = aiInternals.tickNpcFsms.bind(server);
   const realDateNow = Date.now;
   let simulatedNow = realDateNow();
+  const simulatedStartedAt = simulatedNow;
   const memoryStart = process.memoryUsage();
   const wasmHeapStart = R.Raw.Module.HEAPU8.buffer.byteLength;
   const navDiagnostics = server.navManager as unknown as {
-    _loadedCols: Set<string>;
-    _cacheLoadedCols: Set<string>;
-    _streamCacheLayers: Map<string, unknown[]>;
-    _streamCacheLayerCount: number;
-    _streamCacheCapacity: number;
+    _loadedCols?: Set<string>;
+    _cacheLoadedCols?: Set<string>;
+    _streamCacheLayers?: Map<string, unknown[]>;
+    _streamCacheLayerCount?: number;
+    _streamCacheCapacity?: number;
+    _monolithicResources?: {
+      layerCount: number;
+      columnCount: number;
+    };
   };
   let activeObstacle: ReturnType<typeof server.navManager.addObstacle> = null;
   let obstacleAdds = 0;
   let obstacleRemovals = 0;
   let completedCrowdSteps = 0;
+  const crowdMaxAgents = server.navManager.crowd.maxAgents;
+  const churnBaselineAgents = server.navManager.crowd.getActiveAgentCount();
+  let churnCreated = 0;
+  let churnDeleted = 0;
+  let churnPeakAgents = churnBaselineAgents;
+  for (let wave = 0; wave < npcChurnWaves; wave++) {
+    const waveIds: string[] = [];
+    for (let index = 0; index < npcChurnWaveSize; index++) {
+      const point = server.navManager.navMeshQuery.findRandomPointAroundCircle(
+        centerSnap.nearestPoint,
+        10
+      );
+      if (!point.success) continue;
+      const npc = server.worldObjectManager.createNpc(
+        server,
+        ModelIds.SURVIVOR_MALE_HEAD_01,
+        new Float32Array([
+          point.randomPoint.x,
+          point.randomPoint.y,
+          point.randomPoint.z,
+          1
+        ]),
+        new Float32Array([0, 0, 0, 1])
+      );
+      const agent =
+        npc.navAgent ?? server.navManager.createAgent(npc.state.position);
+      if (!agent) {
+        server.batchDeleteEntities([npc.characterId], server._npcs);
+        continue;
+      }
+      npc.navAgent = agent;
+      waveIds.push(npc.characterId);
+      churnCreated++;
+    }
+    churnPeakAgents = Math.max(
+      churnPeakAgents,
+      server.navManager.crowd.getActiveAgentCount()
+    );
+    server.batchDeleteEntities(waveIds, server._npcs);
+    churnDeleted += waveIds.length;
+    const activeAfterWave = server.navManager.crowd.getActiveAgentCount();
+    if (activeAfterWave !== churnBaselineAgents) {
+      throw new Error(
+        `native Crowd slot leak after churn wave ${wave + 1}: active=${activeAfterWave}; baseline=${churnBaselineAgents}`
+      );
+    }
+    if (waveIds.some((characterId) => server._npcs[characterId])) {
+      throw new Error(`NPC registry leak after churn wave ${wave + 1}`);
+    }
+  }
+  const churnAfterAgents = server.navManager.crowd.getActiveAgentCount();
   const wallStartedAt = realDateNow();
   const wallDeadline = soakSeconds
     ? wallStartedAt + soakSeconds * 1000
     : Number.POSITIVE_INFINITY;
+  const memorySamples: Array<{
+    label: "start" | "periodic" | "end";
+    wallSeconds: number;
+    simulatedSeconds: number;
+    crowdSteps: number;
+    activeAgents: number;
+    maxAgents: number;
+    agentUtilization: number;
+    currentNpcs: number;
+    tileCacheObstacles: number;
+    obstacleCount: number;
+    pendingObstacleRequests: number;
+    crowdHealthy: boolean;
+    obstacleUpdatesHealthy: boolean;
+    beforeGc: ReturnType<typeof processMemorySnapshot>;
+    afterGc: ReturnType<typeof processMemorySnapshot> | null;
+    wasmHeapMb: number;
+  }> = [];
+  const sampleMemory = (label: "start" | "periodic" | "end") => {
+    const beforeGc = processMemorySnapshot();
+    const gc = (globalThis as { gc?: () => void }).gc;
+    if (forceGcMemorySamples) gc?.();
+    memorySamples.push({
+      label,
+      wallSeconds: Number(((realDateNow() - wallStartedAt) / 1000).toFixed(3)),
+      simulatedSeconds: Number(
+        ((simulatedNow - simulatedStartedAt) / 1000).toFixed(3)
+      ),
+      crowdSteps: completedCrowdSteps,
+      activeAgents: server.navManager.crowd.getActiveAgentCount(),
+      maxAgents: crowdMaxAgents,
+      agentUtilization: Number(
+        (
+          server.navManager.crowd.getActiveAgentCount() / crowdMaxAgents
+        ).toFixed(4)
+      ),
+      currentNpcs: Object.keys(server._npcs).length,
+      tileCacheObstacles: server.navManager.tilecache.obstacles.size,
+      obstacleCount: server.navManager.obstacleCount,
+      pendingObstacleRequests: server.navManager.obstaclesRequestsPending,
+      crowdHealthy: server.navManager.crowdHealthy,
+      obstacleUpdatesHealthy: server.navManager.obstacleUpdatesHealthy,
+      beforeGc,
+      afterGc: forceGcMemorySamples && gc ? processMemorySnapshot() : null,
+      wasmHeapMb: Math.round(
+        R.Raw.Module.HEAPU8.buffer.byteLength / 1024 / 1024
+      )
+    });
+  };
+  let nextMemorySampleAt = memorySampleSeconds
+    ? wallStartedAt + memorySampleSeconds * 1000
+    : Number.POSITIVE_INFINITY;
+  sampleMemory("start");
   Date.now = () => simulatedNow;
   try {
     for (let i = 0; i < crowdSteps; i++) {
@@ -338,6 +501,12 @@ async function main() {
         );
       }
       completedCrowdSteps = i + 1;
+      if (realDateNow() >= nextMemorySampleAt) {
+        sampleMemory("periodic");
+        do {
+          nextMemorySampleAt += memorySampleSeconds * 1000;
+        } while (realDateNow() >= nextMemorySampleAt);
+      }
       if ((i + 1) % 5000 === 0 || i + 1 === crowdSteps) {
         process.stdout.write(
           `[NAV-SOAK] progress=${i + 1}/${crowdSteps} active=${server.navManager.crowd.getActiveAgentCount()} npcs=${Object.keys(server._npcs).length} rssMb=${Math.round(process.memoryUsage().rss / 1024 / 1024)}\n`
@@ -355,6 +524,13 @@ async function main() {
     }
     Date.now = realDateNow;
   }
+  const workloadWallEndedAt = realDateNow();
+  sampleMemory("end");
+  const workloadWallSeconds = Number(
+    ((workloadWallEndedAt - wallStartedAt) / 1000).toFixed(3)
+  );
+  const wallTargetReached =
+    soakSeconds === 0 || workloadWallEndedAt >= wallDeadline;
 
   const maxNavMeshTiles = server.navManager.navmesh.getMaxTiles();
   let activeNavMeshTiles = 0;
@@ -400,6 +576,21 @@ async function main() {
     finalTargetState: obstacleRecoveryProbe.raw.targetState
   };
   const validationFailures: string[] = [];
+  if (!wallTargetReached) {
+    validationFailures.push(
+      `wall-clock soak ended early: completed=${workloadWallSeconds}s; requested=${soakSeconds}s`
+    );
+  }
+  if (churnCreated !== churnDeleted) {
+    validationFailures.push(
+      `NPC churn accounting diverged: created=${churnCreated}; deleted=${churnDeleted}`
+    );
+  }
+  if (churnPeakAgents > crowdMaxAgents * 0.9) {
+    validationFailures.push(
+      `NPC churn exceeded 90% Crowd capacity: peak=${churnPeakAgents}; max=${crowdMaxAgents}`
+    );
+  }
   if (
     activeAgents !== activeCrowdWrappers.length ||
     activeAgents !== expectedActiveAgents
@@ -437,11 +628,27 @@ async function main() {
     worldNpcs: Object.keys(server._npcs).length,
     worldVehicles: Object.keys(server._vehicles).length,
     fakePlayers: validationCharacters.length,
+    registeredFakeClients,
+    nativeNpcChurn: {
+      requestedWaves: npcChurnWaves,
+      requestedWaveSize: npcChurnWaveSize,
+      created: churnCreated,
+      deleted: churnDeleted,
+      baselineAgents: churnBaselineAgents,
+      peakAgents: churnPeakAgents,
+      afterChurnAgents: churnAfterAgents,
+      maxAgents: crowdMaxAgents,
+      peakUtilization: Number((churnPeakAgents / crowdMaxAgents).toFixed(4))
+    },
     center: Array.from(center.slice(0, 3)),
     requestedCrowdSteps: crowdSteps,
     crowdSteps: completedCrowdSteps,
-    wallSeconds: Number(((realDateNow() - wallStartedAt) / 1000).toFixed(3)),
+    wallSeconds: workloadWallSeconds,
+    totalWallSeconds: Number(
+      ((realDateNow() - wallStartedAt) / 1000).toFixed(3)
+    ),
     requestedSoakSeconds: soakSeconds,
+    wallTargetReached,
     realtimeDelayMs,
     initialWorldNpcs,
     initialAgentlessNpcs: initialWorldNpcs - npcAgents,
@@ -468,15 +675,27 @@ async function main() {
     navigationMode:
       process.env.NAV_MONOLITHIC_64 === "1" ? "monolithic64" : "streaming",
     streaming: {
-      loadedColumns: navDiagnostics._loadedCols.size,
-      cachedColumns: navDiagnostics._cacheLoadedCols.size,
-      cachedLayers: navDiagnostics._streamCacheLayerCount,
-      layerCapacity: navDiagnostics._streamCacheCapacity,
+      loadedColumns: navDiagnostics._loadedCols?.size ?? 0,
+      cachedColumns: navDiagnostics._cacheLoadedCols?.size ?? 0,
+      cachedLayers:
+        navDiagnostics._monolithicResources?.layerCount ??
+        navDiagnostics._streamCacheLayerCount ??
+        0,
+      layerCapacity: navDiagnostics._streamCacheCapacity ?? maxNavMeshTiles,
       activeNavMeshTiles,
       maxNavMeshTiles,
-      maxLayersPerColumn: Array.from(
-        navDiagnostics._streamCacheLayers.values()
-      ).reduce((maximum, layers) => Math.max(maximum, layers.length), 0)
+      compressedLayersWithoutActiveTile: Math.max(
+        0,
+        (navDiagnostics._monolithicResources?.layerCount ??
+          navDiagnostics._streamCacheLayerCount ??
+          0) - activeNavMeshTiles
+      ),
+      maxLayersPerColumn: navDiagnostics._streamCacheLayers
+        ? Array.from(navDiagnostics._streamCacheLayers.values()).reduce(
+            (maximum, layers) => Math.max(maximum, layers.length),
+            0
+          )
+        : 0
     },
     memory: {
       rssStartMb: Math.round(memoryStart.rss / 1024 / 1024),
@@ -496,6 +715,12 @@ async function main() {
       ),
       wasmResizeHeapAvailable:
         typeof R.Raw.Module._emscripten_resize_heap === "function"
+    },
+    memoryTelemetry: {
+      sampleSeconds: memorySampleSeconds,
+      forceGcSamples: forceGcMemorySamples,
+      gcAvailable: typeof forceGc === "function",
+      samples: memorySamples
     },
     validation: {
       passed: validationFailures.length === 0,
