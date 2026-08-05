@@ -4534,7 +4534,7 @@ export class ZoneServer2016 extends EventEmitter {
   private releaseNavAgent(entity: BaseEntity): void {
     if (!(entity instanceof BaseLightweightCharacter) || !entity.navAgent)
       return;
-    this.navManager.crowd.removeAgent(entity.navAgent);
+    this.navManager.removeAgent(entity.navAgent);
     entity.navAgent = undefined;
   }
 
@@ -10697,6 +10697,7 @@ export class ZoneServer2016 extends EventEmitter {
   }
 
   updatePathfindingPositions(): void {
+    if (!this.navManager.crowdHealthy) return;
     for (const k in this._npcs) {
       const npc = this._npcs[k];
       if (npc.navAgent) {
