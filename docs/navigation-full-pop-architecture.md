@@ -1,9 +1,11 @@
 # Full-population navigation architecture
 
 Status: Slice 0 capacity audit, 64-bit monolithic WASM consumer, opt-in server
-integration, and a standalone 2,000-agent crowd/replan benchmark are complete.
-Installed-server deployment and the two-hour distributed gameplay soak remain
-open. No production claim yet.
+integration, standalone 2,000-agent crowd/replan benchmark, installed-server
+deployment, corrected two-hour-equivalent 100-player synthetic soak, and the
+first real-client navigation acceptance session are complete. A corrected
+wall-clock soak and real multi-client replication/event testing remain open.
+No production claim yet.
 
 This document pauses further whole-map semantic grinding until the runtime can
 support a populated public server. The current disk-indexed streamer remains a
@@ -642,8 +644,10 @@ Current evidence clears the standalone 2,000-agent Crowd, replan, reference
 ABI, full-cache materialization, clean-teardown, 100-player synthetic
 distribution, and two-hour-equivalent Crowd/obstacle churn portions of these
 gates. It also clears installed-runtime startup, representative box-carve
-effectiveness, and a 1,000-tick/50-obstacle ZoneServer stress. It does not clear
-multi-client replication/event delivery or entity-specific obstacle behavior.
+effectiveness, a 1,000-tick/50-obstacle ZoneServer stress, and one real-client
+session covering Pleasant Valley, an office interior, and an apartment route to
+an accessible roof. It does not clear multi-client replication/event delivery,
+the corrected wall-clock soak, or entity-specific obstacle behavior.
 
 ## Audited surfaces
 

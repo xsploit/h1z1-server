@@ -1082,3 +1082,36 @@ resets. Live doors, drivable vehicles, and construction still need bounded
 dynamic blockers. The five remaining placement failures and any surviving PV
 wall shortcut can be repaired with regional evidence. None of those steps
 requires another full-map bake yet.
+
+### Monolithic64 installed-client checkpoint (2026-08-04)
+
+The `DT_POLYREF64` comparison is no longer hypothetical. The opt-in 64-bit
+Recast WASM/runtime materialized all 104,935 compressed layers in 100,289
+columns as one complete-map navmesh. The installed QuickStart selected the
+packaged 64-bit core and WASM modules, verified artifact
+`4b8368d7afdb72fdfe3ae73a7bc5a521dbe3caf860ce1d384f199f7cc42a2e2b`,
+and reached ready state with a fixed 667.3 MiB WASM heap. Streaming and tile
+eviction were disabled for this test.
+
+Before client testing, the corrected accelerated full-population reproducer
+completed 40,000 deterministic 200 ms steps (2.22 simulated hours), 100
+distributed synthetic players, and 2,000 obstacle add/remove cycles. Native
+agents, wrappers, and expected entity/test agents matched at 912; the complete
+map remained resident; Crowd and obstacle health stayed valid; and no WASM trap
+occurred. This is server-side capacity/lifecycle evidence, not a substitute for
+multi-client replication testing.
+
+The same installed build then passed its first real-client navigation
+acceptance session. The player travelled through Pleasant Valley while the
+world population remained active. Zombies navigated through an office building
+and through a multi-storey apartment to its accessible roof. The server
+continued saving and creating additional world NPC waves without a navigation,
+Crowd, WASM, or watchdog failure in the captured console output.
+
+One localized topology regression remains visible: some common storefronts
+have a small sidewalk-to-threshold step whose exterior and interior polygons do
+not connect in the current full artifact. That defect is an archetype-specific
+bake/transition issue, not a 64-bit reference-capacity or runtime-coverage
+failure. It should be diagnosed against the earlier common-entrance evidence
+without rebuilding the whole world. Dynamic door panels, drivable vehicles,
+and physical character-to-character collision remain separate runtime work.
