@@ -189,10 +189,12 @@ async function main() {
     npcAgents++;
   }
   for (const vehicle of Object.values(server._vehicles)) {
-    const agent = server.navManager.createPassiveAgent(
-      vehicle.state.position,
-      2
-    );
+    // The live pathfinding interval may already have registered vehicles while
+    // world generation was finishing. Reuse that wrapper instead of replacing
+    // it and leaking an unaccounted native Crowd slot in the validator itself.
+    const agent =
+      vehicle.navAgent ??
+      server.navManager.createPassiveAgent(vehicle.state.position, 2);
     if (!agent) continue;
     vehicle.navAgent = agent;
     wrappers.push(agent);
