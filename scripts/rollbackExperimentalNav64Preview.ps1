@@ -53,13 +53,13 @@ if (Test-Path -LiteralPath (Join-Path $backup 'experimental-nav64-bootstrap.js')
 }
 
 if ($manifest.createdNavigationData -eq $true) {
-    foreach ($path in @(
-            (Join-Path $installed 'data\2016\collision'),
-            (Join-Path $installed 'data\2016\zoneData\heightmap.png'),
-            (Join-Path $installed 'data\2016\navigationTransitions.json'),
-            (Join-Path $installed 'data\2016\navigation-artifact-manifest.json')
-        )) {
-        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+    $createdFiles = @($manifest.createdNavigationDataFiles)
+    if ($createdFiles.Count -eq 0) {
+        throw 'Rollback manifest does not contain the exact generated-data file list; use the rollback script from the preview version that created this backup.'
+    }
+    foreach ($relative in $createdFiles) {
+        $path = Join-Path $installed (Join-Path 'data\2016' ([string]$relative))
+        if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force }
     }
 }
 

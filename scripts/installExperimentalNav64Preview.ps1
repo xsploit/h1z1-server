@@ -119,12 +119,21 @@ $dataSource = if ([string]::IsNullOrWhiteSpace($NavigationDataRoot)) {
     (Resolve-Path -LiteralPath $NavigationDataRoot).Path
 }
 $cachePartCount = Assert-NavigationData $dataSource
+$navigationDataFilesToCopy = @()
 
 if ($dataSource -ne $targetData) {
-    $targetCollision = Join-Path $targetData 'collision'
-    if ((Test-Path -LiteralPath (Join-Path $targetCollision 'z1_collision.bin')) -or
-        @(Get-ChildItem -LiteralPath $targetCollision -Filter 'z1_cache_*.bin' -File -ErrorAction SilentlyContinue).Count -gt 0) {
-        throw 'Target already contains generated navigation data. Omit -NavigationDataRoot to use it; this installer will not overwrite a previous bake.'
+    $sourcePrefix = $dataSource.TrimEnd('\', '/') + '\'
+    $navigationDataFilesToCopy += @(Get-ChildItem -LiteralPath (Join-Path $dataSource 'collision') -Recurse -File)
+    $navigationDataFilesToCopy += @(Get-Item -LiteralPath (Join-Path $dataSource 'zoneData\heightmap.png'))
+    $navigationDataFilesToCopy += @(Get-Item -LiteralPath (Join-Path $dataSource 'navigationTransitions.json'))
+    if (Test-Path -LiteralPath (Join-Path $dataSource 'navigation-artifact-manifest.json') -PathType Leaf) {
+        $navigationDataFilesToCopy += @(Get-Item -LiteralPath (Join-Path $dataSource 'navigation-artifact-manifest.json'))
+    }
+    foreach ($sourceFile in $navigationDataFilesToCopy) {
+        $relative = $sourceFile.FullName.Substring($sourcePrefix.Length)
+        if (Test-Path -LiteralPath (Join-Path $targetData $relative)) {
+            throw "Target already contains generated navigation data file: $relative. Omit -NavigationDataRoot to use the existing bake; this installer will not overwrite it."
+        }
     }
 }
 
@@ -147,6 +156,7 @@ $backup = Join-Path $quickStart "backups\experimental-nav64-$stamp"
 $bootstrapTarget = Join-Path $quickStart 'experimental-nav64-bootstrap.js'
 $bootstrapLine = 'require("./experimental-nav64-bootstrap")({ quickStartRoot: __dirname });'
 $createdData = $false
+$createdDataFiles = @()
 
 try {
     New-Item -ItemType Directory -Path $backup | Out-Null
@@ -170,12 +180,13 @@ try {
 
     if ($dataSource -ne $targetData) {
         New-Item -ItemType Directory -Path $targetData -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $dataSource 'collision') -Destination (Join-Path $targetData 'collision') -Recurse
-        New-Item -ItemType Directory -Path (Join-Path $targetData 'zoneData') -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $dataSource 'zoneData\heightmap.png') -Destination (Join-Path $targetData 'zoneData\heightmap.png')
-        Copy-Item -LiteralPath (Join-Path $dataSource 'navigationTransitions.json') -Destination (Join-Path $targetData 'navigationTransitions.json')
-        if (Test-Path -LiteralPath (Join-Path $dataSource 'navigation-artifact-manifest.json')) {
-            Copy-Item -LiteralPath (Join-Path $dataSource 'navigation-artifact-manifest.json') -Destination (Join-Path $targetData 'navigation-artifact-manifest.json')
+        $sourcePrefix = $dataSource.TrimEnd('\', '/') + '\'
+        foreach ($sourceFile in $navigationDataFilesToCopy) {
+            $relative = $sourceFile.FullName.Substring($sourcePrefix.Length)
+            $destination = Join-Path $targetData $relative
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $sourceFile.FullName -Destination $destination
+            $createdDataFiles += $relative
         }
         $createdData = $true
     }
@@ -203,6 +214,7 @@ try {
         sourceCommit = [string]$manifest.sourceCommit
         quickStart = $quickStart
         createdNavigationData = $createdData
+        createdNavigationDataFiles = $createdDataFiles
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backup 'rollback-manifest.json') -Encoding UTF8
 
     & node --check $launcher
