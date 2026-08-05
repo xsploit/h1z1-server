@@ -5,7 +5,16 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputRoot,
 
-    [string]$Version = '0.1.0'
+    [Parameter(Mandatory = $true)]
+    [string]$ToolingRoot,
+
+    [Parameter(Mandatory = $true)]
+    [string]$BakerRoot,
+
+    [Parameter(Mandatory = $true)]
+    [string]$PythonWheelRoot,
+
+    [string]$Version = '0.2.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +22,9 @@ Set-StrictMode -Version Latest
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $runtimeSource = Join-Path (Resolve-Path -LiteralPath $RuntimeBundleRoot).Path 'runtime\navigation64'
+$toolingSource = (Resolve-Path -LiteralPath $ToolingRoot).Path
+$bakerSource = (Resolve-Path -LiteralPath $BakerRoot).Path
+$pythonWheelSource = (Resolve-Path -LiteralPath $PythonWheelRoot).Path
 $output = [System.IO.Path]::GetFullPath($OutputRoot)
 $commit = (& git -C $repo rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve source commit.' }
@@ -37,15 +49,38 @@ if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 
 New-Item -ItemType Directory -Path (Join-Path $stage 'payload\runtime') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stage 'scripts') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $stage 'tooling\forgelight\policies') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $stage 'tooling\bin') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $stage 'tooling\python') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo 'out') -Destination (Join-Path $stage 'payload\out') -Recurse
 Copy-Item -LiteralPath $runtimeSource -Destination (Join-Path $stage 'payload\runtime\navigation64') -Recurse
 foreach ($script in @(
         'experimentalNav64Bootstrap.js',
+        'buildAndInstallExperimentalNav64.ps1',
         'installExperimentalNav64Preview.ps1',
         'rollbackExperimentalNav64Preview.ps1'
     )) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $script) -Destination (Join-Path $stage "scripts\$script")
 }
+$forgelightFiles = @(
+    'artifact_bundle.py',
+    'cdta.py',
+    'collision_classification.py',
+    'collision_semantic_policy.py',
+    'export_z1_heightmap.py',
+    'export_z1_instanced.py',
+    'h1sem.py'
+)
+foreach ($file in $forgelightFiles) {
+    Copy-Item -LiteralPath (Join-Path $toolingSource "tools\forgelight\$file") -Destination (Join-Path $stage "tooling\forgelight\$file")
+}
+Copy-Item -LiteralPath (Join-Path $toolingSource 'tools\forgelight\policies\z1_collision.semantic_policy.json') -Destination (Join-Path $stage 'tooling\forgelight\policies\z1_collision.semantic_policy.json')
+Copy-Item -LiteralPath (Join-Path $toolingSource 'data\2016\navigationTransitions.json') -Destination (Join-Path $stage 'tooling\navigationTransitions.json')
+Copy-Item -LiteralPath (Join-Path $bakerSource 'build\Release\navmesh-builder.exe') -Destination (Join-Path $stage 'tooling\bin\navmesh-builder.exe')
+Copy-Item -LiteralPath (Join-Path $bakerSource 'recastnavigation\License.txt') -Destination (Join-Path $stage 'tooling\LICENSE.recast-navigation.txt')
+$cnkWheel = @(Get-ChildItem -LiteralPath $pythonWheelSource -Filter 'pycnkdec-0.0.1-cp312-cp312-win_amd64.whl' -File)
+if ($cnkWheel.Count -ne 1) { throw 'Expected exactly one pinned CPython 3.12 pycnkdec wheel.' }
+Copy-Item -LiteralPath $cnkWheel[0].FullName -Destination (Join-Path $stage 'tooling\python\pycnkdec-0.0.1-cp312-cp312-win_amd64.whl')
 Copy-Item -LiteralPath (Join-Path $repo 'docs\experimental-nav64-preview.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination (Join-Path $stage 'LICENSE')
 
