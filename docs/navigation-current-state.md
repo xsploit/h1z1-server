@@ -72,11 +72,15 @@ The exact installed runtime demonstrated:
 
 - 104,935 compressed layers;
 - 100,289 materialized columns;
-- 104,903 active navmesh tiles; 32 imported compressed layers currently produce
-  no active tile and remain an unclassified artifact gap;
-- 131,072 tile slots and 1,048,576 polygons per tile reference capacity;
+- 104,903 active navmesh tiles; the deterministic polygon inspector classifies
+  the 32-layer difference as zero-polygon compressed layers, while their
+  underlying geometric cause remains open;
+- five pre-patch offline-inspector region-buffer failures, addressed by the
+  wider intermediate-region dependency used by the final runtime;
+- a selected runtime allocation of 131,072 tile slots and a `DT_POLYREF64`
+  capacity of 1,048,576 polygon references per tile;
 - approximately 667.3 MiB of WASM linear memory after load;
-- approximately 17.6 seconds to import and materialize the full cache;
+- 17.943 and 23.848 seconds in the two exact final-HEAD runs;
 - heightmap, collision, plugins, loot tables, world NPCs, and PvE startup all
   complete afterward.
 
@@ -116,11 +120,12 @@ Its endpoint route succeeds through the remaining topology, so the runtime
 reports it truthfully instead of duplicating it across layers. That micro-check
 does not prove the link is unnecessary for every possible NPC route.
 
-## What the client has proved
+## Earlier client checkpoint and final-HEAD gap
 
-The real 2016 client has now launched against the hash-verified clean
-seven-commit server integration. NPC navigation remained active while traveling
-through Pleasant Valley. The tested clean candidate supports:
+The real 2016 client session ran against six-commit candidate `296c6e409`. It
+did not run against final HEAD `d08d814fd`, which adds the
+fail-closed native fault containment. NPC navigation remained active while
+traveling through Pleasant Valley. That earlier candidate supports:
 
 - road to Pleasant Valley police-station front entrance;
 - police basement to main floor;
@@ -130,8 +135,8 @@ through Pleasant Valley. The tested clean candidate supports:
 - zombies active across normal travel rather than a player-local streamed
   window.
 
-This is acceptance evidence, not universal building coverage. The latest
-client pass still found small single-step storefront/business thresholds that
+This is earlier runtime/topology evidence, not final-HEAD acceptance or
+universal building coverage. The client pass still found small single-step storefront/business thresholds that
 NPCs would not cross, and not every apartment/top-floor route has been
 validated. The exact failing actor and placement must be identified before
 another regional repair; `StoreFront04` itself already passes its authored
@@ -173,26 +178,28 @@ obstacle faults. It does not create 100 network clients and therefore does not t
 login/session handling, packet replication, bandwidth, client prediction, or
 remote visibility.
 
-The clean branch's full test run has one unrelated environment failure: the
-tracked `plugins/TestPlugin` fixture has no compiled `out/plugin` because its
-TypeScript 5-era configuration fails under the workspace TypeScript 6 compiler
-(`rootDir` and deprecated `baseUrl`). All navigation, ZoneServer, batch-despawn,
-Crowd, and obstacle tests pass. Do not misreport that fixture failure as a
-navigation regression or silently modify it inside the navigation PR.
+The clean branch's full test run has one unrelated local-fixture failure: the
+tracked `plugins/TestPlugin` has no compiled `out/plugin` in this checkout, so
+its load assertion and parent suite fail. All navigation, ZoneServer,
+batch-despawn, Crowd, and obstacle tests pass. Do not misreport that fixture
+failure as a navigation regression or silently modify it inside the navigation
+PR.
 
 The older externally logged 40,000-step run is withdrawn as final-branch
-evidence. It ran before the final transition commits, used invalid fake damage
-targets, and performed no native NPC despawn churn. Its strongest narrow,
+evidence. It ran before the final transition commits, did not register fake
+characters through the server client registry, and performed no native NPC
+despawn churn. Its strongest narrow,
 historical result is that RSS moved only from 1,768 MiB at step 5,000 to
 1,777 MiB at step 40,000 after warm-up while processing 8,000 seconds of
 simulated Crowd time in 1,497.179 seconds. It does not prove the final branch,
 real clients, or public-server scale.
 
-A corrected short exact-install smoke proved:
+A short exact-final-HEAD qualification smoke proved:
 
-- 100/100 fake characters resolve through the server client registry;
-- no `CharacterId not found` damage spam;
-- 20 native NPC churn waves of 50 agents each return to the exact baseline;
+- 10/10 fake characters resolve through the server client registry;
+- two native NPC churn waves of 25 agents each return to the exact baseline;
+- from its 1,012-agent baseline, the capacity probe creates 988 agents to fill
+  all 2,000 Crowd slots, rejects one overflow agent, and returns to baseline;
 - healthy Crowd and obstacle updates;
 - process-memory samples run with `--expose-gc` and record before/after GC;
 - approximately 667 MiB of WASM linear memory during the smoke;

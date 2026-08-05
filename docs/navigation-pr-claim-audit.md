@@ -39,27 +39,26 @@ be claimed as part of the navigation diff.
 - The loader imports 104,935/104,935 compressed layers and builds
   100,289/100,289 indexed columns.
 - The active navmesh contains 104,903 tiles within 131,072 tile-reference
-  slots. The 32-layer difference is recorded as compressed layers without an
-  active navmesh tile; its geometric cause has not yet been classified.
+  slots. The deterministic polygon inspector classifies the 32-layer difference
+  as zero-polygon compressed layers; 104,935 - 32 = 104,903 exactly. Their
+  underlying geometric cause remains open.
+- The offline inspector also recorded five pre-patch region-buffer failures.
+  The wider intermediate-region dependency listed below is what lets the final
+  patched runtime build all 100,289 columns.
 - 176/177 authored transitions are admitted in 68 columns. The unattached
   House36B transition is reported by name rather than silently duplicated.
-- Complete-cache startup takes approximately 18 seconds on this machine.
+- Exact final-HEAD runs loaded the complete cache in 17.943 and 23.848 seconds
+  on this machine.
 - The WASM linear memory is approximately 667 MiB after materialization.
 - The installed WASM ABI directly passes the 64-bit PolyRef smoke, including
   values above `2^53` and the complete unsigned 64-bit bit pattern. This is a
   `DT_POLYREF64` build running in wasm32; it is not a wasm64 memory build and
   does not need to be one.
-- A corrected exact-install runtime smoke registered 100 fake character
-  entities as valid server clients, produced no `CharacterId not found` damage
-  spam, and kept Crowd and obstacle health true.
-- A native churn probe on the exact installed build ran 20 waves of 50 real
-  NPC objects. Every wave returned the active native Crowd count to its exact
-  baseline. The first version of this probe accidentally double-created each
-  NPC agent; that harness defect was corrected before accepting the result.
-- The real client has now launched against the byte-verified clean server
-  build. NPC navigation remained active through Pleasant Valley, an office
-  interior, and at least one multi-floor apartment route. Small single-step
-  business entrances still failed in the same session.
+- The exact final-HEAD qualification smoke registered 10 fake character
+  entities as valid server clients, ran two native NPC churn waves of 25, and
+  started its capacity probe from 1,012 agents. The probe created 988 agents to
+  fill all 2,000 slots, rejected one overflow agent, returned to the exact
+  baseline, and kept Crowd and obstacle health true.
 - The exact installed final branch completed a guarded two-hour wall-clock
   synthetic navigation soak. The worker reached 7,200.045 workload seconds
   and 602,003 Crowd steps, wrote its final report, and exited zero.
@@ -80,6 +79,14 @@ be claimed as part of the navigation diff.
   zero post-load growth events against a statically verified 2,048 MiB maximum.
   Twenty-four post-warmup forced-GC samples passed the evaluator's memory
   bounds. The final evaluator passed with no failures or warnings.
+
+## Earlier client evidence, not final-HEAD proof
+
+The real-client acceptance session ran against six-commit candidate
+`296c6e409`, not final HEAD `d08d814fd`. That earlier candidate remained active
+through Pleasant Valley, an office interior, and one multi-floor apartment;
+small single-step business entrances still failed. Final-HEAD client acceptance
+remains pending.
 
 ## Important wording correction: stock mode
 
@@ -108,8 +115,8 @@ timestamps and its missing transition log show that it ran after
 `980d5d8b1` but before final commits `c1f000a85` and `296c6e409`.
 It also had three harness limitations:
 
-- fake characters were not valid damage targets, producing 25,399
-  `CharacterId not found` lines;
+- fake characters were not registered through the server client registry, so
+  the report does not establish client/damage-target validity;
 - fake positions were not distributed unless tour mode was selected;
 - no NPC batch-despawn churn occurred.
 
@@ -129,8 +136,12 @@ because it predated valid fake-client registration and native despawn churn.
   slots and verified fail-closed overflow behavior before returning to
   baseline. The evaluator reports an 80.05% peak for the ordinary churn phase,
   below its 90% sustained-load gate.
-- Navmesh capacity is 131,072 tiles and the candidate currently uses 104,903
-  active tiles (80.0%). This is finite headroom, not unlimited capacity.
+- The loader selected `maxTiles=131,072`, the next power of two above the
+  104,935 imported layers; 104,903 active tiles occupy 80.03% of that allocation.
+  Because the allocation is derived from the input count, that percentage is
+  not evidence of spare architectural capacity. The `DT_POLYREF64` layout's
+  actual tile-index field is 28 bits; the selected runtime allocation is much
+  smaller.
 - The WASM memory section is wasm32, unshared, with 1,024 initial pages
   (64 MiB) and 32,768 maximum pages (2,048 MiB). The heap grows to 667 MiB
   during full-cache load and did not grow afterward during the two-hour run.

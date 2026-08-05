@@ -6,9 +6,10 @@
 
 Status: Slice 0 capacity audit, opt-in monolithic `DT_POLYREF64` WASM consumer,
 standalone 2,000-agent benchmark, exact installed-server deployment, a true
-two-hour wall-clock 100-character synthetic navigation soak, and the first
-real-client navigation acceptance session are complete. Real multi-client
-replication/event testing remains open. No production claim yet.
+two-hour wall-clock 100-character synthetic navigation soak, and an earlier
+six-commit real-client navigation checkpoint are complete. Final-HEAD client
+acceptance and real multi-client replication/event testing remain open. No
+production claim yet.
 
 The exact installed `dev` candidate at `d08d814fd` completed 7,200.045 workload
 wall seconds and 602,003 Crowd steps with 1,551/1,551 final agents accounted
@@ -333,25 +334,28 @@ replans; it is not yet a zone-server replication or gameplay-event soak.
 
 ### Opt-in server integration
 
-`work/h1z1-pv-nav` can now select the packaged 64-bit runtime without replacing
-the stock dependency or silently mixing ABIs. The installed package contract is:
+The server branch can select an external 64-bit runtime without replacing the
+stock dependency or silently mixing ABIs. Its direct configuration contract is:
 
 ```text
 NAV_MONOLITHIC_64=1
 NAV_CACHE_DIR=<directory containing the verified split TSET>
-NAV_ARTIFACT_MANIFEST=<verified artifact manifest>
+NAV_64_CORE_MODULE=<absolute path to core.mjs>
+NAV_64_WASM_MODULE=<absolute path to wasm-compat.mjs>
 ```
 
-The server resolves `runtime/navigation64/core.mjs` and
-`runtime/navigation64/wasm-compat.mjs` relative to the installed `h1z1-server`
-package. `NAV_64_CORE_MODULE` and `NAV_64_WASM_MODULE` remain available as an
-explicit development override, but they must be supplied together. The mode
-fails closed when either packaged module is missing, is not a 64-bit build, or
-differs from the runtime already initialized in the process. It imports all
-compressed layers with Detour-owned copies, materializes every unique column,
-closes the cache file descriptors, creates a 2,000-agent Crowd, and uses the
-non-interpolating one-argument Crowd update. The stock 32-bit path remains the
-default when `NAV_MONOLITHIC_64` is absent or is not `1`.
+Both module paths are mandatory in monolithic64 mode. The server fails closed
+when either is missing, is not a `DT_POLYREF64` build, or differs from the
+runtime already initialized in the process. It imports all compressed layers
+with Detour-owned copies, materializes every unique column, closes the cache
+file descriptors, creates a 2,000-agent Crowd, and uses the non-interpolating
+one-argument Crowd update. The stock 32-bit path remains the default when
+`NAV_MONOLITHIC_64` is absent or is not `1`.
+
+Package-relative `runtime/navigation64` resolution and
+`NAV_ARTIFACT_MANIFEST` verification belong to the separately maintained
+QuickStart `navigation64-bootstrap.js` deployment layer. They are not in the
+19-file server PR diff and must not be attributed to it.
 
 ### Reproducible 64-bit runtime package
 
@@ -604,6 +608,10 @@ bandwidth, complete AI/event behavior, or public production readiness.
 The durable evidence prefix is
 `work/staging/installed-distributed-100-player-2h-d08d814fd-20260805`.
 
+The following packaging record is an earlier 2026-08-04 checkpoint explaining
+how the deployment tooling was proven. It predates the final clean deployment
+and exact-HEAD soak above.
+
 After commit `b899e4320`, the verified runtime closure and unchanged navigation
 artifact were transactionally installed with backup
 `nav-artifact-contract-20260804-155919`. Packaged 64-bit runtime artifact
@@ -698,9 +706,10 @@ Current evidence clears the standalone 2,000-agent Crowd, replan, reference
 ABI, full-cache materialization, clean teardown, exact-build two-hour synthetic
 population, native churn, and generic TileCache obstacle portions of these
 gates. It also clears installed-runtime startup, representative box-carve
-effectiveness, and one real-client session covering Pleasant Valley, an office
-interior, and an apartment route to an accessible roof. It does not clear real
-multi-client replication/event delivery or entity-specific obstacle behavior.
+effectiveness, and an earlier six-commit real-client session covering Pleasant
+Valley, an office interior, and an apartment route to an accessible roof. It
+does not clear final-HEAD client acceptance, real multi-client
+replication/event delivery, or entity-specific obstacle behavior.
 
 ## Audited surfaces
 

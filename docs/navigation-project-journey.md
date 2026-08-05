@@ -1092,8 +1092,9 @@ requires another full-map bake yet.
 
 The `DT_POLYREF64` comparison is no longer hypothetical. The opt-in 64-bit
 Recast WASM/runtime imported all 104,935 compressed layers in 100,289 columns
-as one map-wide active navmesh. It produced 104,903 active tiles; 32 imported
-layers did not produce an active tile and remain an unclassified artifact gap.
+as one map-wide active navmesh. It produced 104,903 active tiles; the
+deterministic polygon inspector classifies the 32-layer difference as
+zero-polygon compressed layers; their underlying geometric cause remains open.
 The installed QuickStart selected the
 packaged 64-bit core and WASM modules, verified artifact
 `4b8368d7afdb72fdfe3ae73a7bc5a521dbe3caf860ce1d384f199f7cc42a2e2b`,
@@ -1108,12 +1109,15 @@ map remained resident; Crowd and obstacle health stayed valid; and no WASM trap
 occurred. This is server-side capacity/lifecycle evidence, not a substitute for
 multi-client replication testing.
 
-The same installed build then passed its first real-client navigation
-acceptance session. The player travelled through Pleasant Valley while the
+Six-commit candidate `296c6e409` then passed its first real-client navigation
+checkpoint. This predated final fail-closed commit `d08d814fd`, so it is not
+final-HEAD acceptance. The player travelled through Pleasant Valley while the
 world population remained active. Zombies navigated through an office building
 and through a multi-storey apartment to its accessible roof. The server
 continued saving and creating additional world NPC waves without a navigation,
 Crowd, WASM, or watchdog failure in the captured console output.
+The routes are user-observed acceptance evidence; the console capture proves
+only the absence of those server fault signatures during that session.
 
 One localized topology regression remains visible: some common storefronts
 have a small sidewalk-to-threshold step whose exterior and interior polygons do
