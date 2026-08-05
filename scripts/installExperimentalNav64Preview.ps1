@@ -184,7 +184,17 @@ try {
     $launcherText = [System.IO.File]::ReadAllText($launcher)
     if (-not $launcherText.Contains($bootstrapLine)) {
         $lineBreak = if ($launcherText.Contains("`r`n")) { "`r`n" } else { "`n" }
-        [System.IO.File]::WriteAllText($launcher, "$bootstrapLine$lineBreak$launcherText")
+        if ($launcherText.StartsWith('#!')) {
+            $firstBreak = $launcherText.IndexOf($lineBreak)
+            if ($firstBreak -lt 0) { throw 'QuickStart launcher has an invalid shebang.' }
+            $launcherText = $launcherText.Insert(
+                $firstBreak + $lineBreak.Length,
+                "$bootstrapLine$lineBreak"
+            )
+        } else {
+            $launcherText = "$bootstrapLine$lineBreak$launcherText"
+        }
+        [System.IO.File]::WriteAllText($launcher, $launcherText)
     }
 
     [pscustomobject]@{
