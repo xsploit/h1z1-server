@@ -1091,12 +1091,14 @@ requires another full-map bake yet.
 ### Monolithic64 installed-client checkpoint (2026-08-04)
 
 The `DT_POLYREF64` comparison is no longer hypothetical. The opt-in 64-bit
-Recast WASM/runtime materialized all 104,935 compressed layers in 100,289
-columns as one complete-map navmesh. The installed QuickStart selected the
+Recast WASM/runtime imported all 104,935 compressed layers in 100,289 columns
+as one map-wide active navmesh. It produced 104,903 active tiles; 32 imported
+layers did not produce an active tile and remain an unclassified artifact gap.
+The installed QuickStart selected the
 packaged 64-bit core and WASM modules, verified artifact
 `4b8368d7afdb72fdfe3ae73a7bc5a521dbe3caf860ce1d384f199f7cc42a2e2b`,
-and reached ready state with a fixed 667.3 MiB WASM heap. Streaming and tile
-eviction were disabled for this test.
+and reached ready state with a 667.3 MiB post-load WASM allocation. Streaming
+and tile eviction were disabled for this test.
 
 Before client testing, the corrected accelerated full-population reproducer
 completed 40,000 deterministic 200 ms steps (2.22 simulated hours), 100
@@ -1120,3 +1122,45 @@ bake/transition issue, not a 64-bit reference-capacity or runtime-coverage
 failure. It should be diagnosed against the earlier common-entrance evidence
 without rebuilding the whole world. Dynamic door panels, drivable vehicles,
 and physical character-to-character collision remain separate runtime work.
+
+### Exact final-branch synthetic soak checkpoint (2026-08-05)
+
+The earlier accelerated 40,000-step result was not promoted to final PR
+evidence because it predated the last integration commits and did not exercise
+the corrected exact-install identity, final failure containment, or complete
+native churn/capacity gates. The server and validation tooling were therefore
+made self-verifying before the final duration run.
+
+QuickStart was transactionally replaced from clean commit `d08d814fd`. Its
+complete 957-file compiled `out` tree matched the clean worktree at SHA-256
+tree identity
+`2e1d99e381fd97e9e46bb3603bdecba870e44202c2ba187a4ecd6918db37a799`;
+72 stale experimental compiled files were removed. The recoverable backup is
+`clean-server-build-20260805-002335`. Runtime artifact
+`7ec35b7039eb5382528ba44fb2b316c225aed79da933a948e519c970583fe7ad`
+and its two external modules passed manifest verification. The installed WASM
+artifact directly passed the `DT_POLYREF64` ABI smoke; it carries polygon refs
+as 64-bit BigInt-safe values while retaining the normal wasm32 pointer/memory
+model.
+
+A 30-second qualification run filled the real Crowd to all 2,000 slots,
+rejected exactly one overflow agent, removed every probe agent, and returned to
+baseline. The exact two-hour run then completed 7,200.045 workload wall
+seconds and 602,003 Crowd steps. All 100 synthetic characters registered,
+1,551 active agents matched 1,551 expected, 2,500 churn agents were created and
+deleted with exact baseline recovery, and 30,101 obstacle additions matched
+30,101 removals. Crowd and obstacle latches remained healthy, no agent index
+was invalid, and the process exited zero with a final report.
+
+WASM allocation was 667 MiB after materialization and at exit, with no
+post-load growth against the module's statically verified 2,048 MiB maximum.
+The strict evaluator accepted 24 post-warmup forced-GC samples and returned
+PASS with no failure or warning. This is strong evidence for sustained
+server-side navigation/Crowd/TileCache lifecycle on the exact candidate. It is
+not 100 real network clients and does not prove login, replication, bandwidth,
+prediction, distributed gameplay events, or universal building topology.
+
+The remaining pre-PR gates are a final adversarial source/evidence review, the
+user's final exact-build client session, and explicit permission to open the
+H1Emu `dev` pull request. Collision, topology repairs, survivor gameplay, and
+real multi-client scale remain separate follow-up work.

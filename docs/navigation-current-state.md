@@ -1,6 +1,6 @@
 # Navigation current state
 
-Last verified: 2026-08-04
+Last verified: 2026-08-05
 
 This is the short operational truth for the H1Emu Z1 navigation project. The
 long-form history remains in `navigation-project-journey.md`; the architecture
@@ -38,7 +38,7 @@ as wholly unchanged.
 | ForgeLight asset decoding                                                                 | `work/pydmod`                                         |
 
 The clean integration is based on QuentinGruber `dev` commit `d4aeac97c` and
-contains six bounded commits:
+contains seven bounded commits:
 
 1. `b5fbd2cb1` - opt-in monolithic 64-bit loader and runtime selection;
 2. `0e0946cd7` - release Crowd agents during batch NPC despawn;
@@ -48,6 +48,9 @@ contains six bounded commits:
    them across vertically overlapping TileCache layers.
 6. `296c6e409` - resolve the default transition file beside the selected cache
    bundle.
+7. `d08d814fd` - fail navigation closed after a native runtime fault, reject
+   invalid/overflow Crowd agents, expose operator health, and prevent native
+   re-entry from NPC FSM and synchronization paths.
 
 The branch is pushed to `xsploit/h1z1-server:feat/monolithic64-navmesh`. Do not
 open the H1Emu pull request until the final readiness gate and user approval.
@@ -55,17 +58,22 @@ The pull request target is `QuentinGruber/h1z1-server:dev`, not `master`.
 
 ## Runtime and artifact
 
-QuickStart now contains the exact compiled clean six-commit server build. The
-installed `out/utils/recast.js` hash is
-`7303BBDC90D7BB7653A180A31E88A70F9E896B044AF5B3F5F4BCC2FBDD875930`,
-byte-identical to `work/h1z1-nav64-dev-pr` at `296c6e409`. The recoverable
-pre-deployment backup is `clean-server-build-20260804-230233`. The separately
-installed Survivor Encounters plugin is not part of the PR diff.
+QuickStart now contains the exact compiled clean seven-commit server build at
+`d08d814fd`. Its complete 957-file `out` tree has SHA-256 tree identity
+`2e1d99e381fd97e9e46bb3603bdecba870e44202c2ba187a4ecd6918db37a799`,
+byte-identical to `work/h1z1-nav64-dev-pr`; deployment removed 72 stale
+experimental compiled files. Installed `out/utils/recast.js` is
+`6c6d353fe4cef35191004ed87ca7ad4b0612fde0e14535965685f23db690e7fb`.
+The recoverable pre-deployment backup is
+`clean-server-build-20260805-002335`. The separately installed Survivor
+Encounters plugin is not part of the PR diff.
 
 The exact installed runtime demonstrated:
 
 - 104,935 compressed layers;
 - 100,289 materialized columns;
+- 104,903 active navmesh tiles; 32 imported compressed layers currently produce
+  no active tile and remain an unclassified artifact gap;
 - 131,072 tile slots and 1,048,576 polygons per tile reference capacity;
 - approximately 667.3 MiB of WASM linear memory after load;
 - approximately 17.6 seconds to import and materialize the full cache;
@@ -111,7 +119,7 @@ does not prove the link is unnecessary for every possible NPC route.
 ## What the client has proved
 
 The real 2016 client has now launched against the hash-verified clean
-six-commit server integration. NPC navigation remained active while traveling
+seven-commit server integration. NPC navigation remained active while traveling
 through Pleasant Valley. The tested clean candidate supports:
 
 - road to Pleasant Valley police-station front entrance;
@@ -180,7 +188,7 @@ historical result is that RSS moved only from 1,768 MiB at step 5,000 to
 simulated Crowd time in 1,497.179 seconds. It does not prove the final branch,
 real clients, or public-server scale.
 
-A corrected short exact-install smoke has since proved:
+A corrected short exact-install smoke proved:
 
 - 100/100 fake characters resolve through the server client registry;
 - no `CharacterId not found` damage spam;
@@ -190,20 +198,35 @@ A corrected short exact-install smoke has since proved:
 - approximately 667 MiB of WASM linear memory during the smoke;
 - validator pass and process exit code 0.
 
-That smoke is a harness qualification, not a duration result. A guarded
-external launcher now refuses to overlap a live H1Emu server and is prepared
-to run the exact installed bytes for two wall-clock hours with durable stdout,
-stderr, JSON, PID, commit, file-hash, and runtime-artifact metadata. The current
-live client/server session correctly blocked it. The two-hour result remains
-pending.
+The exact installed final branch then completed the guarded two-hour run:
+
+- 7,200.045 workload wall seconds and 602,003 Crowd steps, final report present,
+  clean exit code 0;
+- 100/100 registered synthetic character objects (not network clients);
+- 1,551 active / 1,551 expected final agents with zero invalid indexes;
+- 50 waves x 50 native NPC agents, 2,500 created and 2,500 deleted, exact
+  baseline recovery;
+- explicit fill to the 2,000-agent capacity, one clean overflow rejection, and
+  exact return to baseline;
+- 30,101 obstacle additions and 30,101 removals, zero pending requests, healthy
+  Crowd and obstacle latches;
+- 667 MiB post-load and final WASM allocation, zero post-load growth events,
+  and a statically verified 2,048 MiB wasm32 linear-memory maximum;
+- 24 post-warmup forced-GC samples within the evaluator's memory limits;
+- final evaluator pass with no failures or warnings.
+
+Evidence is under `work/staging/installed-distributed-100-player-2h-d08d814fd-20260805.*`.
+This clears the exact-build sustained synthetic navigation gate. It does not
+convert the synthetic characters into real network clients or prove public
+server replication/event behavior.
 
 The WASM heap grows from its initial allocation to the loaded value, so an
 unchanged `HEAPU8` size during a soak must not be described as “fixed heap” or
 free-memory proof. Native allocator free space is not currently exported.
 
-The remaining pull-request readiness work is the corrected two-hour run, a
-decision on fail-closed operator visibility, a final diff/evidence review, and
-the user's explicit approval to open it.
+The remaining pull-request readiness work is documentation reconciliation, a
+final adversarial diff/evidence review, the user's final exact-build client
+test, and the user's explicit approval to open it.
 
 ## Dependency pull requests
 

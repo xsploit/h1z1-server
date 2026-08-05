@@ -1,6 +1,6 @@
 # H1Emu monolithic64 claim audit
 
-Audited: 2026-08-04
+Audited: 2026-08-05
 
 This is the strict evidence ledger for the proposed H1Emu `dev` pull request.
 Anything under **Pending** must not be presented as completed or proven.
@@ -9,20 +9,23 @@ Anything under **Pending** must not be presented as completed or proven.
 
 - Clean PR worktree: `work/h1z1-nav64-dev-pr`.
 - Branch: `feat/monolithic64-navmesh`.
-- HEAD: `296c6e4099bce9ef81596ec54c1061b329abb6b6`.
+- HEAD: `d08d814fdd2ef0ba0d2d45274a00c32d6a3101fd`.
 - Base: fetched `QuentinGruber/dev` at
   `d4aeac97c851fec539dfe8709aa5939e50b0cbbe`.
-- Relationship at the audit: zero commits behind and six commits ahead.
+- Relationship at the audit: zero commits behind and seven commits ahead.
 - The worktree is clean and the branch is pushed to
   `xsploit/h1z1-server:feat/monolithic64-navmesh`.
 - QuickStart was transactionally updated from that clean compiled worktree.
-  Backup: `clean-server-build-20260804-230233`.
+  Backup: `clean-server-build-20260805-002335`.
+- The complete installed `out` tree contains 957 files and has SHA-256 tree
+  identity
+  `2e1d99e381fd97e9e46bb3603bdecba870e44202c2ba187a4ecd6918db37a799`,
+  byte-identical to the clean worktree. The deployment removed 72 stale
+  experimental compiled files rather than overlaying the new build on them.
 - Installed `out/utils/recast.js` SHA-256:
-  `7303BBDC90D7BB7653A180A31E88A70F9E896B044AF5B3F5F4BCC2FBDD875930`.
-  It is byte-identical to the clean worktree and different from the prior
-  experimental installation.
+  `6c6d353fe4cef35191004ed87ca7ad4b0612fde0e14535965685f23db690e7fb`.
 
-The installed Survivor Encounters plugin is not part of this six-commit PR.
+The installed Survivor Encounters plugin is not part of this seven-commit PR.
 It may load beside the PR build during client testing, but its behavior cannot
 be claimed as part of the navigation diff.
 
@@ -30,7 +33,8 @@ be claimed as part of the navigation diff.
 
 - TypeScript build passes.
 - Oxlint passes.
-- Focused navigation tests pass 13/13.
+- Focused navigation and ZoneServer tests pass 18/18, with one intentional
+  Mongo test skip.
 - Real-cache server startup under bundled Node 24.18.0 succeeds.
 - The loader imports 104,935/104,935 compressed layers and builds
   100,289/100,289 indexed columns.
@@ -41,6 +45,10 @@ be claimed as part of the navigation diff.
   House36B transition is reported by name rather than silently duplicated.
 - Complete-cache startup takes approximately 18 seconds on this machine.
 - The WASM linear memory is approximately 667 MiB after materialization.
+- The installed WASM ABI directly passes the 64-bit PolyRef smoke, including
+  values above `2^53` and the complete unsigned 64-bit bit pattern. This is a
+  `DT_POLYREF64` build running in wasm32; it is not a wasm64 memory build and
+  does not need to be one.
 - A corrected exact-install runtime smoke registered 100 fake character
   entities as valid server clients, produced no `CharacterId not found` damage
   spam, and kept Crowd and obstacle health true.
@@ -52,6 +60,26 @@ be claimed as part of the navigation diff.
   build. NPC navigation remained active through Pleasant Valley, an office
   interior, and at least one multi-floor apartment route. Small single-step
   business entrances still failed in the same session.
+- The exact installed final branch completed a guarded two-hour wall-clock
+  synthetic navigation soak. The worker reached 7,200.045 workload seconds
+  and 602,003 Crowd steps, wrote its final report, and exited zero.
+- All 100 synthetic character objects registered through the server client
+  registry. They are not network clients and do not prove replication,
+  bandwidth, prediction, or login/session scale.
+- Final native Crowd accounting was exact at 1,551 active and 1,551 expected
+  agents, with zero invalid indexes. Fifty waves of 50 native NPC creations
+  and deletions created/deleted 2,500 agents and returned to the exact 1,551
+  baseline.
+- The native capacity probe filled all remaining slots to the configured 2,000
+  agent limit, rejected exactly one overflow agent, removed every probe agent,
+  and returned to the 1,551 baseline.
+- The run completed 30,101 successful obstacle additions and 30,101 removals.
+  Crowd and obstacle health remained true, pending obstacle requests ended at
+  zero, and stderr contained no WASM/runtime fault.
+- WASM linear memory was 667 MiB at the post-load baseline and at exit, with
+  zero post-load growth events against a statically verified 2,048 MiB maximum.
+  Twenty-four post-warmup forced-GC samples passed the evaluator's memory
+  bounds. The final evaluator passed with no failures or warnings.
 
 ## Important wording correction: stock mode
 
@@ -96,18 +124,19 @@ because it predated valid fake-client registration and native despawn churn.
 
 ## Hard ceilings and honest interpretation
 
-- Crowd capacity is 2,000 agents. The historical high-load run reached 1,553
-  agents (77.7%). The corrected short run peaked below the 90% rejection gate,
-  but the final two-hour result is pending.
+- Crowd capacity is 2,000 agents. The final sustained workload retained 1,551
+  agents (77.55%); the explicit boundary probe temporarily filled all 2,000
+  slots and verified fail-closed overflow behavior before returning to
+  baseline. The evaluator reports an 80.05% peak for the ordinary churn phase,
+  below its 90% sustained-load gate.
 - Navmesh capacity is 131,072 tiles and the candidate currently uses 104,903
   active tiles (80.0%). This is finite headroom, not unlimited capacity.
-- The WASM heap grows from its initial allocation to approximately 667 MiB
-  during full-cache load. `_malloc` and `_free` are exported, but allocator
-  free-space telemetry is not. Absence of an externally visible
-  `_emscripten_resize_heap` function does not prove a non-growable heap: the
-  runtime demonstrably grows during materialization. A separate allocation
-  headroom probe or a native allocator metric is still required before quoting
-  a free-memory margin.
+- The WASM memory section is wasm32, unshared, with 1,024 initial pages
+  (64 MiB) and 32,768 maximum pages (2,048 MiB). The heap grows to 667 MiB
+  during full-cache load and did not grow afterward during the two-hour run.
+  `_malloc` and `_free` are exported, but allocator free-space telemetry is not;
+  the 1,381 MiB difference to the linear-memory maximum is address-space
+  headroom, not proven contiguous allocator capacity.
 - A constant `HEAPU8.buffer.byteLength` during a run proves only that the
   linear-memory allocation did not change in that interval. It does not prove
   absence of fragmentation, available native allocator headroom, or bounded
@@ -115,11 +144,10 @@ because it predated valid fake-client registration and native despawn churn.
 
 ## What remains unproven
 
-- The corrected final branch has not completed a true two-hour wall-clock
-  synthetic navigation soak.
 - The deterministic soak clears real AI/pathfinding timers and advances a
-  synthetic clock. Even a two-hour pass proves sustained navigation workload,
-  not a production server soak.
+  synthetic clock while its outer duration is real wall time. Its pass proves
+  sustained server-side navigation/Crowd/obstacle workload, not a production
+  server soak.
 - One machine with 100 registered synthetic character objects is not 100
   network clients. Login/session behavior, replication, bandwidth, remote
   visibility, prediction, and packet backpressure remain untested.
@@ -129,18 +157,24 @@ because it predated valid fake-client registration and native despawn churn.
   upper-floor routes still fail.
 - Physical wall, door, player, and drivable-vehicle collision is not solved by
   the navigation PR.
-- The permanent Crowd/obstacle fault latch intentionally fails closed, but its
-  operator visibility and restart guidance still need a final decision.
+- A native WASM `RuntimeError` now fails navigation closed: Crowd, queries,
+  agent calls, FSM entry, position synchronization, and obstacle mutation stop
+  rather than re-entering a potentially poisoned runtime. `/serverinfo nav`
+  exposes latch state and rejection/release counters. Recovery is an operator
+  restart, not speculative in-process native recovery.
 - “Mergeable” dependency PRs are not approved, CI-green, merged, or published.
 
 ## Test-suite truth
 
-The full test command reports 81 pass, 2 fail, and 5 skip. The two displayed
-failures are parent/subtest output for the existing `plugins/TestPlugin`
-fixture, whose TypeScript 5-era configuration fails under the workspace
-TypeScript 6 compiler and leaves `out/plugin` absent. Navigation, ZoneServer,
-Crowd, obstacle, and world tests pass. The PR should report this exactly and
-must not silently fix the unrelated fixture inside the navigation change.
+The latest full test command reports 87 pass, 4 fail, and 5 skip. The four
+reported failures are parent/subtest output for two unrelated local fixtures:
+
+- `plugins/TestPlugin/plugin.js` cannot load its absent `./out/plugin` build;
+- the local H1Emu world-data `vehicles.json` is truncated and fails JSON parse.
+
+Focused navigation and ZoneServer tests pass 18/18 with one Mongo skip; build
+and oxlint pass. The PR must not present the full suite as green or silently
+modify those unrelated fixtures inside the navigation change.
 
 ## Dependency truth
 
@@ -160,14 +194,9 @@ published `recast-navigation@0.43.1` package.
 
 Before telling the user the PR is ready:
 
-1. finish the corrected true two-hour wall-clock navigation run on the exact
-   installed clean bytes, with post-GC samples, native NPC churn, hard-cap
-   utilization, obstacle state, health latches, clean stderr, final JSON, and
-   exit code;
-2. decide and document the fail-closed operator behavior after a Crowd or
-   TileCache fault;
-3. run the final build/lint/focused tests and record the known full-suite
-   fixture failure without embellishment;
-4. update the draft so every statement matches this ledger;
-5. obtain one last adversarial diff/evidence review;
-6. stop and ask the user for explicit permission before opening any PR.
+1. update the draft and long-form state documents so every statement matches
+   this final report;
+2. obtain one last adversarial diff/evidence review;
+3. let the user run the final exact-build client acceptance test;
+4. run the final build/lint/focused tests after any review fix;
+5. stop and ask the user for explicit permission before opening any PR.

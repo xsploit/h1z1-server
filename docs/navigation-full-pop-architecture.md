@@ -4,19 +4,19 @@
 > document retains the measurements, rejected alternatives, and detailed scale
 > evidence behind that decision.
 
-Status: Slice 0 capacity audit, 64-bit monolithic WASM consumer, opt-in server
-integration, standalone 2,000-agent crowd/replan benchmark, installed-server
-deployment, corrected two-hour-equivalent 100-player synthetic soak, and the
-first real-client navigation acceptance session are complete. The corrected
-40,000-step wall-clock soak also passes; real multi-client replication/event
-testing remains open. No production claim yet.
+Status: Slice 0 capacity audit, opt-in monolithic `DT_POLYREF64` WASM consumer,
+standalone 2,000-agent benchmark, exact installed-server deployment, a true
+two-hour wall-clock 100-character synthetic navigation soak, and the first
+real-client navigation acceptance session are complete. Real multi-client
+replication/event testing remains open. No production claim yet.
 
-The clean `dev` integration's final 40,000-step run completed 40,000/40,000
-steps in 1,497.179 seconds with 1,553/1,553 agents accounted for, 1,438/1,438
-NPC wrappers retained, 2,000 obstacle add/remove cycles, healthy Crowd and
-obstacle state, a fixed 667 MiB WASM heap, and exit code 0. A subsequent
-transition-aware 1,000-step smoke on `296c6e409` also passed with exact
-1,551-agent accounting and 50 obstacle cycles.
+The exact installed `dev` candidate at `d08d814fd` completed 7,200.045 workload
+wall seconds and 602,003 Crowd steps with 1,551/1,551 final agents accounted
+for, 2,500/2,500 native churn agents created/deleted, 30,101 obstacle
+add/remove cycles, healthy Crowd and obstacle state, unchanged 667 MiB
+post-load WASM allocation, and exit code 0. Its evaluator passed without a
+failure or warning. This supersedes the accelerated 40,000-step run as final
+branch duration evidence.
 
 This document pauses further whole-map semantic grinding until the runtime can
 support a populated public server. The current disk-indexed streamer remains a
@@ -444,7 +444,8 @@ module, not the last generic `dist` build (which was correctly rejected as
 32-bit by the capability check). The installed ZoneServer reported:
 
 - 104,935 layers imported and 100,289 columns materialized;
-- 667.3 MiB WASM heap and 17.992 seconds to load the monolithic cache;
+- 667.3 MiB post-load WASM allocation and 17.992 seconds to load the
+  monolithic cache;
 - the full collision/heightmap/plugin/runtime sequence completed;
 - the normal world population created 604 zombies, 140 bandits, 36 rabbits,
   103 deer, 34 wolves, and 18 bears; and
@@ -452,12 +453,11 @@ module, not the last generic `dist` build (which was correctly rejected as
   the test PID was deliberately stopped.
 
 The combined launcher process retained about 1.59 GiB RSS after world/NPC
-creation. This is the current installed-server memory baseline. The reproducible
-package and QuickStart bootstrap now exist and have passed isolated fixture and
-real-install deployment-plan checks. They remain intentionally undeployed while
-the corrected two-hour soak owns the installed runtime; the next installed
-checkpoint must deploy them and prove that Play logs packaged paths rather than
-workspace module paths.
+creation. This was the installed-server memory baseline for that checkpoint.
+The reproducible package and QuickStart bootstrap subsequently passed isolated
+fixture and real-install deployment checks; the final clean build and packaged
+runtime are now deployed and verified by complete compiled-tree and manifest
+identity.
 
 The installed runtime also passed two non-client behavior gates:
 
@@ -469,7 +469,8 @@ The installed runtime also passed two non-client behavior gates:
   obstacle add/remove cycles.
 
 That stress run retained 1,788 active agents, reported no invalid agent indexes,
-kept Crowd and obstacle health true, and kept the WASM heap fixed at 667 MiB.
+kept Crowd and obstacle health true, and kept the post-load WASM allocation at
+667 MiB.
 With forced JavaScript GC, process RSS ended at 2,065 MiB and JavaScript heap
 usage ended at 334 MiB. The machine-readable report is
 `work/staging/full-apartments06-v1/installed-world-crowd-1000x1000-gc-20260804.json`.
@@ -513,16 +514,17 @@ initial wrappers through 50 obstacle add/remove cycles. Native active agents
 matched the 1,800 agents currently referenced by live entities and fixed test
 agents; 1,784 original wrappers remained identical, 25 were recycled locally,
 and the dedicated target-tile probe remained walking, was never invalid, and
-moved 5.631 m. Crowd and obstacle health stayed true, the complete mesh stayed
-resident, and the WASM heap stayed fixed at 667 MiB. The report is
+moved 5.631 m. Crowd and obstacle health stayed true, the materialized map-wide
+mesh stayed
+resident, and the post-load WASM allocation remained at 667 MiB. The report is
 `work/staging/full-apartments06-v1/installed-obstacle-recovery-recycle-1000x1000-20260804.json`.
 
 This proves local salt-change recovery and disproves global teardown as a
 viable full-pop strategy.
 
 The next installed 100-fake-player, two-hour run completed its full wall-clock
-duration and kept the complete mesh and fixed 667 MiB WASM heap alive without a
-WASM trap, but correctly failed its final accounting gate: native Crowd had
+duration and kept the materialized map-wide mesh and 667 MiB post-load WASM allocation alive
+without a WASM trap, but correctly failed its final accounting gate: native Crowd had
 filled all 2,000 slots while only 676 live entity/test agents were expected.
 `WorldObjectManager` expires dead NPC corpses through
 `batchDeleteEntities()`. That optimized path removed the entity from the world
@@ -548,8 +550,8 @@ steps (2.22 simulated hours) with 100 distributed fake players and completed
   other two were recovered locally;
 - Crowd and obstacle health remained true, no agent index was invalid, and the
   target-tile recovery probe remained valid while moving 10.583 m;
-- all 100,289 columns / 104,935 layers remained resident and the WASM heap was
-  fixed at 667 MiB; and
+- all 100,289 columns / 104,935 compressed layers remained resident and the
+  post-load WASM allocation stayed at 667 MiB; and
 - RSS plateaued at about 1,975 MiB during the last 15,000 progress ticks rather
   than growing with every despawn/obstacle cycle.
 
@@ -561,6 +563,47 @@ This clears the server-side Crowd lifecycle and deterministic two-hour-equivalen
 obstacle/churn gate. It does not replace multi-client replication, event
 delivery, or entity-specific gameplay checks.
 
+### Exact final-branch two-hour soak (2026-08-05)
+
+The accelerated result above was deliberately not accepted as final PR-head
+evidence. The guarded launcher first proved that the complete installed
+957-file compiled tree was byte-identical to clean commit `d08d814fd`, that the
+runtime manifest and both external navigation modules matched their hashes,
+and that the embedded WASM memory descriptor was wasm32 with 64 MiB initial and
+2,048 MiB maximum linear memory. The installed PolyRef ABI separately passed
+the 64-bit smoke with exact values above `2^53`; wasm32 pointer width does not
+reduce the `DT_POLYREF64` integer ABI.
+
+The exact installed run then completed 7,200.045 workload wall seconds and
+602,003 Crowd updates with:
+
+- 100/100 registered synthetic character objects, explicitly not network
+  clients;
+- 1,436 NPCs and 1,551 sustained native Crowd agents;
+- 50 waves of 50 native NPC creations/deletions, 2,500/2,500 total, returning
+  exactly to the 1,551 baseline;
+- an explicit capacity boundary probe that filled all 2,000 slots, rejected
+  exactly one overflow agent, removed every probe wrapper, and returned to
+  baseline;
+- 30,101 successful obstacle additions and 30,101 removals;
+- zero invalid agent indexes, zero unreleased agents, zero pending obstacle
+  requests, and healthy Crowd/obstacle latches at every sample;
+- 667 MiB post-load and final WASM allocation, zero post-load growth events,
+  and 32.58% use of the declared 2,048 MiB maximum;
+- 24 post-warmup forced-GC memory samples; and
+- a final report, clean exit code 0, and no WASM/runtime or missing-character
+  fault signature.
+
+The strict evaluator passed with no failures or warnings. Its post-warmup RSS
+slope was negative, final post-GC RSS was 0.4691x the ten-minute baseline, and
+final JavaScript heap was 1.0295x baseline. These measurements establish
+bounded behavior for this synthetic server-side navigation workload on this
+machine; they do not establish 100-client network capacity, replication,
+bandwidth, complete AI/event behavior, or public production readiness.
+
+The durable evidence prefix is
+`work/staging/installed-distributed-100-player-2h-d08d814fd-20260805`.
+
 After commit `b899e4320`, the verified runtime closure and unchanged navigation
 artifact were transactionally installed with backup
 `nav-artifact-contract-20260804-155919`. Packaged 64-bit runtime artifact
@@ -571,7 +614,8 @@ QuickStart launcher/bootstrap was installed with backup
 staged package and compiled runtime exactly. A server-only QuickStart smoke then
 selected the installed `runtime/navigation64` core and WASM modules, verified
 artifact `4b8368d7afdb72fdfe3ae73a7bc5a521dbe3caf860ce1d384f199f7cc42a2e2b`,
-materialized all 104,935 layers / 100,289 columns with the 667.3 MiB WASM heap,
+materialized all 104,935 compressed layers / 100,289 columns with a 667.3 MiB
+post-load WASM allocation,
 loaded the heightmap, collision, plugins, loot tables, and world NPC population,
 and reached `Server is ready and accepting connections.` The smoke server was
 then stopped without launching the game client.
@@ -586,9 +630,8 @@ capacity:
   blocked and locally replanned, not merely that the API returns success;
 - replication, the complete AI update phase, and separated sound/explosion
   delivery remain outside the standalone benchmark; and
-- the 1.5-2.6 GiB observed process RSS range needs an explicit host-capacity
-  budget, and the corrected local-recovery lifecycle needs a fresh two-hour
-  stability soak.
+- real network clients, event delivery, and host-capacity planning remain
+  outside the synthetic navigation gate.
 
 Opaque handles remain Candidate B's preferred process boundary, but Candidate
 A can proceed with BigInt refs if the high-level wrapper and tests stay
@@ -652,13 +695,12 @@ make it the most complex fallback.
 | Obstacles             | Repeated door, construction, and vehicle changes cause bounded local replans without corrupting unrelated agents.                          |
 
 Current evidence clears the standalone 2,000-agent Crowd, replan, reference
-ABI, full-cache materialization, clean-teardown, 100-player synthetic
-distribution, and two-hour-equivalent Crowd/obstacle churn portions of these
+ABI, full-cache materialization, clean teardown, exact-build two-hour synthetic
+population, native churn, and generic TileCache obstacle portions of these
 gates. It also clears installed-runtime startup, representative box-carve
-effectiveness, a 1,000-tick/50-obstacle ZoneServer stress, and one real-client
-session covering Pleasant Valley, an office interior, and an apartment route to
-an accessible roof. It does not clear multi-client replication/event delivery,
-the corrected wall-clock soak, or entity-specific obstacle behavior.
+effectiveness, and one real-client session covering Pleasant Valley, an office
+interior, and an apartment route to an accessible roof. It does not clear real
+multi-client replication/event delivery or entity-specific obstacle behavior.
 
 ## Audited surfaces
 
