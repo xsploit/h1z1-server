@@ -1,6 +1,11 @@
 # Navigation Project: Journey, Current State, and Roadmap
 
-Last verified: 2026-08-03
+Last verified: 2026-08-04
+
+> Current operational checkpoint: see `navigation-current-state.md`. This file
+> preserves the full chronology, including the earlier 32-bit streaming phase;
+> statements below about the then-current installed architecture are historical
+> unless repeated in the current-state checkpoint.
 
 This document is the canonical project record for the Z1 navigation work. It
 explains why the work exists, what was tried, what is actually deployed, what
@@ -77,8 +82,8 @@ another blind full-map bake.
 - Make zombies and human NPCs navigate outdoor terrain, entrances, interiors,
   stairs, and multiple floors without floating or walking through solid
   geometry.
-- Keep the server stable on the 32-bit Recast/Detour WASM runtime currently
-  used by H1emu.
+- Keep stock H1Emu behavior unchanged by default while providing a stable,
+  opt-in 64-bit complete-map Recast/Detour WASM runtime.
 - Make every generated artifact reproducible, attributable, validated, and
   safely deployable.
 - Upstream generally useful navigation, collision, validation, and deployment

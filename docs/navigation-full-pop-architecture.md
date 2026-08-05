@@ -1,11 +1,22 @@
 # Full-population navigation architecture
 
+> The concise operational checkpoint is `navigation-current-state.md`. This
+> document retains the measurements, rejected alternatives, and detailed scale
+> evidence behind that decision.
+
 Status: Slice 0 capacity audit, 64-bit monolithic WASM consumer, opt-in server
 integration, standalone 2,000-agent crowd/replan benchmark, installed-server
 deployment, corrected two-hour-equivalent 100-player synthetic soak, and the
-first real-client navigation acceptance session are complete. A corrected
-wall-clock soak and real multi-client replication/event testing remain open.
-No production claim yet.
+first real-client navigation acceptance session are complete. The corrected
+40,000-step wall-clock soak also passes; real multi-client replication/event
+testing remains open. No production claim yet.
+
+The clean `dev` integration's final 40,000-step run completed 40,000/40,000
+steps in 1,497.179 seconds with 1,553/1,553 agents accounted for, 1,438/1,438
+NPC wrappers retained, 2,000 obstacle add/remove cycles, healthy Crowd and
+obstacle state, a fixed 667 MiB WASM heap, and exit code 0. A subsequent
+transition-aware 1,000-step smoke on `296c6e409` also passed with exact
+1,551-agent accounting and 50 obstacle cycles.
 
 This document pauses further whole-map semantic grinding until the runtime can
 support a populated public server. The current disk-indexed streamer remains a
