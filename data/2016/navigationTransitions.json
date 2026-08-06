@@ -4471,6 +4471,74 @@
     "bidirectional": true
   },
   {
+    "name": "Common_Structures_HardwareStore01.adr #148607 front door east outer threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      2174.7708970068543,
+      47.49168975830078,
+      -1017.0838404735833
+    ],
+    "end": [
+      2171.9708971026944,
+      47.501689758300785,
+      -1017.0838400973786
+    ],
+    "radius": 0.75,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_HardwareStore01.adr #148607 front door east inner threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      2174.7708974771103,
+      47.49168975830078,
+      -1013.5838405933832
+    ],
+    "end": [
+      2171.9708975729504,
+      47.501689758300785,
+      -1013.5838402171785
+    ],
+    "radius": 0.75,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_HardwareStore01.adr #148607 front door west inner threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      2174.7708979876734,
+      47.49168975830078,
+      -1009.7838407234517
+    ],
+    "end": [
+      2171.9708980835135,
+      47.501689758300785,
+      -1009.783840347247
+    ],
+    "radius": 0.75,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_HardwareStore01.adr #148607 front door west outer threshold seam",
+    "kind": "threshold",
+    "source": "model-local-navigation-template",
+    "start": [
+      2174.7708984579294,
+      47.49168975830078,
+      -1006.2838408432516
+    ],
+    "end": [
+      2171.9708985537695,
+      47.501689758300785,
+      -1006.2838404670468
+    ],
+    "radius": 0.75,
+    "bidirectional": true
+  },
+  {
     "name": "Common_Structures_Houses_House36B.adr #146664 second-floor landing seam",
     "kind": "stairs",
     "source": "model-local-navigation-template",

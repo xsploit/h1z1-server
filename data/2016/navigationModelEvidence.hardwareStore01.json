@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_HardwareStore01.adr",
+  "inputs": {
+    "collision": {
+      "sha256": "ce8ca93c8b3d3607d829b323580b6cad60723ea46c7f46eb0e8f16ed38656065",
+      "size": 26332088
+    },
+    "collisionMetadata": {
+      "sha256": "4a1603384cad29321a3785227753afbc5b6b6eb686308349243775155b758c30",
+      "size": 336537
+    },
+    "combinedSemantics": {
+      "sha256": "f5fbf4d83b5950c782bc795d58022ead440f1950b754e7c29f2454c483d6b3a1",
+      "size": 508976
+    },
+    "compiledTransitionProvenance": {
+      "sha256": "9effbec695653631fa3bcb8156cc083b7ca11ee370e7b87fff33cfdda43aee82",
+      "size": 1671
+    },
+    "compiledTransitions": {
+      "sha256": "f381e1ad02a625488232f000a04716f830ca79c95880eb400d4b805183bab185",
+      "size": 115742
+    },
+    "heightmap": {
+      "sha256": "78799a6429aaf910cc5c38fe4d8ebfa15d79096c272e77faa3cc2a089ecadc21",
+      "size": 40150471
+    },
+    "semanticPolicy": {
+      "sha256": "e1a880889dd1feef87a9058112c15f766bfa4b2b58fe3c165ee29b1437ab8621",
+      "size": 49284
+    },
+    "semanticRecipe": {
+      "sha256": "4a6273a8f327468f0ae4309e077ae5622f744555391b4cc0f6af8cec00c056c6",
+      "size": 1403
+    },
+    "validationTemplate": {
+      "sha256": "00b9f301537642fc2ecb0ffc3832cfbe99b4dbfa403e4ec5af4ecd69f30970b5",
+      "size": 3182
+    }
+  },
+  "streamingCaches": [
+    {
+      "instanceIndex": 148607,
+      "parts": [
+        {
+          "name": "z1_cache_0.bin",
+          "sha256": "6de93723842b0c97c12ea1185d8df8ff71405b44efaa58ec63de05ac2db4fbab",
+          "size": 83897
+        }
+      ]
+    }
+  ],
+  "result": {
+    "instances": 1,
+    "routes": 8,
+    "passed": 8,
+    "forbiddenProbes": 6,
+    "forbiddenEvaluated": 6,
+    "forbiddenPassed": 6
+  }
+}

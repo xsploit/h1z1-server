@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_HardwareStore01.adr",
+  "boundsMargin": 16,
+  "maxTerrainDelta": 1.5,
+  "terrainProbes": [
+    [-5.4, 0.08, 21.0],
+    [-1.9, 0.08, 21.0],
+    [1.9, 0.08, 21.0],
+    [5.4, 0.08, 21.0]
+  ],
+  "forbiddenProbes": [
+    {
+      "label": "main roof center must remain non-walkable",
+      "position": [0.0, 10.2, 0.0],
+      "halfExtents": [0.7, 0.45, 0.7]
+    },
+    {
+      "label": "main roof northwest must remain non-walkable",
+      "position": [-24.0, 10.2, -12.0],
+      "halfExtents": [0.7, 0.45, 0.7]
+    },
+    {
+      "label": "main roof southeast must remain non-walkable",
+      "position": [24.0, 9.65, 12.0],
+      "halfExtents": [0.7, 0.45, 0.7]
+    },
+    {
+      "label": "upper front roof center must remain non-walkable",
+      "position": [0.0, 15.53, 24.0],
+      "halfExtents": [0.7, 0.45, 0.7]
+    },
+    {
+      "label": "upper front roof west must remain non-walkable",
+      "position": [-6.0, 14.34, 21.0],
+      "halfExtents": [0.7, 0.45, 0.7]
+    },
+    {
+      "label": "upper front roof east must remain non-walkable",
+      "position": [6.0, 14.34, 21.0],
+      "halfExtents": [0.7, 0.45, 0.7]
+    }
+  ],
+  "transitions": [
+    {
+      "name": "front door west outer threshold seam",
+      "kind": "threshold",
+      "start": [-5.4, 0.08, 20.6],
+      "end": [-5.4, 0.09, 17.8],
+      "radius": 0.75,
+      "bidirectional": true
+    },
+    {
+      "name": "front door west inner threshold seam",
+      "kind": "threshold",
+      "start": [-1.9, 0.08, 20.6],
+      "end": [-1.9, 0.09, 17.8],
+      "radius": 0.75,
+      "bidirectional": true
+    },
+    {
+      "name": "front door east inner threshold seam",
+      "kind": "threshold",
+      "start": [1.9, 0.08, 20.6],
+      "end": [1.9, 0.09, 17.8],
+      "radius": 0.75,
+      "bidirectional": true
+    },
+    {
+      "name": "front door east outer threshold seam",
+      "kind": "threshold",
+      "start": [5.4, 0.08, 20.6],
+      "end": [5.4, 0.09, 17.8],
+      "radius": 0.75,
+      "bidirectional": true
+    }
+  ],
+  "routes": [
+    {
+      "label": "west outer entrance exterior to interior",
+      "start": [-5.4, 0.08, 21.5],
+      "end": [-5.4, 0.09, 16.5]
+    },
+    {
+      "label": "west outer entrance interior to exterior",
+      "start": [-5.4, 0.09, 16.5],
+      "end": [-5.4, 0.08, 21.5]
+    },
+    {
+      "label": "west inner entrance exterior to interior",
+      "start": [-1.9, 0.08, 21.5],
+      "end": [-1.9, 0.09, 16.5]
+    },
+    {
+      "label": "west inner entrance interior to exterior",
+      "start": [-1.9, 0.09, 16.5],
+      "end": [-1.9, 0.08, 21.5]
+    },
+    {
+      "label": "east inner entrance exterior to interior",
+      "start": [1.9, 0.08, 21.5],
+      "end": [1.9, 0.09, 16.5]
+    },
+    {
+      "label": "east inner entrance interior to exterior",
+      "start": [1.9, 0.09, 16.5],
+      "end": [1.9, 0.08, 21.5]
+    },
+    {
+      "label": "east outer entrance exterior to interior",
+      "start": [5.4, 0.08, 21.5],
+      "end": [5.4, 0.09, 16.5]
+    },
+    {
+      "label": "east outer entrance interior to exterior",
+      "start": [5.4, 0.09, 16.5],
+      "end": [5.4, 0.08, 21.5]
+    }
+  ]
+}

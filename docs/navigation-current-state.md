@@ -150,6 +150,18 @@ also passed. This is reproducible regional source evidence, not a full-map bake
 or client acceptance result: the currently installed 104,935-layer artifact
 still predates this business batch.
 
+The dedicated `Common_Structures_HardwareStore01.adr` is a separate composite
+building, not another StoreFront placement. Its hash-bound rule admits only 71
+reviewed ground-level triangles (63 floor/apron and eight threshold triangles)
+and leaves the other 10,031 wall, upper-floor, and roof triangles as static
+obstacles. Four extracted `Common_Props_SuperMarket_FrontDoor01.adr` instances
+align exactly with the four authored threshold strips. The one map placement
+passed 8/8 bidirectional entrance routes and 6/6 forbidden roof probes. A
+full StoreFront01 through StoreFront04 replay against the combined candidate
+also remained green at 608/608 routes and 153/153 evaluated roof probes across
+76 placements. This is bounded source validation; it has not been included in
+a new full-map artifact or accepted in the client.
+
 ## What is not solved
 
 Navigation is not physical collision. The current work does not justify any
@@ -160,6 +172,9 @@ vehicle.
   and are used for melee and ranged line-of-sight gates.
 - The navmesh and authored transitions reduce wall shortcuts only where the
   baked topology is correct.
+- Compiled doorway transitions are topological links; they do not by
+  themselves disable while a physical door is closed. Closed-door blocking
+  still depends on complete runtime dynamic-obstacle coverage.
 - Drivable vehicles and players currently contribute soft Crowd avoidance;
   they are not a hard swept-capsule collision solution.
 - The previous server-authoritative position correction experiment was

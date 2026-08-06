@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "outputSha256": "7f46c212d467fd9a3c008dad44167f925ffd029a0b631ad3d37131cb20771e7b",
-  "transitionCount": 279,
+  "outputSha256": "f381e1ad02a625488232f000a04716f830ca79c95880eb400d4b805183bab185",
+  "transitionCount": 283,
   "authoredSource": {
     "path": "data/2016/navigationTransitions.authored.json",
     "sha256": "600f0a61e8bf485848ac8e09918d02a31e06388ac2b2b2794b9d9c0150a8a49e",
@@ -42,6 +42,11 @@
       "label": "storeFront03",
       "sha256": "47053b735849a94817629beb1c22ee4fac3d386fc8dae4cb81be17c0da4b278a",
       "transitionCount": 28
+    },
+    {
+      "label": "hardwareStore01",
+      "sha256": "a5c90814197675f5047741d31528b084545c222496a233e7edabf2bd6d27264b",
+      "transitionCount": 4
     }
   ]
 }

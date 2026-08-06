@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_HardwareStore01.adr",
+  "collisionAssetSha256": "3c0793829fc6b5522728ef11cbb68e23b16989562f4204020c793db034fd7117",
+  "defaultSemantic": "nav_obstacle_static",
+  "selectors": [
+    {
+      "id": "four-authored-front-door-thresholds",
+      "semantic": "nav_threshold",
+      "triangleRanges": [
+        [2898, 2899],
+        [2934, 2935],
+        [3553, 3554],
+        [3589, 3590]
+      ],
+      "normalYMax": -0.99,
+      "slopeDegreesMax": 1,
+      "minSelectedTriangles": 8,
+      "maxSelectedTriangles": 8
+    },
+    {
+      "id": "reviewed-ground-floor-and-ground-level-aprons",
+      "semantic": "nav_floor_interior",
+      "triangleRanges": [
+        [2831, 2831],
+        [2834, 2834],
+        [2873, 2873],
+        [2898, 2899],
+        [2934, 2935],
+        [3553, 3554],
+        [3589, 3590],
+        [4865, 4866],
+        [4873, 4874],
+        [5319, 5320],
+        [5355, 5356],
+        [5391, 5392],
+        [5912, 5913],
+        [5948, 5949],
+        [5984, 5985],
+        [6020, 6021],
+        [6334, 6335],
+        [6370, 6371],
+        [6689, 6689],
+        [8441, 8450],
+        [8453, 8455],
+        [8493, 8495],
+        [8500, 8509],
+        [8514, 8523],
+        [10080, 10080]
+      ],
+      "normalYMax": -0.99,
+      "slopeDegreesMax": 5,
+      "minSelectedTriangles": 63,
+      "maxSelectedTriangles": 63
+    }
+  ]
+}

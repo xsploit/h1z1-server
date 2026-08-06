@@ -88,6 +88,32 @@ def triangle_evidence(positions, indices) -> list[dict]:
 
 
 def _matches(selector: dict, triangle: dict) -> bool:
+    triangle_ranges = selector.get("triangleRanges")
+    if triangle_ranges is not None:
+        if not isinstance(triangle_ranges, list) or not triangle_ranges:
+            raise ValueError("selector triangleRanges must be a non-empty list")
+        parsed_ranges = []
+        previous_end = -1
+        for index, value in enumerate(triangle_ranges):
+            if (
+                not isinstance(value, list)
+                or len(value) != 2
+                or not all(isinstance(bound, int) for bound in value)
+            ):
+                raise ValueError(
+                    f"selector triangleRanges entry {index} must contain two integers"
+                )
+            start, end = value
+            if start < 0 or end < start or start <= previous_end:
+                raise ValueError(
+                    "selector triangleRanges must be sorted, disjoint, and non-negative"
+                )
+            parsed_ranges.append((start, end))
+            previous_end = end
+        if not any(
+            start <= triangle["triangle"] <= end for start, end in parsed_ranges
+        ):
+            return False
     bounds = selector.get("centroidBounds")
     if bounds is not None:
         if not isinstance(bounds, list) or len(bounds) != 6:

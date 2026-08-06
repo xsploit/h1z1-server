@@ -137,6 +137,31 @@ class CaptureNavigationModelEvidenceTests(unittest.TestCase):
                 self.assertEqual(evidence["result"]["forbiddenPassed"], forbidden)
                 self.assertEqual(len(evidence["streamingCaches"]), instances)
 
+    def test_committed_hardwarestore01_evidence_tracks_repository_inputs(self):
+        repository = Path(__file__).resolve().parents[3]
+        evidence = json.loads(
+            (
+                repository / "data/2016/navigationModelEvidence.hardwareStore01.json"
+            ).read_text(encoding="utf-8")
+        )
+        tracked = {
+            "semanticPolicy": "tools/forgelight/policies/z1_collision.semantic_policy.json",
+            "semanticRecipe": "data/2016/navigationSemanticRecipe.hardwareStore01.json",
+            "validationTemplate": "data/2016/navigationModelValidation.hardwareStore01.json",
+            "compiledTransitions": "data/2016/navigationTransitions.json",
+            "compiledTransitionProvenance": "data/2016/navigationTransitions.provenance.json",
+        }
+        for label, relative_path in tracked.items():
+            raw = (repository / relative_path).read_bytes()
+            self.assertEqual(
+                evidence["inputs"][label]["sha256"],
+                hashlib.sha256(raw).hexdigest(),
+            )
+        self.assertEqual(evidence["result"]["instances"], 1)
+        self.assertEqual(evidence["result"]["passed"], 8)
+        self.assertEqual(evidence["result"]["forbiddenPassed"], 6)
+        self.assertEqual(len(evidence["streamingCaches"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

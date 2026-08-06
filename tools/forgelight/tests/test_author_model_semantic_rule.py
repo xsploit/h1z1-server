@@ -148,6 +148,61 @@ class AuthorModelSemanticRuleTest(unittest.TestCase):
             ],
         )
 
+    def test_selector_can_pin_disjoint_triangle_ranges(self):
+        positions = tuple(
+            coordinate
+            for offset in range(4)
+            for coordinate in (
+                float(offset), 0.0, 0.0,
+                float(offset + 1), 0.0, 0.0,
+                float(offset), 0.0, 1.0,
+            )
+        )
+        evidence = triangle_evidence(positions, tuple(range(12)))
+        recipe = {
+            "actorFile": "Test.adr",
+            "collisionAssetSha256": "a" * 64,
+            "defaultSemantic": "nav_obstacle_static",
+            "selectors": [
+                {
+                    "id": "reviewed-disjoint-surfaces",
+                    "semantic": "nav_floor_interior",
+                    "triangleRanges": [[0, 0], [2, 3]],
+                    "normalYMax": -0.9,
+                    "minSelectedTriangles": 3,
+                    "maxSelectedTriangles": 3,
+                }
+            ],
+        }
+        rule, _report = author_rule(0, evidence, recipe)
+        self.assertEqual(
+            rule["selections"],
+            [
+                {"semantic": "nav_floor_interior", "triangleRanges": [[0, 0], [2, 3]]},
+                {"semantic": "nav_obstacle_static", "triangleRanges": [[1, 1]]},
+            ],
+        )
+
+    def test_selector_rejects_invalid_triangle_ranges(self):
+        evidence = triangle_evidence(
+            (0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0),
+            (0, 1, 2),
+        )
+        recipe = {
+            "actorFile": "Test.adr",
+            "collisionAssetSha256": "a" * 64,
+            "defaultSemantic": "nav_obstacle_static",
+            "selectors": [
+                {
+                    "id": "bad-ranges",
+                    "semantic": "nav_floor_interior",
+                    "triangleRanges": [[1, 2], [2, 3]],
+                }
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "sorted, disjoint"):
+            author_rule(0, evidence, recipe)
+
 
 if __name__ == "__main__":
     unittest.main()

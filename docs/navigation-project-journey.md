@@ -1130,6 +1130,18 @@ not yet been included in a new full-map bake or accepted in the client. Dynamic
 door panels, drivable vehicles, and physical character-to-character collision
 remain separate runtime work.
 
+The next business pass treated the dedicated hardware store as its actual
+actor instead of assuming storefront reuse. `HardwareStore01` has one world
+placement, 10,102 composite triangles, and four extracted supermarket front
+door instances aligned with four model-local threshold strips. A fail-closed
+recipe admits 63 reviewed ground-floor/apron triangles and eight threshold
+triangles; all 10,031 remaining triangles stay static obstacles. Its regional
+candidate passed 8/8 entrance routes and 6/6 forbidden roof probes, then the
+combined candidate replayed StoreFront01 through StoreFront04 at 608/608
+routes and 153/153 evaluated roof probes across 76 placements. These results
+are content-addressed regional evidence only. No new full-map bake or client
+acceptance result is claimed for the hardware-store batch.
+
 ### Exact final-branch synthetic soak checkpoint (2026-08-05)
 
 The earlier accelerated 40,000-step result was not promoted to final PR
