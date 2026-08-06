@@ -104,6 +104,39 @@ class CaptureNavigationModelEvidenceTests(unittest.TestCase):
         self.assertEqual(evidence["result"]["forbiddenPassed"], 208)
         self.assertEqual(len(evidence["streamingCaches"]), 13)
 
+    def test_committed_storefront_evidence_tracks_repository_inputs(self):
+        repository = Path(__file__).resolve().parents[3]
+        expected = {
+            "01": (18, 144, 54),
+            "02": (19, 152, 57),
+            "03": (14, 112, 42),
+        }
+        for suffix, (instances, routes, forbidden) in expected.items():
+            with self.subTest(storefront=suffix):
+                evidence = json.loads(
+                    (
+                        repository
+                        / f"data/2016/navigationModelEvidence.storeFront{suffix}.json"
+                    ).read_text(encoding="utf-8")
+                )
+                tracked = {
+                    "semanticPolicy": "tools/forgelight/policies/z1_collision.semantic_policy.json",
+                    "semanticRecipe": f"data/2016/navigationSemanticRecipe.storeFront{suffix}.json",
+                    "validationTemplate": f"data/2016/navigationModelValidation.storeFront{suffix}.json",
+                    "compiledTransitions": "data/2016/navigationTransitions.json",
+                    "compiledTransitionProvenance": "data/2016/navigationTransitions.provenance.json",
+                }
+                for label, relative_path in tracked.items():
+                    raw = (repository / relative_path).read_bytes()
+                    self.assertEqual(
+                        evidence["inputs"][label]["sha256"],
+                        hashlib.sha256(raw).hexdigest(),
+                    )
+                self.assertEqual(evidence["result"]["instances"], instances)
+                self.assertEqual(evidence["result"]["passed"], routes)
+                self.assertEqual(evidence["result"]["forbiddenPassed"], forbidden)
+                self.assertEqual(len(evidence["streamingCaches"]), instances)
+
 
 if __name__ == "__main__":
     unittest.main()

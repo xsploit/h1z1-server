@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_StoreFront03.adr",
+  "collisionAssetSha256": "75b2d8b3d847fd97fadde9ff9dd0224663c8f2c53e0d655e527b3755d72251ce",
+  "defaultSemantic": "nav_obstacle_static",
+  "selectors": [
+    {
+      "id": "south-stepped-threshold",
+      "semantic": "nav_threshold",
+      "centroidBounds": [-5.6, -0.05, -9.85, -2.8, 0.46, -8.95],
+      "normalYMax": -0.75,
+      "slopeDegreesMax": 50,
+      "areaMin": 0.05,
+      "areaMax": 0.75,
+      "minSelectedTriangles": 9,
+      "maxSelectedTriangles": 9
+    },
+    {
+      "id": "north-ramped-threshold",
+      "semantic": "nav_threshold",
+      "centroidBounds": [-2.6, -0.05, 8.5, 2.6, 0.46, 9.4],
+      "normalYMax": -0.7,
+      "slopeDegreesMax": 50,
+      "areaMin": 0.1,
+      "areaMax": 1.2,
+      "minSelectedTriangles": 8,
+      "maxSelectedTriangles": 8
+    },
+    {
+      "id": "ground-floor",
+      "semantic": "nav_floor_interior",
+      "centroidBounds": [-6.2, 0.38, -8.95, 5.0, 0.46, 8.6],
+      "normalYMax": -0.94,
+      "slopeDegreesMax": 10,
+      "areaMin": 0.1,
+      "areaMax": 100,
+      "minSelectedTriangles": 38,
+      "maxSelectedTriangles": 38
+    }
+  ]
+}

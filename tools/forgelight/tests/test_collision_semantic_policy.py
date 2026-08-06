@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "3e361ab5d1272c04c7987b2794865003f1e0a0f2b9553846116aaec9ae7cca46"
+POLICY_SHA256 = "292137024a04de7cc1090966c6eb979fff478dbf8aa5f0f426e062a0b7ae9d8c"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,7 +151,7 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 140)
+        self.assertEqual(len(policy.rules), 143)
         self.assertEqual(
             sum(rule.strategy == "uniform" for rule in policy.rules), 97
         )
@@ -163,7 +163,7 @@ class CanonicalPolicyTests(unittest.TestCase):
             34,
         )
         self.assertEqual(
-            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 9
+            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 12
         )
 
     def test_apartments06_floors_stairs_and_fail_closed_remainder_are_pinned(self):
@@ -343,6 +343,78 @@ class CanonicalPolicyTests(unittest.TestCase):
             selections[SemanticId.FLOOR_INTERIOR],
             ((2261, 2270), (2667, 2672)),
         )
+
+    def test_storefront01_through_03_authored_entrances_are_pinned(self):
+        policy = load_semantic_policy(POLICY_PATH)
+        expected = {
+            "Common_Structures_StoreFront01.adr": {
+                "triangles": 1412,
+                "threshold": (
+                    (482, 483),
+                    (489, 490),
+                    (656, 657),
+                    (661, 662),
+                    (667, 670),
+                    (773, 774),
+                    (779, 780),
+                    (1222, 1223),
+                    (1235, 1235),
+                ),
+                "floor": ((675, 682), (685, 690), (693, 694)),
+            },
+            "Common_Structures_StoreFront02.adr": {
+                "triangles": 2348,
+                "threshold": (
+                    (2048, 2051),
+                    (2058, 2061),
+                    (2074, 2077),
+                    (2084, 2085),
+                    (2092, 2093),
+                    (2108, 2113),
+                    (2118, 2123),
+                    (2239, 2239),
+                ),
+                "floor": ((2098, 2107), (2342, 2347)),
+            },
+            "Common_Structures_StoreFront03.adr": {
+                "triangles": 5162,
+                "threshold": (
+                    (933, 933),
+                    (4420, 4421),
+                    (4430, 4431),
+                    (4476, 4479),
+                    (4505, 4505),
+                    (4507, 4507),
+                    (4512, 4513),
+                    (4522, 4523),
+                    (5018, 5019),
+                ),
+                "floor": (
+                    (628, 635),
+                    (637, 640),
+                    (657, 662),
+                    (707, 708),
+                    (725, 731),
+                    (734, 735),
+                    (785, 785),
+                    (3754, 3755),
+                    (4500, 4504),
+                    (4506, 4506),
+                ),
+            },
+        }
+        for actor, model_expected in expected.items():
+            with self.subTest(actor=actor):
+                rule = next(rule for rule in policy.rules if rule.actor_file == actor)
+                self.assertEqual(rule.strategy, "explicit_triangles")
+                self.assertEqual(rule.triangle_count, model_expected["triangles"])
+                selections = dict(rule.selections)
+                self.assertEqual(
+                    selections[SemanticId.THRESHOLD], model_expected["threshold"]
+                )
+                self.assertEqual(
+                    selections[SemanticId.FLOOR_INTERIOR], model_expected["floor"]
+                )
 
     def test_rejects_noncanonical_bytes_bom_and_duplicate_keys(self):
         canonical = canonical_policy_bytes(policy_value())
@@ -848,7 +920,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         self.assertEqual(
             (uniform_count, surface_count), (97, 34)
         )
-        self.assertEqual(explicit_count, 9)
+        self.assertEqual(explicit_count, 12)
 
 
 if __name__ == "__main__":

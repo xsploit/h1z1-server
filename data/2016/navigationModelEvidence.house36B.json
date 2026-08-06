@@ -3,12 +3,12 @@
   "actorFile": "Common_Structures_Houses_House36B.adr",
   "inputs": {
     "compiledTransitions": {
-      "sha256": "386481477e016caa9bfb46e2c49242176cfbba7573df4259dc24c7f5dcaa360e",
-      "size": 71976
+      "sha256": "7f46c212d467fd9a3c008dad44167f925ffd029a0b631ad3d37131cb20771e7b",
+      "size": 114047
     },
     "semanticPolicy": {
-      "sha256": "3e361ab5d1272c04c7987b2794865003f1e0a0f2b9553846116aaec9ae7cca46",
-      "size": 46295
+      "sha256": "292137024a04de7cc1090966c6eb979fff478dbf8aa5f0f426e062a0b7ae9d8c",
+      "size": 48293
     },
     "semanticRecipe": {
       "sha256": "5df902dd0193deec87f8426de7ed9086bf9ba9a6ca92221716669fbfd4e5f5e2",

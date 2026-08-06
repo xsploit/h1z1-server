@@ -82,7 +82,7 @@ class CompileNavigationTransitionsTests(unittest.TestCase):
         provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
 
         self.assertEqual(len(authored), 5)
-        self.assertEqual(len(compiled), 177)
+        self.assertEqual(len(compiled), 279)
         self.assertEqual(
             sum(entry["name"].startswith("Common_Structures_Houses_House36B.adr #") for entry in compiled),
             64,
@@ -105,6 +105,19 @@ class CompileNavigationTransitionsTests(unittest.TestCase):
             ),
             50,
         )
+        for actor, count in (
+            ("Common_Structures_StoreFront01.adr", 36),
+            ("Common_Structures_StoreFront02.adr", 38),
+            ("Common_Structures_StoreFront03.adr", 28),
+        ):
+            with self.subTest(actor=actor):
+                self.assertEqual(
+                    sum(
+                        entry["name"].startswith(f"{actor} #")
+                        for entry in compiled
+                    ),
+                    count,
+                )
         self.assertEqual(
             encode(compile_transitions(authored, compiled[len(authored) :])),
             compiled_raw,

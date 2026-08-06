@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "outputSha256": "386481477e016caa9bfb46e2c49242176cfbba7573df4259dc24c7f5dcaa360e",
-  "transitionCount": 177,
+  "outputSha256": "7f46c212d467fd9a3c008dad44167f925ffd029a0b631ad3d37131cb20771e7b",
+  "transitionCount": 279,
   "authoredSource": {
-    "path": "C:/Users/SUBSECT/Documents/Codex/2026-07-27/https-dev-epicgames-com-documentation-unreal/work/h1z1-pv-nav/data/2016/navigationTransitions.authored.json",
+    "path": "data/2016/navigationTransitions.authored.json",
     "sha256": "600f0a61e8bf485848ac8e09918d02a31e06388ac2b2b2794b9d9c0150a8a49e",
     "transitionCount": 5
   },
@@ -27,6 +27,21 @@
       "label": "storeFront04",
       "sha256": "54327b143700bc78bb2c3b8bbe1bd4b69f5b7fd4e52c12ce966a5713a269ad5c",
       "transitionCount": 50
+    },
+    {
+      "label": "storeFront01",
+      "sha256": "641920ccbbbf88ebc57dae7f74e1b8e7fd9f4975ceb72faa9af43a8f7e884a9f",
+      "transitionCount": 36
+    },
+    {
+      "label": "storeFront02",
+      "sha256": "2a2f4ca0553c14f0dfb0b38ee6dac8b8c8a0b13eb7455d4a34e0227aec2420f8",
+      "transitionCount": 38
+    },
+    {
+      "label": "storeFront03",
+      "sha256": "47053b735849a94817629beb1c22ee4fac3d386fc8dae4cb81be17c0da4b278a",
+      "transitionCount": 28
     }
   ]
 }

@@ -3,20 +3,20 @@
   "actorFile": "Common_Structures_Apartments_Apartments06.adr",
   "inputs": {
     "compiledTransitionProvenance": {
-      "sha256": "e964a4ac1a40fdc9a09ffba472d132e07be5225a4a872861e3259f8125ce4bf6",
-      "size": 1131
+      "sha256": "5ae698fc2411c29de1a5d406c22f9765ae59d2ea37a3f9619eae66218b361fe0",
+      "size": 1508
     },
     "compiledTransitions": {
-      "sha256": "386481477e016caa9bfb46e2c49242176cfbba7573df4259dc24c7f5dcaa360e",
-      "size": 71976
+      "sha256": "7f46c212d467fd9a3c008dad44167f925ffd029a0b631ad3d37131cb20771e7b",
+      "size": 114047
     },
     "placementSeams": {
       "sha256": "0c8bec474c847428ac914d790611a322956650e05d91bf05693d4f2781f72bb8",
       "size": 2799
     },
     "semanticPolicy": {
-      "sha256": "3e361ab5d1272c04c7987b2794865003f1e0a0f2b9553846116aaec9ae7cca46",
-      "size": 46295
+      "sha256": "292137024a04de7cc1090966c6eb979fff478dbf8aa5f0f426e062a0b7ae9d8c",
+      "size": 48293
     },
     "semanticRecipe": {
       "sha256": "ac19d5635a9f0fc2b500192aecc2e2bbad291bb8ace97432383371ae26f0a116",
@@ -153,8 +153,8 @@
       "parts": [
         {
           "name": "z1_cache_0.bin",
-          "sha256": "ca52de8d9af346d3edc8b05648efa960e56f342d2d259ea40346ea4de7f755c1",
-          "size": 58337
+          "sha256": "b58bcb9820eb0ab01552738616a3c2081e3e2a4a80b07d6ceadc7d6440848f26",
+          "size": 57846
         }
       ]
     }

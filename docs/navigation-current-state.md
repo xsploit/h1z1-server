@@ -136,12 +136,19 @@ traveling through Pleasant Valley. That earlier candidate supports:
   window.
 
 This is earlier runtime/topology evidence, not final-HEAD acceptance or
-universal building coverage. The client pass still found small single-step storefront/business thresholds that
-NPCs would not cross, and not every apartment/top-floor route has been
-validated. The exact failing actor and placement must be identified before
-another regional repair; `StoreFront04` itself already passes its authored
-model validator, so a visual storefront failure must not be assumed to be that
-model.
+universal building coverage. That client pass found small single-step
+storefront/business thresholds that NPCs would not cross, and not every
+apartment/top-floor route has been validated.
+
+The follow-up regional admission identified the three remaining repeated
+storefront actors instead of assuming they were `StoreFront04`. Hash-bound,
+fail-closed rules now classify only their ground-floor and entrance surfaces;
+their walls and roofs remain obstacles. The exact combined policy and compiled
+279-link transition source passed 408/408 bidirectional route probes across all
+51 StoreFront01 through StoreFront03 placements. All 153 forbidden roof probes
+also passed. This is reproducible regional source evidence, not a full-map bake
+or client acceptance result: the currently installed 104,935-layer artifact
+still predates this business batch.
 
 ## What is not solved
 

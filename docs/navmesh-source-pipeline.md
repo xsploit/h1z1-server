@@ -159,10 +159,11 @@ those two sources into the runtime/full-bake input
 `data/2016/navigationTransitions.json` and records its input/output hashes in
 `data/2016/navigationTransitions.provenance.json`.
 
-The current compiled artifact contains 177 links: five authored PV links, 64
-reviewed House36B links, 52 model-local Apartments06 links, six narrowly
-scoped Apartments06 placement seams, and 50 model-local StoreFront04 doorway
-links. Rebuild it after model preparation with:
+The current compiled source artifact contains 279 links: five authored PV
+links, 64 reviewed House36B links, 52 model-local Apartments06 links, six
+narrowly scoped Apartments06 placement seams, 50 model-local StoreFront04
+doorway links, and 102 links for StoreFront01 through StoreFront03 (36, 38,
+and 28 respectively). Rebuild it after model preparation with:
 
 ```powershell
 py -3 tools/forgelight/compile_navigation_transitions.py `
@@ -171,6 +172,9 @@ py -3 tools/forgelight/compile_navigation_transitions.py `
   --generated "apartments06=C:\path\to\apartments06-prepared\transitions.json" `
   --generated "apartments06PlacementSeams=data/2016/navigationTransitions.apartments06.placements.json" `
   --generated "storeFront04=C:\path\to\storefront04-prepared\transitions.json" `
+  --generated "storeFront01=C:\path\to\storefront01-prepared\transitions.json" `
+  --generated "storeFront02=C:\path\to\storefront02-prepared\transitions.json" `
+  --generated "storeFront03=C:\path\to\storefront03-prepared\transitions.json" `
   --output data/2016/navigationTransitions.json `
   --provenance data/2016/navigationTransitions.provenance.json
 ```

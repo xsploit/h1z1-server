@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "actorFile": "Common_Structures_StoreFront03.adr",
+  "boundsMargin": 15,
+  "maxTerrainDelta": 1.5,
+  "terrainProbes": [
+    [-4.2, 0.0, -10.2],
+    [-1.5, 0.0, 9.8]
+  ],
+  "forbiddenProbes": [
+    {
+      "label": "roof center must remain non-walkable",
+      "position": [0.0, 7.66, 0.0],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "roof southwest must remain non-walkable",
+      "position": [-4.0, 7.66, -3.0],
+      "halfExtents": [0.6, 0.35, 0.6]
+    },
+    {
+      "label": "roof northeast must remain non-walkable",
+      "position": [4.0, 7.66, 3.0],
+      "halfExtents": [0.6, 0.35, 0.6]
+    }
+  ],
+  "transitions": [
+    {
+      "name": "stepped entrance threshold seam",
+      "kind": "threshold",
+      "start": [-4.2, 0.22, -9.3],
+      "end": [-4.2, 0.414, -7.0],
+      "radius": 1.0,
+      "bidirectional": true
+    },
+    {
+      "name": "ramped entrance threshold seam",
+      "kind": "threshold",
+      "start": [-1.5, 0.22, 9.0],
+      "end": [-1.5, 0.414, 7.0],
+      "radius": 0.8,
+      "bidirectional": true
+    }
+  ],
+  "routes": [
+    {
+      "label": "stepped exterior to threshold",
+      "start": [-4.2, 0.0, -10.2],
+      "end": [-4.2, 0.22, -9.3]
+    },
+    {
+      "label": "stepped threshold to interior",
+      "start": [-4.2, 0.22, -9.3],
+      "end": [-4.2, 0.414, -7.0]
+    },
+    {
+      "label": "stepped interior to threshold",
+      "start": [-4.2, 0.414, -7.0],
+      "end": [-4.2, 0.22, -9.3]
+    },
+    {
+      "label": "stepped threshold to exterior",
+      "start": [-4.2, 0.22, -9.3],
+      "end": [-4.2, 0.0, -10.2]
+    },
+    {
+      "label": "ramped exterior to threshold",
+      "start": [-1.5, 0.0, 9.8],
+      "end": [-1.5, 0.22, 9.0]
+    },
+    {
+      "label": "ramped threshold to interior",
+      "start": [-1.5, 0.22, 9.0],
+      "end": [-1.5, 0.414, 7.0]
+    },
+    {
+      "label": "ramped interior to threshold",
+      "start": [-1.5, 0.414, 7.0],
+      "end": [-1.5, 0.22, 9.0]
+    },
+    {
+      "label": "ramped threshold to exterior",
+      "start": [-1.5, 0.22, 9.0],
+      "end": [-1.5, 0.0, 9.8]
+    }
+  ]
+}

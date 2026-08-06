@@ -1119,13 +1119,16 @@ Crowd, WASM, or watchdog failure in the captured console output.
 The routes are user-observed acceptance evidence; the console capture proves
 only the absence of those server fault signatures during that session.
 
-One localized topology regression remains visible: some common storefronts
-have a small sidewalk-to-threshold step whose exterior and interior polygons do
-not connect in the current full artifact. That defect is an archetype-specific
-bake/transition issue, not a 64-bit reference-capacity or runtime-coverage
-failure. It should be diagnosed against the earlier common-entrance evidence
-without rebuilding the whole world. Dynamic door panels, drivable vehicles,
-and physical character-to-character collision remain separate runtime work.
+One localized topology regression remained visible: some common storefronts
+had a small sidewalk-to-threshold step whose exterior and interior polygons did
+not connect in the current full artifact. Regional, content-addressed admission
+then identified StoreFront01 through StoreFront03, classified only their ground
+floors and entrance thresholds, and compiled 102 placement links. The exact
+combined candidate passed 408/408 bidirectional routes across 51 placements and
+153/153 forbidden roof probes. This proves the bounded source candidate; it has
+not yet been included in a new full-map bake or accepted in the client. Dynamic
+door panels, drivable vehicles, and physical character-to-character collision
+remain separate runtime work.
 
 ### Exact final-branch synthetic soak checkpoint (2026-08-05)
 
