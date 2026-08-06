@@ -4,6 +4,7 @@ import {
   forbiddenProbeContainsNearestPoint,
   modelRouteEndpointGap
 } from "../src/utils/modelroutevalidation";
+import { loadNavigationRuntime } from "../src/utils/navigationruntime";
 
 type Route = {
   instance?: number;
@@ -67,6 +68,11 @@ async function main() {
   process.env.NAV_TRANSITIONS_PATH = resolve(
     transitionsPath ?? "data/2016/navigationTransitions.json"
   );
+  // Regional candidates are deliberately small enough for stock 32-bit
+  // Detour. They bypass NavManager.loadNav() because they do not yet have a
+  // deployable artifact manifest, so initialize the runtime explicitly before
+  // exercising the production streaming loader.
+  await loadNavigationRuntime({ mode: "stock" });
   const { NavManager } = await import("../src/utils/recast");
   const nav = new NavManager();
   // Regional candidate caches intentionally have no deployable manifest yet.
