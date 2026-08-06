@@ -846,15 +846,29 @@ export async function runNavigationCrawl(
     const uniqueJobs = [
       ...new Map(jobs.map((job) => [job.key, job] as const)).values()
     ];
-    const uniqueResults = await runBounded(uniqueJobs, config.workers!, (job) =>
-      bakeOne(
-        job,
-        baker,
-        config.collision,
-        config.semantics,
-        config.heightmap,
-        config.repositoryRoot
-      )
+    console.log(
+      `[nav-crawl] regional queue logical=${jobs.length} unique=${uniqueJobs.length} workers=${config.workers}`
+    );
+    const uniqueResults = await runBounded(
+      uniqueJobs,
+      config.workers!,
+      async (job, index) => {
+        console.log(
+          `[nav-crawl] regional ${index + 1}/${uniqueJobs.length} start ${job.actorFile} #${job.instanceIndex}`
+        );
+        const result = await bakeOne(
+          job,
+          baker,
+          config.collision,
+          config.semantics,
+          config.heightmap,
+          config.repositoryRoot
+        );
+        console.log(
+          `[nav-crawl] regional ${index + 1}/${uniqueJobs.length} ${result.state} ${result.seconds.toFixed(1)}s ${job.actorFile} #${job.instanceIndex}`
+        );
+        return result;
+      }
     );
     const resultByKey = new Map(
       uniqueResults.map((result) => [result.key, result] as const)

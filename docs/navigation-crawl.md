@@ -5,6 +5,29 @@ analysis and regional-validation pipeline. It is deliberately read-only with
 respect to the canonical semantic policy, deployed navmesh, and installed
 server.
 
+## One-command campaign
+
+For the standard sibling-worktree layout used during development, the campaign
+runner discovers the pinned H1COL2 bundle, heightmap, transitions, policy, and
+Release baker automatically:
+
+```powershell
+npm run navmesh-campaign
+```
+
+That analysis-only command regenerates a content-addressed candidate semantic
+sidecar from the committed policy and runs the complete inventory/preparation
+pipeline. Add `-- --bake` to build and validate every known model template, or
+`-- --bake --model StoreFront --model HardwareStore` for a selected batch.
+Regional outputs resume from the content-addressed cache. Progress is appended
+to `work/staging/navigation-campaign-current/navigation-campaign.log`, exact
+input hashes go to `navigation-campaign-inputs.json`, and the final result is
+`navigation-crawl-latest.json`.
+
+Use `--bundle`, `--heightmap`, `--baker`, or `--work-dir` when the repositories
+do not use that sibling layout. The runner never changes the canonical policy,
+performs a full-map bake, deploys files, or starts the server/client.
+
 ## Analysis mode
 
 Analysis is the default:
