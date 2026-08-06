@@ -145,7 +145,7 @@ class CompileNavigationTransitionsTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
         actor = "Common_Structures_Apartments_Apartments06.adr"
-        self.assertEqual(len(seams), 6)
+        self.assertEqual(len(seams), 8)
         for seam in seams:
             self.assertEqual(seam["actorFile"], actor)
             self.assertIn(f"#{seam['instanceIndex']} ", seam["name"])

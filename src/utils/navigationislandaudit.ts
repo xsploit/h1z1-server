@@ -47,7 +47,7 @@ export type NavigationIslandAuditConfig = {
 
 export type NavigationTopologyPolygon = {
   id: string;
-  ref: number;
+  ref: number | bigint;
   tile: [number, number, number];
   polygonIndex: number;
   offMesh: boolean;
@@ -116,15 +116,15 @@ export type NavigationIslandAuditReport = {
 };
 
 type TopologyBuildPolygon = Omit<NavigationTopologyPolygon, "outgoing"> & {
-  outgoingRefs: number[];
+  outgoingRefs: string[];
 };
 
 function finitePoint(point: NavigationAuditPoint): boolean {
   return point.length === 3 && point.every(Number.isFinite);
 }
 
-function normalizedRef(ref: number): number {
-  return ref >>> 0;
+function normalizedRef(ref: number | bigint): string {
+  return typeof ref === "bigint" ? ref.toString() : String(ref >>> 0);
 }
 
 function round(value: number): number {
@@ -167,7 +167,7 @@ function polygonId(
 export function extractNavigationTopology(
   navMesh: NavMesh
 ): NavigationTopologySnapshot {
-  const byRef = new Map<number, TopologyBuildPolygon>();
+  const byRef = new Map<string, TopologyBuildPolygon>();
   const maxTiles = navMesh.getMaxTiles();
 
   for (let tileIndex = 0; tileIndex < maxTiles; tileIndex++) {
@@ -206,10 +206,13 @@ export function extractNavigationTopology(
         vertices.reduce((sum, vertex) => sum + vertex[1], 0) / vertices.length,
         vertices.reduce((sum, vertex) => sum + vertex[2], 0) / vertices.length
       ];
-      const ref = normalizedRef(
-        navMesh.encodePolyId(tile.salt(), tileIndex, polygonIndex)
-      );
-      const outgoingRefs: number[] = [];
+      const runtimeRef = navMesh.encodePolyId(
+        tile.salt(),
+        tileIndex,
+        polygonIndex
+      ) as number | bigint;
+      const ref = normalizedRef(runtimeRef);
+      const outgoingRefs: string[] = [];
       const seenLinks = new Set<number>();
       let linkIndex = poly.firstLink() >>> 0;
       while (linkIndex !== DETOUR_NULL_LINK) {
@@ -225,19 +228,24 @@ export function extractNavigationTopology(
         }
         seenLinks.add(linkIndex);
         const link = tile.links(linkIndex);
-        const neighbour = normalizedRef(link.ref());
-        if (neighbour) outgoingRefs.push(neighbour);
+        const neighbourRef = link.ref() as number | bigint;
+        if (neighbourRef !== 0 && neighbourRef !== 0n)
+          outgoingRefs.push(normalizedRef(neighbourRef));
         linkIndex = link.next() >>> 0;
       }
 
       byRef.set(ref, {
         id: polygonId(header.x(), header.y(), header.layer(), polygonIndex),
-        ref,
+        ref: runtimeRef,
         tile: [header.x(), header.y(), header.layer()],
         polygonIndex,
         offMesh: poly.getType() === 1,
         flags: poly.flags(),
-        area: navMesh.getPolyArea(ref).area,
+        area: (
+          navMesh as unknown as {
+            getPolyArea(ref: number | bigint): { area: number };
+          }
+        ).getPolyArea(runtimeRef).area,
         centroid,
         bounds: { min, max },
         surfaceArea: polygonArea3d(vertices),

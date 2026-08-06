@@ -64,5 +64,27 @@
     "end": [157.4000040690104, 40.40000534057617, -1146.6666666666667],
     "radius": 0.25,
     "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145130 second-to-third ramp eroded-floor seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145130,
+    "start": [157.60009765625, 35.89999771118164, -1149.800048828125],
+    "end": [156.99471293603906, 36.09192044500872, -1149.6809821526826],
+    "radius": 0.25,
+    "bidirectional": true
+  },
+  {
+    "name": "Common_Structures_Apartments_Apartments06.adr #145137 fourth-floor coincident-layer seam",
+    "kind": "stairs",
+    "source": "regional-nav-component-diagnosis",
+    "actorFile": "Common_Structures_Apartments_Apartments06.adr",
+    "instanceIndex": 145137,
+    "start": [-1105.466552734375, 81.9000015258789, 1786.8665364583333],
+    "end": [-1105.1999104817708, 81.9000015258789, 1787.3332112630208],
+    "radius": 0.25,
+    "bidirectional": true
   }
 ]

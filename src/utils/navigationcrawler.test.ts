@@ -7,6 +7,7 @@ import {
   bakeCacheIsComplete,
   createRegionalBakeKey,
   findRecoverableBakeCache,
+  mergeNavigationTransitionSets,
   mergeNavigationTransitions,
   runNavigationCrawl,
   runBounded,
@@ -27,7 +28,15 @@ test("stableStringify and bake keys ignore object insertion order", () => {
     profile: "human" as const,
     agentClimb: 1.3,
     dynamicDoorObstacles: true,
-    bounds: [1, 2, 3, 4] as [number, number, number, number]
+    bounds: [1, 2, 3, 4] as [number, number, number, number],
+    globalBounds: [-4096, -100, -4096, 4096, 500, 4096] as [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number
+    ]
   };
   assert.equal(
     createRegionalBakeKey(common),
@@ -36,6 +45,13 @@ test("stableStringify and bake keys ignore object insertion order", () => {
   assert.notEqual(
     createRegionalBakeKey(common),
     createRegionalBakeKey({ ...common, bounds: [1, 2, 3, 5] })
+  );
+  assert.notEqual(
+    createRegionalBakeKey(common),
+    createRegionalBakeKey({
+      ...common,
+      globalBounds: [-4095, -100, -4096, 4096, 500, 4096]
+    })
   );
 });
 
@@ -81,6 +97,43 @@ test("transition merge deduplicates exact entries and rejects name conflicts", (
   assert.throws(
     () =>
       mergeNavigationTransitions([existing], [{ ...existing, end: [2, 2, 2] }]),
+    /conflicting navigation transition identity/
+  );
+});
+
+test("transition-set merge produces one stable candidate across models", () => {
+  const base = {
+    name: "base stair",
+    kind: "offmesh",
+    start: [0, 0, 0],
+    end: [1, 1, 1]
+  };
+  const apartment = {
+    name: "apartment stair",
+    kind: "offmesh",
+    start: [2, 2, 2],
+    end: [3, 3, 3]
+  };
+  const storefront = {
+    name: "storefront threshold",
+    kind: "offmesh",
+    start: [4, 4, 4],
+    end: [5, 5, 5]
+  };
+  assert.deepEqual(
+    mergeNavigationTransitionSets([
+      [base],
+      [apartment, { ...base, actorFile: "duplicate metadata" }],
+      [storefront]
+    ]),
+    [base, apartment, storefront]
+  );
+  assert.throws(
+    () =>
+      mergeNavigationTransitionSets([
+        [apartment],
+        [{ ...apartment, end: [9, 9, 9] }]
+      ]),
     /conflicting navigation transition identity/
   );
 });

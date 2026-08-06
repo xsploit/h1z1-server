@@ -20,6 +20,17 @@ export const NAVIGATION_CRAWL_SCHEMA_VERSION = 1 as const;
 
 export type NavigationCrawlDecision = "PASS" | "REVIEW" | "BLOCKED";
 export type RegionalBounds = [number, number, number, number];
+export type GlobalNavigationBounds = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number
+];
+export const Z1_GLOBAL_NAVIGATION_BOUNDS: GlobalNavigationBounds = [
+  -4096, -100, -4096, 4096, 500, 4096
+];
 
 export interface NavigationCrawlerConfig {
   repositoryRoot: string;
@@ -89,6 +100,7 @@ export interface RegionalBakeInputs {
   agentClimb: number;
   dynamicDoorObstacles: boolean;
   bounds: RegionalBounds;
+  globalBounds: GlobalNavigationBounds;
 }
 
 export interface RegionalBakeJob {
@@ -120,6 +132,13 @@ export interface NavigationCrawlReport {
   inputs: Record<string, string>;
   proposalReport: string;
   preparedModelsReport: string;
+  transitionCandidate: {
+    path: string;
+    sha256: string;
+    baseCount: number;
+    candidateCount: number;
+    addedCount: number;
+  };
   totals: {
     proposals: number;
     preparedModels: number;
@@ -347,18 +366,43 @@ export function mergeNavigationTransitions(
   return result;
 }
 
-function mergeTransitions(
-  basePath: string,
-  modelPath: string,
-  output: string
-): void {
-  writeJson(
-    output,
-    mergeNavigationTransitions(
-      jsonFile<unknown[]>(basePath),
-      jsonFile<unknown[]>(modelPath)
-    )
+/** Merge every model's authored transitions into one stable runtime sidecar. */
+export function mergeNavigationTransitionSets(
+  transitionSets: unknown[][]
+): unknown[] {
+  return transitionSets.reduce<unknown[]>(
+    (merged, transitions) => mergeNavigationTransitions(merged, transitions),
+    []
   );
+}
+
+function selectPlacementTransitionsForActor(
+  transitions: unknown[],
+  actorFile: string
+): unknown[] {
+  return transitions.filter((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry))
+      throw new Error("placement transition entries must be objects");
+    const placementActor = (entry as Record<string, unknown>).actorFile;
+    if (typeof placementActor !== "string")
+      throw new Error("placement transitions must declare actorFile");
+    return placementActor === actorFile;
+  });
+}
+
+function selectRuntimeTransitionsForActor(
+  transitions: unknown[],
+  actorFile: string
+): unknown[] {
+  const prefix = `${actorFile} #`;
+  return transitions.filter((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry))
+      throw new Error("navigation transition entries must be objects");
+    const name = (entry as Record<string, unknown>).name;
+    if (typeof name !== "string")
+      throw new Error("navigation transitions must declare name");
+    return name.startsWith(prefix);
+  });
 }
 
 function hardlinkOrCopy(source: string, destination: string): void {
@@ -442,6 +486,14 @@ function bakeOne(
   const logPath = join(temporary, "bake.log");
   const descriptor = openSync(logPath, "a");
   const [minX, minZ, maxX, maxZ] = job.bounds;
+  const [
+    globalMinX,
+    globalMinY,
+    globalMinZ,
+    globalMaxX,
+    globalMaxY,
+    globalMaxZ
+  ] = job.inputs.globalBounds;
   const arguments_ = [
     "placeholder.obj",
     join(temporary, "nav.bin"),
@@ -460,13 +512,18 @@ function bakeOne(
     heightmap,
     "--forgelight-transitions",
     job.transitionsPath,
-    "--global-bounds",
+    "--bounds",
     String(minX),
-    "-100",
     String(minZ),
     String(maxX),
-    "500",
-    String(maxZ)
+    String(maxZ),
+    "--global-bounds",
+    String(globalMinX),
+    String(globalMinY),
+    String(globalMinZ),
+    String(globalMaxX),
+    String(globalMaxY),
+    String(globalMaxZ)
   ];
   return new Promise((fulfill) => {
     let settled = false;
@@ -611,7 +668,8 @@ async function planJobs(
   config: NavigationCrawlerConfig,
   models: PreparedNavigationModel[],
   hashes: Awaited<ReturnType<typeof buildInputHashes>>,
-  bakerSha256: string
+  bakerSha256: string,
+  placementTransitions: unknown[]
 ): Promise<RegionalBakeJob[]> {
   const jobs: RegionalBakeJob[] = [];
   for (const model of models) {
@@ -620,10 +678,19 @@ async function planJobs(
       "transitions",
       `${model.slug}-${model.templateSha256.slice(0, 12)}.json`
     );
-    mergeTransitions(
-      config.transitions,
-      join(model.outputDirectory, "transitions.json"),
-      mergedTransitions
+    writeJson(
+      mergedTransitions,
+      mergeNavigationTransitionSets([
+        selectRuntimeTransitionsForActor(
+          jsonFile<unknown[]>(config.transitions),
+          model.actorFile
+        ),
+        selectPlacementTransitionsForActor(
+          placementTransitions,
+          model.actorFile
+        ),
+        jsonFile<unknown[]>(join(model.outputDirectory, "transitions.json"))
+      ])
     );
     const transitionsSha256 = await sha256File(mergedTransitions);
     const modelKey = sha256Text(
@@ -651,7 +718,8 @@ async function planJobs(
         profile: "human",
         agentClimb: 1.3,
         dynamicDoorObstacles: true,
-        bounds: bake.bounds
+        bounds: bake.bounds,
+        globalBounds: Z1_GLOBAL_NAVIGATION_BOUNDS
       };
       const key = createRegionalBakeKey(inputs);
       jobs.push({
@@ -848,6 +916,38 @@ export async function runNavigationCrawl(
   if (prepared.schemaVersion !== 1)
     throw new Error("prepared model artifact has unsupported schemaVersion");
 
+  const baseTransitions = jsonFile<unknown[]>(config.transitions);
+  const placementTransitionSets = readdirSync(config.templatesDirectory!)
+    .filter((name) =>
+      /^navigationTransitions\..+\.placements\.json$/i.test(name)
+    )
+    .sort()
+    .map((name) => jsonFile<unknown[]>(join(config.templatesDirectory!, name)));
+  const placementTransitions = placementTransitionSets.flat();
+  const modelTransitionSets = [...prepared.models]
+    .sort((left, right) => left.actorFile.localeCompare(right.actorFile))
+    .map((model) =>
+      jsonFile<unknown[]>(join(model.outputDirectory, "transitions.json"))
+    );
+  const transitionCandidateEntries = mergeNavigationTransitionSets([
+    baseTransitions,
+    ...placementTransitionSets,
+    ...modelTransitionSets
+  ]);
+  const transitionCandidatePath = join(
+    config.workDirectory,
+    "navigation-transitions-candidate.json"
+  );
+  writeJson(transitionCandidatePath, transitionCandidateEntries);
+  const transitionCandidateSha256 = await sha256File(transitionCandidatePath);
+  const transitionCandidate = {
+    path: transitionCandidatePath,
+    sha256: transitionCandidateSha256,
+    baseCount: baseTransitions.length,
+    candidateCount: transitionCandidateEntries.length,
+    addedCount: transitionCandidateEntries.length - baseTransitions.length
+  };
+
   let jobs: RegionalBakeJob[] = [];
   let bakeResults: RegionalBakeResult[] = [];
   const models: NavigationCrawlReport["models"] = prepared.models.map(
@@ -863,7 +963,13 @@ export async function runNavigationCrawl(
   if (config.bake) {
     const baker = requireFile(config.baker ?? "", "navmesh builder");
     const bakerSha256 = await sha256File(baker);
-    jobs = await planJobs(config, prepared.models, hashes, bakerSha256);
+    jobs = await planJobs(
+      config,
+      prepared.models,
+      hashes,
+      bakerSha256,
+      placementTransitions
+    );
     const uniqueJobs = [
       ...new Map(jobs.map((job) => [job.key, job] as const)).values()
     ];
@@ -938,6 +1044,7 @@ export async function runNavigationCrawl(
     inputs: { ...hashes },
     proposalReport: proposalPath,
     preparedModelsReport: preparedPath,
+    transitionCandidate,
     totals: {
       proposals: proposals.totals.proposals,
       preparedModels: prepared.models.length,
