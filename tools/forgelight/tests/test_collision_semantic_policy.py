@@ -24,7 +24,7 @@ from h1sem import SemanticId  # noqa: E402
 
 
 POLICY_PATH = FORGELIGHT_DIR / "policies" / "z1_collision.semantic_policy.json"
-POLICY_SHA256 = "e1a880889dd1feef87a9058112c15f766bfa4b2b58fe3c165ee29b1437ab8621"
+POLICY_SHA256 = "15e3067e1fb8fc51cc219137965686e911a3aba4d2a33ef370619803f039e986"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 
@@ -151,7 +151,7 @@ class CanonicalPolicyTests(unittest.TestCase):
         policy = load_semantic_policy(POLICY_PATH)
         self.assertEqual(raw, policy.canonical_bytes)
         self.assertEqual(policy.sha256, POLICY_SHA256)
-        self.assertEqual(len(policy.rules), 144)
+        self.assertEqual(len(policy.rules), 145)
         self.assertEqual(
             sum(rule.strategy == "uniform" for rule in policy.rules), 97
         )
@@ -163,7 +163,7 @@ class CanonicalPolicyTests(unittest.TestCase):
             34,
         )
         self.assertEqual(
-            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 13
+            sum(rule.strategy == "explicit_triangles" for rule in policy.rules), 14
         )
 
     def test_hardwarestore01_ground_entrances_and_fail_closed_remainder_are_pinned(self):
@@ -182,6 +182,23 @@ class CanonicalPolicyTests(unittest.TestCase):
         self.assertEqual(selected[SemanticId.FLOOR_INTERIOR], 63)
         self.assertEqual(selected[SemanticId.THRESHOLD], 8)
         self.assertEqual(selected[SemanticId.OBSTACLE_STATIC], 10031)
+
+    def test_apartments04_floors_stairs_and_fail_closed_remainder_are_pinned(self):
+        policy = load_semantic_policy(POLICY_PATH)
+        rule = next(
+            rule
+            for rule in policy.rules
+            if rule.actor_file == "Common_Structures_Apartments_Apartments04.adr"
+        )
+        self.assertEqual(rule.strategy, "explicit_triangles")
+        self.assertEqual(rule.triangle_count, 21314)
+        selected = {
+            semantic: sum(end - start + 1 for start, end in ranges)
+            for semantic, ranges in rule.selections
+        }
+        self.assertEqual(selected[SemanticId.FLOOR_INTERIOR], 1123)
+        self.assertEqual(selected[SemanticId.STAIR], 103)
+        self.assertEqual(selected[SemanticId.OBSTACLE_STATIC], 20088)
 
     def test_apartments06_floors_stairs_and_fail_closed_remainder_are_pinned(self):
         policy = load_semantic_policy(POLICY_PATH)
@@ -937,7 +954,7 @@ class CorrectedBundlePolicyTests(unittest.TestCase):
         self.assertEqual(
             (uniform_count, surface_count), (97, 34)
         )
-        self.assertEqual(explicit_count, 13)
+        self.assertEqual(explicit_count, 14)
 
 
 if __name__ == "__main__":
