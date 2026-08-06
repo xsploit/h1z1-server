@@ -5,7 +5,7 @@
   "maxTerrainDelta": 1.5,
   "terrainProbes": [
     [1.130983, 0.000047, -7.481328],
-    [2.173659, 0.000047, 7.239132]
+    [-1.0, 0.0, 7.2]
   ],
   "routes": [
     {
@@ -29,24 +29,34 @@
       "end": [1.130983, 0.000047, -7.481328]
     },
     {
-      "label": "rear exterior to threshold",
-      "start": [2.173659, 0.000047, 7.239132],
-      "end": [2.212156, 0.200047, 5.039484]
+      "label": "rear terrain to outer step",
+      "start": [-1.0, 0.0, 7.2],
+      "end": [-1.0, 0.152, 6.0]
     },
     {
-      "label": "rear threshold to interior",
-      "start": [2.212156, 0.200047, 5.039484],
-      "end": [2.233128, 0.336047, 3.839622]
+      "label": "rear outer step to porch",
+      "start": [-1.0, 0.152, 6.0],
+      "end": [-1.0, 0.308, 4.8]
     },
     {
-      "label": "rear interior to threshold",
-      "start": [2.233128, 0.336047, 3.839622],
-      "end": [2.212156, 0.200047, 5.039484]
+      "label": "rear porch to interior",
+      "start": [-1.0, 0.308, 4.8],
+      "end": [-1.0, 0.336, 3.0]
     },
     {
-      "label": "rear threshold to exterior",
-      "start": [2.212156, 0.200047, 5.039484],
-      "end": [2.173659, 0.000047, 7.239132]
+      "label": "rear interior to porch",
+      "start": [-1.0, 0.336, 3.0],
+      "end": [-1.0, 0.308, 4.8]
+    },
+    {
+      "label": "rear porch to outer step",
+      "start": [-1.0, 0.308, 4.8],
+      "end": [-1.0, 0.152, 6.0]
+    },
+    {
+      "label": "rear outer step to terrain",
+      "start": [-1.0, 0.152, 6.0],
+      "end": [-1.0, 0.0, 7.2]
     }
   ]
 }
