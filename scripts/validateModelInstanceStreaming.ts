@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
   forbiddenProbeContainsNearestPoint,
   modelRouteEndpointGap
@@ -32,9 +32,12 @@ const transitionsPath =
 const forbiddenIndex = process.argv.indexOf("--forbidden");
 const forbiddenPath =
   forbiddenIndex >= 0 ? process.argv[forbiddenIndex + 1] : undefined;
+const runtime64Index = process.argv.indexOf("--runtime64-root");
+const runtime64Root =
+  runtime64Index >= 0 ? process.argv[runtime64Index + 1] : undefined;
 if (!cacheDir || !routeFile || !Number.isInteger(instance)) {
   console.error(
-    "Usage: npx tsx scripts/validateModelInstanceStreaming.ts <cache-dir> <routes.json> <instance-index> [--report <report.json>] [--transitions <transitions.json>] [--forbidden <forbidden.json>]"
+    "Usage: npx tsx scripts/validateModelInstanceStreaming.ts <cache-dir> <routes.json> <instance-index> [--report <report.json>] [--transitions <transitions.json>] [--forbidden <forbidden.json>] [--runtime64-root <directory>]"
   );
   process.exit(1);
 }
@@ -43,6 +46,9 @@ if (transitionsIndex >= 0 && !transitionsPath) {
 }
 if (forbiddenIndex >= 0 && !forbiddenPath) {
   throw new Error("--forbidden requires a path");
+}
+if (runtime64Index >= 0 && !runtime64Root) {
+  throw new Error("--runtime64-root requires a path");
 }
 
 function routeInstance(route: Route) {
@@ -68,11 +74,23 @@ async function main() {
   process.env.NAV_TRANSITIONS_PATH = resolve(
     transitionsPath ?? "data/2016/navigationTransitions.json"
   );
-  // Regional candidates are deliberately small enough for stock 32-bit
-  // Detour. They bypass NavManager.loadNav() because they do not yet have a
-  // deployable artifact manifest, so initialize the runtime explicitly before
-  // exercising the production streaming loader.
-  await loadNavigationRuntime({ mode: "stock" });
+  // Regional candidates have no deployable manifest, so initialize the exact
+  // requested runtime before exercising the production TileCache path. Stock
+  // remains the compatibility default; --runtime64-root validates the target
+  // monolithic runtime, including its ABI-compatible widened temporary region
+  // IDs, without requiring a full-map artifact.
+  const useRuntime64 = runtime64Root !== undefined;
+  if (useRuntime64) {
+    const root = resolve(runtime64Root);
+    process.env.NAV_MONOLITHIC_64 = "1";
+    await loadNavigationRuntime({
+      mode: "monolithic64",
+      coreModule: join(root, "core.mjs"),
+      wasmModule: join(root, "wasm-compat.mjs")
+    });
+  } else {
+    await loadNavigationRuntime({ mode: "stock" });
+  }
   const { NavManager } = await import("../src/utils/recast");
   const nav = new NavManager();
   // Regional candidate caches intentionally have no deployable manifest yet.
@@ -80,8 +98,10 @@ async function main() {
   // materialization path as production without misrepresenting the candidate
   // as a verified deployment artifact.
   await (
-    nav as unknown as { loadNavStreaming(): Promise<void> }
-  ).loadNavStreaming();
+    nav as unknown as {
+      loadNavStreaming(monolithic64?: boolean): Promise<void>;
+    }
+  ).loadNavStreaming(useRuntime64);
   const streamed = nav.streamAround(
     routes.flatMap((route) => [
       new Float32Array([...route.start, 1]),
@@ -182,7 +202,11 @@ async function main() {
     forbiddenFailures,
     forbiddenUnverified
   };
-  const encoded = `${JSON.stringify(summary, null, 2)}\n`;
+  const encoded = `${JSON.stringify(
+    summary,
+    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+    2
+  )}\n`;
   if (reportPath) writeFileSync(resolve(reportPath), encoded);
   console.log(encoded);
   if (failures.length || forbiddenFailures.length || forbiddenUnverified.length)

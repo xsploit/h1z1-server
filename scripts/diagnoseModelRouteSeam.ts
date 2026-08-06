@@ -1,9 +1,23 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { modelRouteEndpointGap } from "../src/utils/modelroutevalidation";
 import { extractNavigationTopology } from "../src/utils/navigationislandaudit";
+import { loadNavigationRuntime } from "../src/utils/navigationruntime";
 
 type Point = { x: number; y: number; z: number };
 type PolygonGeometry = { ref: number; vertices: Point[] };
+
+function normalizedRuntimeRef(ref: number | bigint): number {
+  const normalized = typeof ref === "bigint" ? Number(ref) : ref >>> 0;
+  if (!Number.isSafeInteger(normalized) || normalized < 0)
+    throw new Error(`Detour polygon reference is not a safe integer: ${ref}`);
+  return normalized;
+}
+
+function polygonRefFromBase(base: number | bigint, polygonIndex: number) {
+  return normalizedRuntimeRef(
+    typeof base === "bigint" ? base + BigInt(polygonIndex) : base + polygonIndex
+  );
+}
 
 function option(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -107,7 +121,7 @@ function polygonEdges(vertices: Point[]): Array<[Point, Point]> {
 function extractPolygonGeometry(navMesh: {
   getMaxTiles(): number;
   getTile(index: number): any;
-  encodePolyId(salt: number, tile: number, polygon: number): number;
+  getTileRefAt(x: number, y: number, layer: number): number | bigint;
 }): Map<number, PolygonGeometry> {
   const result = new Map<number, PolygonGeometry>();
   for (let tileIndex = 0; tileIndex < navMesh.getMaxTiles(); tileIndex++) {
@@ -130,13 +144,11 @@ function extractPolygonGeometry(navMesh: {
           z: tile.verts(base + 2)
         });
       }
-      result.set(
-        navMesh.encodePolyId(tile.salt(), tileIndex, polygonIndex) >>> 0,
-        {
-          ref: navMesh.encodePolyId(tile.salt(), tileIndex, polygonIndex) >>> 0,
-          vertices
-        }
+      const ref = polygonRefFromBase(
+        navMesh.getTileRefAt(header.x(), header.y(), header.layer()),
+        polygonIndex
       );
+      result.set(ref, { ref, vertices });
     }
   }
   return result;
@@ -162,14 +174,19 @@ const start = parsePoint(option("--start"), "--start");
 const end = parsePoint(option("--end"), "--end");
 const transitions = option("--transitions");
 const verticalBand = Number(option("--vertical-band") ?? 0.75);
+const snapHorizontal = Number(option("--snap-horizontal") ?? 0.8);
+const runtime64Root = option("--runtime64-root");
 const limit = Number(option("--limit") ?? 12);
 if (
   !cacheDirectory ||
   !Number.isFinite(verticalBand) ||
-  !Number.isInteger(limit)
+  !Number.isFinite(snapHorizontal) ||
+  snapHorizontal <= 0 ||
+  !Number.isInteger(limit) ||
+  limit <= 0
 ) {
   throw new Error(
-    "Usage: npx tsx scripts/diagnoseModelRouteSeam.ts <cache-dir> --start x,y,z --end x,y,z [--transitions file] [--vertical-band 0.75] [--limit 12]"
+    "Usage: npx tsx scripts/diagnoseModelRouteSeam.ts <cache-dir> --start x,y,z --end x,y,z [--transitions file] [--vertical-band 0.75] [--snap-horizontal 0.8] [--limit 12] [--runtime64-root directory]"
   );
 }
 
@@ -177,17 +194,31 @@ async function main() {
   process.env.NAV_STREAMING = "1";
   process.env.NAV_CACHE_DIR = resolve(cacheDirectory);
   if (transitions) process.env.NAV_TRANSITIONS_PATH = resolve(transitions);
+  const useRuntime64 = runtime64Root !== undefined;
+  if (useRuntime64) {
+    const root = resolve(runtime64Root);
+    process.env.NAV_MONOLITHIC_64 = "1";
+    await loadNavigationRuntime({
+      mode: "monolithic64",
+      coreModule: join(root, "core.mjs"),
+      wasmModule: join(root, "wasm-compat.mjs")
+    });
+  } else {
+    await loadNavigationRuntime({ mode: "stock" });
+  }
   const { NavManager } = await import("../src/utils/recast");
   const nav = new NavManager();
   await (
     nav as unknown as { loadNavStreaming(): Promise<void> }
-  ).loadNavStreaming();
+  ).loadNavStreaming(useRuntime64);
   nav.streamAround([
     new Float32Array([start.x, start.y, start.z, 1]),
     new Float32Array([end.x, end.y, end.z, 1])
   ]);
 
-  const queryOptions = { halfExtents: { x: 0.8, y: 1.5, z: 0.8 } };
+  const queryOptions = {
+    halfExtents: { x: snapHorizontal, y: 1.5, z: snapHorizontal }
+  };
   const startSnap = nav.navMeshQuery.findNearestPoly(start, queryOptions);
   const endSnap = nav.navMeshQuery.findNearestPoly(end, queryOptions);
   if (!startSnap.nearestRef || !endSnap.nearestRef) {
@@ -198,14 +229,45 @@ async function main() {
     endSnap.nearestPoint,
     queryOptions
   );
+  const lastPathPoint = path.path?.at(-1);
+  const directGap = lastPathPoint
+    ? modelRouteEndpointGap(lastPathPoint, endSnap.nearestPoint)
+    : Number.POSITIVE_INFINITY;
+  if (directGap <= 0.25) {
+    console.log(
+      JSON.stringify(
+        {
+          connected: true,
+          snapHorizontal,
+          startSnap,
+          endSnap,
+          path: path.path ?? [],
+          endpointGap: directGap,
+          candidateSeams: []
+        },
+        (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+        2
+      )
+    );
+    return;
+  }
   const topology = extractNavigationTopology(nav.navmesh);
   const byRef = new Map(
-    topology.polygons.map((polygon) => [polygon.ref >>> 0, polygon])
+    topology.polygons.map((polygon) => [
+      normalizedRuntimeRef(polygon.ref),
+      polygon
+    ])
   );
-  const startPolygon = byRef.get(startSnap.nearestRef >>> 0);
-  const endPolygon = byRef.get(endSnap.nearestRef >>> 0);
+  const startPolygon = byRef.get(
+    normalizedRuntimeRef(startSnap.nearestRef as number | bigint)
+  );
+  const endPolygon = byRef.get(
+    normalizedRuntimeRef(endSnap.nearestRef as number | bigint)
+  );
   if (!startPolygon || !endPolygon)
-    throw new Error("snapped polygon missing from topology");
+    throw new Error(
+      `snapped polygon missing from topology (start=${startSnap.nearestRef}, end=${endSnap.nearestRef}, sample=${[...byRef.keys()].slice(0, 8).join(",")})`
+    );
   const outgoing = new Map(
     topology.polygons.map((polygon) => [polygon.id, polygon.outgoing])
   );
@@ -232,10 +294,14 @@ async function main() {
   const candidates: Array<Record<string, unknown>> = [];
   if (!fromStart.has(endPolygon.id)) {
     for (const firstPolygon of firstPolygons) {
-      const firstGeometry = geometry.get(firstPolygon.ref >>> 0);
+      const firstGeometry = geometry.get(
+        normalizedRuntimeRef(firstPolygon.ref)
+      );
       if (!firstGeometry) continue;
       for (const secondPolygon of secondPolygons) {
-        const secondGeometry = geometry.get(secondPolygon.ref >>> 0);
+        const secondGeometry = geometry.get(
+          normalizedRuntimeRef(secondPolygon.ref)
+        );
         if (!secondGeometry) continue;
         let closest: ReturnType<typeof closestSegmentPoints> | undefined;
         for (const [firstEdgeStart, firstEdgeEnd] of polygonEdges(
@@ -273,6 +339,7 @@ async function main() {
     JSON.stringify(
       {
         connected: fromStart.has(endPolygon.id),
+        snapHorizontal,
         startSnap,
         endSnap,
         path: path.path ?? [],
@@ -287,7 +354,7 @@ async function main() {
           .sort((left, right) => Number(left.distance) - Number(right.distance))
           .slice(0, limit)
       },
-      null,
+      (_key, value) => (typeof value === "bigint" ? value.toString() : value),
       2
     )
   );

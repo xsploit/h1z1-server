@@ -31,6 +31,7 @@ export interface NavigationCrawlerConfig {
   workDirectory: string;
   templatesDirectory?: string;
   baker?: string;
+  navigationRuntimeRoot?: string;
   pythonCommand?: string;
   pythonPrefix?: string[];
   modelSelectors?: string[];
@@ -574,12 +575,21 @@ async function buildInputHashes(config: NavigationCrawlerConfig) {
     sha256File(config.heightmap),
     sha256File(config.transitions)
   ]);
+  const navigationRuntimeCoreSha256 = config.navigationRuntimeRoot
+    ? await sha256File(join(config.navigationRuntimeRoot, "core.mjs"))
+    : undefined;
+  const navigationRuntimeWasmSha256 = config.navigationRuntimeRoot
+    ? await sha256File(join(config.navigationRuntimeRoot, "wasm-compat.mjs"))
+    : undefined;
   return {
     collisionSha256,
     metadataSha256,
     semanticsSha256,
     heightmapSha256,
-    transitionsSha256
+    transitionsSha256,
+    ...(navigationRuntimeCoreSha256 && navigationRuntimeWasmSha256
+      ? { navigationRuntimeCoreSha256, navigationRuntimeWasmSha256 }
+      : {})
   };
 }
 
@@ -623,6 +633,8 @@ async function planJobs(
         semanticsSha256: hashes.semanticsSha256,
         heightmapSha256: hashes.heightmapSha256,
         transitionsSha256,
+        navigationRuntimeCoreSha256: hashes.navigationRuntimeCoreSha256 ?? null,
+        navigationRuntimeWasmSha256: hashes.navigationRuntimeWasmSha256 ?? null,
         templateSha256: model.templateSha256,
         profile: "human",
         agentClimb: 1.3,
@@ -682,28 +694,27 @@ function validateModel(
     "scripts",
     "validateModelRoutesStreaming.ts"
   );
-  const child = spawnSync(
-    process.execPath,
-    [
-      "--import",
-      "tsx",
-      validator,
-      modelRoot,
-      join(model.outputDirectory, "routes.json"),
-      "--transitions",
-      modelJobs[0].transitionsPath,
-      "--forbidden",
-      join(model.outputDirectory, "forbidden.json"),
-      "--report",
-      report
-    ],
-    {
-      cwd: config.repositoryRoot,
-      encoding: "utf8",
-      windowsHide: true,
-      maxBuffer: 64 * 1024 * 1024
-    }
-  );
+  const childArguments = [
+    "--import",
+    "tsx",
+    validator,
+    modelRoot,
+    join(model.outputDirectory, "routes.json"),
+    "--transitions",
+    modelJobs[0].transitionsPath,
+    "--forbidden",
+    join(model.outputDirectory, "forbidden.json"),
+    "--report",
+    report
+  ];
+  if (config.navigationRuntimeRoot)
+    childArguments.push("--runtime64-root", config.navigationRuntimeRoot);
+  const child = spawnSync(process.execPath, childArguments, {
+    cwd: config.repositoryRoot,
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 64 * 1024 * 1024
+  });
   if (child.status !== 0 || !isFile(report))
     return {
       decision: "BLOCKED",
@@ -725,6 +736,10 @@ function validateModel(
 export async function runNavigationCrawl(
   configured: NavigationCrawlerConfig
 ): Promise<NavigationCrawlReport> {
+  if (configured.bake && !configured.navigationRuntimeRoot)
+    throw new Error(
+      "navigationRuntimeRoot is required for bake validation so results cannot silently use the stock runtime"
+    );
   const config: NavigationCrawlerConfig = {
     ...configured,
     repositoryRoot: requireDirectory(configured.repositoryRoot, "repository"),
@@ -733,6 +748,12 @@ export async function runNavigationCrawl(
     semantics: requireFile(configured.semantics, "H1SEM1 semantics"),
     heightmap: requireFile(configured.heightmap, "heightmap"),
     transitions: requireFile(configured.transitions, "navigation transitions"),
+    navigationRuntimeRoot: configured.navigationRuntimeRoot
+      ? requireDirectory(
+          configured.navigationRuntimeRoot,
+          "navigation64 runtime"
+        )
+      : undefined,
     workDirectory: resolve(configured.workDirectory),
     templatesDirectory: requireDirectory(
       configured.templatesDirectory ??

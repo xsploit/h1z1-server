@@ -34,7 +34,13 @@ const cacheDir = process.argv[2];
 const reportPath = option("--report");
 const transitionsPath = option("--transitions");
 const forbiddenPath = option("--forbidden");
-const valueOptions = new Set(["--report", "--transitions", "--forbidden"]);
+const runtime64Root = option("--runtime64-root");
+const valueOptions = new Set([
+  "--report",
+  "--transitions",
+  "--forbidden",
+  "--runtime64-root"
+]);
 const routeFiles = process.argv
   .slice(3)
   .filter((argument, index, arguments_) => {
@@ -45,7 +51,7 @@ const routeFiles = process.argv
 
 if (!cacheDir || routeFiles.length === 0) {
   console.error(
-    "Usage: npx tsx scripts/validateModelRoutesStreaming.ts <cache-dir> <routes.json> [...] [--report <report.json>] [--transitions <transitions.json>] [--forbidden <forbidden.json>]"
+    "Usage: npx tsx scripts/validateModelRoutesStreaming.ts <cache-dir> <routes.json> [...] [--report <report.json>] [--transitions <transitions.json>] [--forbidden <forbidden.json>] [--runtime64-root <directory>]"
   );
   process.exit(1);
 }
@@ -126,6 +132,8 @@ async function main() {
         childArguments.push("--transitions", resolve(transitionsPath));
       if (forbiddenPath)
         childArguments.push("--forbidden", resolve(forbiddenPath));
+      if (runtime64Root)
+        childArguments.push("--runtime64-root", resolve(runtime64Root));
       const child = spawnSync(process.execPath, childArguments, {
         encoding: "utf8",
         windowsHide: true,

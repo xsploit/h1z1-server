@@ -8,6 +8,7 @@ import {
   createRegionalBakeKey,
   findRecoverableBakeCache,
   mergeNavigationTransitions,
+  runNavigationCrawl,
   runBounded,
   stableStringify
 } from "./navigationcrawler";
@@ -35,6 +36,22 @@ test("stableStringify and bake keys ignore object insertion order", () => {
   assert.notEqual(
     createRegionalBakeKey(common),
     createRegionalBakeKey({ ...common, bounds: [1, 2, 3, 5] })
+  );
+});
+
+test("bake validation requires an explicit target navigation runtime", async () => {
+  await assert.rejects(
+    runNavigationCrawl({
+      repositoryRoot: "unused",
+      collision: "unused",
+      metadata: "unused",
+      semantics: "unused",
+      heightmap: "unused",
+      transitions: "unused",
+      workDirectory: "unused",
+      bake: true
+    }),
+    /navigationRuntimeRoot is required/
   );
 });
 

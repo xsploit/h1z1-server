@@ -65,7 +65,7 @@ function usage(): string {
 npm run navmesh-campaign -- [--bake] [--model <actor-substring>]...
   [--bundle <H1COL2-directory>] [--heightmap <heightmap.png>]
   [--baker <navmesh-builder.exe>] [--work-dir <directory>]
-  [--workers 2]
+  [--runtime64-root <runtime/navigation64>] [--workers 2]
 
 The default mode is analysis-only. It regenerates a candidate H1SEM1 sidecar
 from the committed policy, inventories unknown geometry, prepares every known
@@ -218,6 +218,23 @@ async function main(): Promise<void> {
         "navmesh builder"
       )
     : undefined;
+  const runtimeArgument = value("--runtime64-root");
+  if (bake && !runtimeArgument)
+    throw new Error(
+      "--runtime64-root is required with --bake so validation uses the exact target runtime"
+    );
+  const navigationRuntimeRoot = runtimeArgument
+    ? requireDirectory(runtimeArgument, "navigation64 runtime")
+    : undefined;
+  const runtimeCore = navigationRuntimeRoot
+    ? requireFile(join(navigationRuntimeRoot, "core.mjs"), "runtime core")
+    : undefined;
+  const runtimeWasm = navigationRuntimeRoot
+    ? requireFile(
+        join(navigationRuntimeRoot, "wasm-compat.mjs"),
+        "runtime WASM module"
+      )
+    : undefined;
 
   const manifestPath = join(workDirectory, "navigation-campaign-inputs.json");
   writeJson(manifestPath, {
@@ -239,7 +256,14 @@ async function main(): Promise<void> {
       transitions,
       transitionsSha256: await sha256File(transitions),
       baker,
-      bakerSha256: baker ? await sha256File(baker) : null
+      bakerSha256: baker ? await sha256File(baker) : null,
+      navigationRuntimeRoot,
+      navigationRuntimeCoreSha256: runtimeCore
+        ? await sha256File(runtimeCore)
+        : null,
+      navigationRuntimeWasmSha256: runtimeWasm
+        ? await sha256File(runtimeWasm)
+        : null
     },
     selectors: values("--model"),
     workers
@@ -254,6 +278,7 @@ async function main(): Promise<void> {
     transitions,
     workDirectory,
     baker,
+    navigationRuntimeRoot,
     modelSelectors: values("--model"),
     bake,
     workers

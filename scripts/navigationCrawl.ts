@@ -38,7 +38,8 @@ npm run navmesh-crawl -- --collision <z1_collision.bin> --metadata <metadata.jso
   --semantics <semantics.bin> --heightmap <heightmap.png>
   --transitions <navigationTransitions.json> --work-dir <directory>
   [--model <actor-substring>]... [--proposal-limit <n>]
-  [--bake --baker <navmesh-builder> --workers 2]
+  [--bake --baker <navmesh-builder>
+    --runtime64-root <runtime/navigation64> --workers 2]
 
 Analysis inventories and prepares; it never changes canonical policy. --bake
 uses content-addressed regional caches and validates every known archetype.`;
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
     workDirectory,
     templatesDirectory: value("--templates-dir"),
     baker: value("--baker"),
+    navigationRuntimeRoot: value("--runtime64-root"),
     pythonCommand: python,
     pythonPrefix: python ? [] : undefined,
     modelSelectors: values("--model"),
