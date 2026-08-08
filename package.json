@@ -96,6 +96,7 @@
     "navmesh-house34b-door-check": "tsx scripts/validateHouse34BDoors.ts",
     "navmesh-house34b-instances-check": "tsx scripts/validateHouse34BInstances.ts",
     "navmesh-model-routes-check": "tsx scripts/validateModelRoutesStreaming.ts",
+    "navmesh-model-crowd-routes-check": "tsx scripts/validateModelCrowdRoutes.ts",
     "navmesh-doctor": "tsx scripts/navigationDoctor.ts",
     "navmesh-crawl": "tsx scripts/navigationCrawl.ts",
     "navmesh-campaign": "tsx scripts/navigationCampaign.ts",
