@@ -28,12 +28,16 @@ if ([string]::IsNullOrWhiteSpace($WorkRoot)) {
 
 $PYDMOD_REPOSITORY = 'https://github.com/ryanjsims/pydmod.git'
 $PYDMOD_COMMIT = 'd220703826b39bdccd54956782e57809696226b5'
-$TOOLING_COMMIT = 'ee3e2721c062bb0d5b3d0ed401aaa2025fbe71a5'
-$BAKER_COMMIT = '2646f66a7eae3d601579f86752cbf699ae2c3915'
+$TOOLING_COMMIT = '8b65541ac7e2c0b24fb8ce796f7a72c62003b916'
+$BAKER_COMMIT = '5fc5facbdabeeed65dc4c0ee4d1fe809be0bdc1f'
+$EXPECTED_BAKER_SHA256 = '39caa4ea3781d42d1ac60d4ef229290ca2d6e675fc7aaefdf67b3ef477eafa5a'
 $EXPECTED_COLLISION_SHA256 = 'ce8ca93c8b3d3607d829b323580b6cad60723ea46c7f46eb0e8f16ed38656065'
-$EXPECTED_SEMANTICS_SHA256 = '827cb61bbdfbe54f2e7aa24894ace987bbf5e071702a0810b69bf921daa5d36e'
+$EXPECTED_SEMANTICS_SHA256 = 'eab9ecb7b880ce5fd2ed0571850d7d5467152e176123e407ff764bde2689fe97'
 $EXPECTED_HEIGHTMAP_SHA256 = '78799a6429aaf910cc5c38fe4d8ebfa15d79096c272e77faa3cc2a089ecadc21'
-$EXPECTED_TRANSITIONS_SHA256 = '386481477e016caa9bfb46e2c49242176cfbba7573df4259dc24c7f5dcaa360e'
+$EXPECTED_BAKE_TRANSITIONS_SHA256 = 'f381e1ad02a625488232f000a04716f830ca79c95880eb400d4b805183bab185'
+$EXPECTED_RUNTIME_TRANSITIONS_SHA256 = '27e26a54a0784937b23048c1f9e2842c7c8f4fb1a941397fe02e1be95b4f45b5'
+$EXPECTED_CACHE_LAYERS = 105030
+$EXPECTED_TRANSITION_COUNT = 355
 
 function Get-Sha256([string]$Path) {
     (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -97,7 +101,7 @@ function New-ArtifactManifest([string]$ArtifactRoot) {
             cache = [ordered]@{ format = 'TSET'; parts = $records }
             collision = [ordered]@{ file = [ordered]@{ path = 'collision/z1_collision.bin'; size = (Get-Item $collision).Length; sha256 = Get-Sha256 $collision } }
             heightmap = [ordered]@{ file = [ordered]@{ path = 'zoneData/heightmap.png'; size = (Get-Item $heightmap).Length; sha256 = Get-Sha256 $heightmap } }
-            transitions = [ordered]@{ file = [ordered]@{ path = 'navigationTransitions.json'; size = (Get-Item $transitions).Length; sha256 = Get-Sha256 $transitions }; count = 177 }
+            transitions = [ordered]@{ file = [ordered]@{ path = 'navigationTransitions.json'; size = (Get-Item $transitions).Length; sha256 = Get-Sha256 $transitions }; count = $EXPECTED_TRANSITION_COUNT }
         }
     }
     $identityJson = $identity | ConvertTo-Json -Depth 8 -Compress
@@ -115,6 +119,7 @@ $work = [System.IO.Path]::GetFullPath($WorkRoot)
 $tools = Join-Path $package 'tooling\forgelight'
 $baker = Join-Path $package 'tooling\bin\navmesh-builder.exe'
 $cnkWheel = Join-Path $package 'tooling\python\pycnkdec-0.0.1-cp312-cp312-win_amd64.whl'
+$bakeTransitionsSource = Join-Path $package 'tooling\navigationTransitions.bake.json'
 $transitionsSource = Join-Path $package 'tooling\navigationTransitions.json'
 $installer = Join-Path $package 'scripts\installExperimentalNav64Preview.ps1'
 $pydmod = Join-Path $work 'pydmod'
@@ -133,10 +138,12 @@ $logRoot = Join-Path $work 'logs'
 if (@(Get-ChildItem -LiteralPath $assets -Filter 'Assets_*.pack' -File).Count -eq 0) {
     throw "No Assets_*.pack files were found in $assets"
 }
-foreach ($required in @($tools, $baker, $cnkWheel, $transitionsSource, $installer)) {
+foreach ($required in @($tools, $baker, $cnkWheel, $bakeTransitionsSource, $transitionsSource, $installer)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Preview tooling is missing: $required" }
 }
-Assert-Hash $transitionsSource $EXPECTED_TRANSITIONS_SHA256 'authored transitions'
+Assert-Hash $bakeTransitionsSource $EXPECTED_BAKE_TRANSITIONS_SHA256 'bake transitions'
+Assert-Hash $transitionsSource $EXPECTED_RUNTIME_TRANSITIONS_SHA256 'runtime transitions'
+Assert-Hash $baker $EXPECTED_BAKER_SHA256 'DT_POLYREF64 baker'
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Git is required.' }
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) { throw 'The Python launcher is required with Python 3.12 installed.' }
 & py -3.12 -c 'import sys; print(sys.version)' *> $null
@@ -151,6 +158,9 @@ if ($Plan) {
         PydmodCommit = $PYDMOD_COMMIT
         ToolingCommit = $TOOLING_COMMIT
         BakerCommit = $BAKER_COMMIT
+        BakerSha256 = $EXPECTED_BAKER_SHA256
+        ExpectedCacheLayers = $EXPECTED_CACHE_LAYERS
+        TransitionCount = $EXPECTED_TRANSITION_COUNT
         EstimatedBake = '90-120 minutes after extraction'
         Install = -not $SkipInstall
     } | Format-List
@@ -237,7 +247,7 @@ if ($Rebuild -and $existingCache.Count -gt 0) {
     }
     $existingCache = @()
 }
-if ($Rebuild -or $existingCache.Count -ne 22 -or -not (Select-String -LiteralPath $bakeLog -SimpleMatch 'Cache layers : 104935 total' -Quiet -ErrorAction SilentlyContinue)) {
+if ($Rebuild -or $existingCache.Count -ne 22 -or -not (Select-String -LiteralPath $bakeLog -SimpleMatch "Cache layers : $EXPECTED_CACHE_LAYERS total" -Quiet -ErrorAction SilentlyContinue)) {
     if ($existingCache.Count -gt 0) {
         throw "A partial or mismatched bake exists in $bakeRoot. Move it aside or rerun with -Rebuild."
     }
@@ -250,13 +260,13 @@ if ($Rebuild -or $existingCache.Count -ne 22 -or -not (Select-String -LiteralPat
         '--forgelight-collision', $collision,
         '--forgelight-semantics', $semantics,
         '--forgelight-heightmap', $heightmap,
-        '--forgelight-transitions', $transitions,
+        '--forgelight-transitions', $bakeTransitionsSource,
         '--global-bounds', '-4096', '-100', '-4096', '4096', '500', '4096'
     )
     Invoke-Logged 'full Z1 navigation bake' $baker $arguments $bakeRoot $bakeLog
 }
-if (-not (Select-String -LiteralPath $bakeLog -SimpleMatch 'Cache layers : 104935 total' -Quiet)) {
-    throw "Bake completed without the tested 104935-layer result. Do not install it; inspect $bakeLog"
+if (-not (Select-String -LiteralPath $bakeLog -SimpleMatch "Cache layers : $EXPECTED_CACHE_LAYERS total" -Quiet)) {
+    throw "Bake completed without the tested $EXPECTED_CACHE_LAYERS-layer result. Do not install it; inspect $bakeLog"
 }
 $cacheParts = @(Get-ChildItem -LiteralPath $bakeRoot -Filter 'z1_cache_*.bin' -File | Sort-Object { [int]($_.BaseName -replace '^z1_cache_', '') })
 if ($cacheParts.Count -ne 22) { throw "Expected 22 cache parts, found $($cacheParts.Count)." }
